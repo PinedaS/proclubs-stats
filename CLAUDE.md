@@ -40,13 +40,20 @@ API no oficial de EA ──► Colector (GitHub Actions, cada 30 min) ──► 
 3. **Dashboard:** web estática que lee Supabase con una clave de solo lectura (`anon` + RLS, *Row Level Security*: seguridad a nivel de fila).
    - **Publicado (2026-11-11):** https://pinedas.github.io/proclubs-stats/, en GitHub Pages, gratis. El workflow `pages.yml` despliega la carpeta `dashboard/` en cada push.
    - HTML, CSS y JS sin compilar ni dependencias externas. Lee la API REST de Supabase con `fetch` y la clave **publicable** (`dashboard/config.js`).
-   - Incluye:
-     - ranking ordenable por `person_stats`, con mínimo de partidos;
-     - filtros por tipo de partido y fechas;
-     - lista de partidos con sus jugadores;
-     - detalle por jugador con la evolución de la calificación;
-     - estado del colector.
+   - Pestañas (2026-11-11):
+     - **Ranking:** `person_stats`, con podio, columna "Media (EA)" y columnas avanzadas y experimentales.
+     - **Por rol:** `relative_stats`, índices relativos a la posición o arquetipo; 100 = promedio del rol.
+     - **Comparar:** `person_split_stats`, rival fuerte/débil, tipo de partido y jugadores en cancha.
+     - **Duplas:** `pair_stats`.
+     - **Por posición:** `position_stats`.
+     - **Partidos.**
+     - **Club:** `club_snapshots`.
+   - **Vista oculta `#verificacion`:** conciliación EA vs. capturado (`v_reconciliation`) y la antigua pestaña de miembros. Si faltan partidos, aparece un aviso en la cabecera.
+   - Detalle por jugador: resumen, relativo a su rol, avanzadas, récords (`person_records`) y gráficos de calificación y de media del Pro.
+   - Filtros: tipo de partido, fechas, mínimo de partidos y excluir incompletos.
+   - Los archivos se versionan con el commit en `pages.yml` (`__V__`), para no mezclar versiones viejas desde la caché de Pages.
    - Probado en Chrome con los datos del club de prueba.
+   - **Migraciones aplicadas en Supabase:** 001–009, cada una verificada después de aplicarla.
 
 ### Por qué así (no reabrir sin un motivo nuevo)
 
@@ -167,7 +174,7 @@ No hay API oficial. Se usan los endpoints públicos que lee la web de Clubes de 
 | Falla | Contingencia |
 |---|---|
 | EA bloquea las IPs de GitHub (403) | Plan B: el mismo colector en un dispositivo de casa siempre encendido. El *upsert* idempotente permite correr **nube + casa a la vez** como redundancia. Diseñar el colector para ejecutarse igual en ambos sitios (solo variables de entorno). |
-| GitHub Actions se retrasa o salta ejecuciones | El margen de 30 min frente a la ventana de ~3 h lo cubre. |
+| GitHub Actions se retrasa o salta ejecuciones | **⚠ Verificado (2026-11-11): el cron NO es confiable.** Entre las 03:50 y las 16:28 UTC hubo **1 sola ejecución programada** de ~25 esperadas (el workflow estaba activo). El margen de 30 min **no** basta. **Pendiente:** un disparador externo gratuito (ver pendiente 8). |
 | La API de EA cae por completo | Los partidos que salgan de la ventana de 10 **se pierden**. Mitigación: conciliar contra `members/stats` (totales por jugador que mantiene EA) para recuperar al menos los totales de la temporada. Último recurso: capturas manuales de la Plantilla del juego. |
 | EA cambia campos o el SDK se rompe | JSON crudo en `jsonb`, versión del SDK fijada, error claro (no fallar en silencio). |
 | Supabase se pausa | Se restaura desde el panel; los datos se conservan. |
@@ -230,6 +237,12 @@ No hay API oficial. Se usan los endpoints públicos que lee la web de Clubes de 
    - **Nunca publicar datos sin cifrar en el repo, que es público.** Un primer intento sin cifrar fue bloqueado por esa razón.
    - La restauración (`npm run restore-sql`) está probada en CI: se restaura en una base vacía y queda idéntica.
    - Contexto, verificado el 2026-11-11: el plan Free de Supabase **no incluye respaldos automáticos accesibles**, según su página de precios y su documentación. Los partidos no se pueden recuperar de EA, así que conviene una exportación periódica gratuita, por ejemplo con un workflow de GitHub Actions.
+8. **Confiabilidad del cron (URGENTE antes de que juegue el club real).** GitHub ejecutó 1 de ~25 corridas programadas en 12,5 h.
+   - Alternativas gratuitas:
+     - **(a)** `pg_cron` + `pg_net` en Supabase Free, que dispare `workflow_dispatch` cada 15 min con un token *fine-grained* guardado en Supabase Vault;
+     - **(b)** cron-job.org, que llame a la misma API;
+     - **(c)** un dispositivo en casa (plan B).
+   - Las tres requieren que el usuario cree un token de GitHub con permiso de *Actions* solo sobre este repo. **Nunca** pedírselo por chat.
 7. **Catálogo de datos de EA:** ver `docs/datos-ea.md`. Recoge los endpoints y campos verificados, los no usados y los que EA no expone.
 
 ## 8. Orden sugerido de trabajo
