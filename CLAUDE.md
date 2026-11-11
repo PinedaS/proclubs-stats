@@ -58,7 +58,8 @@ No hay API oficial. Se usan los endpoints públicos que lee la web de Clubes de 
 - **Los IDs de club cambian cada año.** Hay que buscar el club por nombre y no guardar un ID fijo de una temporada a otra.
 - **Prueba real:** una consulta desde un servidor de Anthropic recibió HTTP 200 con datos de FC 27.
   - La documentación de `proclubs-sdk` reporta 403 y tiempos de espera intermitentes desde servidores, y que `curl` falla mientras `fetch` de Node funciona.
-  - **No probado todavía desde GitHub Actions.** Es el primer riesgo a validar.
+  - **Verificado desde GitHub Actions (2026-11-11, una ejecución):** el workflow `ea-probe.yml` (runner `ubuntu-latest`, `proclubs-sdk` 0.3.4) buscó el club y descargó sus 10 partidos de liga sin 403.
+    - Es una sola muestra. Si EA bloquea de forma intermitente, se verá en `collector_runs` cuando el colector corra cada 30 min.
 
 ### Forma de un partido (`clubs/matches`)
 
@@ -153,7 +154,7 @@ No hay API oficial. Se usan los endpoints públicos que lee la web de Clubes de 
    - Mínimo de partidos para entrar al ranking.
    - Comparación dentro de cada posición.
    - Hacerla transparente y configurable.
-3. **Validar el colector desde GitHub Actions** contra EA (riesgo de 403 desde IPs de centro de datos). Plan B si falla: un dispositivo siempre encendido en casa.
+3. ~~Validar el colector desde GitHub Actions contra EA.~~ **Primera prueba OK (2026-11-11), sin 403.** Hay que vigilar fallas intermitentes en `collector_runs`. El plan B (un dispositivo en casa) sigue disponible.
 4. **Descifrar `match_event_aggregate`** (opcional, futuro).
 5. **Conciliación:** comparar la suma de los partidos guardados contra `members/stats` para detectar partidos perdidos.
 
