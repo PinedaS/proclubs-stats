@@ -184,13 +184,39 @@ No hay API oficial. Se usan los endpoints públicos que lee la web de Clubes de 
 1. ~~Repo público o privado.~~ **Decidido (2026-11-10): público.**
    - Dashboard en GitHub Pages, y minutos de Actions ilimitados.
    - **Riesgo:** GitHub desactiva los workflows programados de un repo público tras **60 días sin actividad** en el repo. Hay que mitigarlo en el paso 4 (p. ej. un *keepalive*).
-2. **Fórmula de "mejor jugador".** Definirla con datos reales enfrente. Ideas:
+2. **Fórmula de "mejor jugador": POSPUESTA por decisión del usuario (2026-11-11).** Por ahora solo se recopilan y muestran los datos; la fórmula se decidirá más adelante. No implementar ningún puntaje ni ranking ponderado sin que el usuario lo pida. Ideas para entonces:
    - Métricas por partido (G+A, calificación media, % MVP).
    - Mínimo de partidos para entrar al ranking.
    - Comparación dentro de cada posición.
    - Hacerla transparente y configurable.
 3. ~~Validar el colector desde GitHub Actions contra EA.~~ **Primera prueba OK (2026-11-11), sin 403.** Hay que vigilar fallas intermitentes en `collector_runs`. El plan B (un dispositivo en casa) sigue disponible.
-4. **Descifrar `match_event_aggregate`** (opcional, futuro).
+4. **Descifrar `match_event_aggregate`** (opcional, futuro). **Investigado el 2026-11-11:**
+   - **No está cifrado.** Son contadores sin documentar con el formato `código:cantidad`. En nuestros datos solo `_0` y `_1` traen valores.
+   - **Hay un mapeo de la comunidad para FC 27,** sin respaldo oficial de EA: [Interactive-63/eafc-pro-clubs-api-research](https://github.com/Interactive-63/eafc-pro-clubs-api-research). Según ese mapeo:
+
+     | Dato | Código |
+     |---|---|
+     | Regates completados | 174 |
+     | Intercepciones | 6 |
+     | Posesión perdida | 105–107 |
+     | Posesión ganada | 108–110 |
+     | Duelos aéreos ganados | 265–266 |
+     | Faltas cometidas | 2 + 3 |
+     | Amarillas | 95 + 213 |
+
+     **No hay código para distancia recorrida.**
+   - **Lo contrasté contra los campos oficiales en 96 registros reales (jugador × partido):**
+
+     | Campo oficial | Código | Coincidencia |
+     |---|---|---|
+     | Goles | 214 | 94/96 |
+     | Asistencias | 11 | 94/96 |
+     | Tiros | 217+218 | 86/96 |
+     | Pases completados | 215 | 65/96 |
+     | Entradas | 0 | 80/96 |
+     | Atajadas | 202 | 0 de 33 casos con valor (**mapeo incorrecto**) |
+
+   - **Conclusión:** los códigos dan aproximaciones útiles, no valores exactos. Si se muestran, marcarlos como **experimentales**. El JSON crudo ya se guarda, así que se pueden calcular después, también para partidos ya capturados.
 5. **Conciliación:** comparar la suma de los partidos guardados contra `members/stats` para detectar partidos perdidos.
 
 ## 8. Orden sugerido de trabajo
