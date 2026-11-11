@@ -38,7 +38,15 @@ API no oficial de EA ──► Colector (GitHub Actions, cada 30 min) ──► 
    - El colector escribe a través de una **interfaz de almacenamiento (patrón Repository)**, para poder cambiar de proveedor sin tocar la lógica.
    - Guardar el **JSON crudo de cada partido** en una columna `jsonb`, además de las tablas normalizadas, para poder reprocesar si EA cambia campos o si se descifra `match_event_aggregate`.
 3. **Dashboard:** web estática que lee Supabase con una clave de solo lectura (`anon` + RLS, *Row Level Security*: seguridad a nivel de fila).
-   - **Hosting por decidir:** GitHub Pages si el repo es público; Vercel o Netlify si es privado.
+   - **Publicado (2026-11-11):** https://pinedas.github.io/proclubs-stats/, en GitHub Pages, gratis. El workflow `pages.yml` despliega la carpeta `dashboard/` en cada push.
+   - HTML, CSS y JS sin compilar ni dependencias externas. Lee la API REST de Supabase con `fetch` y la clave **publicable** (`dashboard/config.js`).
+   - Incluye:
+     - ranking ordenable por `person_stats`, con mínimo de partidos;
+     - filtros por tipo de partido y fechas;
+     - lista de partidos con sus jugadores;
+     - detalle por jugador con la evolución de la calificación;
+     - estado del colector.
+   - Probado en Chrome con los datos del club de prueba.
 
 ### Por qué así (no reabrir sin un motivo nuevo)
 
