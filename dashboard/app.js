@@ -1,7 +1,7 @@
 // Dashboard de solo lectura. Todo el texto que viene de EA (nombres, rivales)
 // se inserta como TEXTO, nunca como HTML: evita inyección de código (XSS).
-import * as api from './api.js';
-import { STALE_CRITICAL_MINUTES, STALE_WARNING_MINUTES } from './config.js';
+import * as api from './api.js?v=__V__';
+import { STALE_CRITICAL_MINUTES, STALE_WARNING_MINUTES } from './config.js?v=__V__';
 
 const TYPE_LABEL = { leagueMatch: 'Liga', playoffMatch: 'Play-off', friendlyMatch: 'Amistoso' };
 const POS_LABEL = { forward: 'Delantero', midfielder: 'Mediocampista', defender: 'Defensa', goalkeeper: 'Portero' };

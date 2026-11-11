@@ -1,6 +1,6 @@
 // Acceso de solo lectura a Supabase vía su API REST (PostgREST), con fetch.
 // Sin supabase-js: no hay dependencias de terceros que cargar desde un CDN.
-import { MATCH_LIST_LIMIT, SUPABASE_PUBLISHABLE_KEY, SUPABASE_URL } from './config.js';
+import { MATCH_LIST_LIMIT, SUPABASE_PUBLISHABLE_KEY, SUPABASE_URL } from './config.js?v=__V__';
 
 const REST = `${SUPABASE_URL}/rest/v1`;
 
