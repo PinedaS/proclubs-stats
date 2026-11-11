@@ -111,6 +111,13 @@ No hay API oficial. Se usan los endpoints públicos que lee la web de Clubes de 
   - `anon` no escribe en ninguna tabla. No lee `match_raw`, y de `collector_runs` solo lee algunas columnas.
   - `service_role` escribe en todas las tablas.
   - `anon` no ejecuta `merge_persons`, `purge_club` ni `accounts_assign_person`.
+- **Primera ejecución real (2026-11-11, `workflow_dispatch` de `collect.yml`): éxito.**
+  - Guardó, del club de prueba, 10 partidos con su JSON crudo, 50 filas de stats y 7 cuentas/personas.
+  - Resultados: 5 derrotas, 3 empates y 2 victorias. Coinciden con el fixture.
+  - `collector_runs` la registró como `success`, con 10 partidos vistos y 10 nuevos.
+  - Desde entonces corre sola cada 30 min (minutos 7 y 37).
+- **Secretos del repo:** `SUPABASE_URL` y `SUPABASE_SERVICE_ROLE_KEY`, cargados el 2026-11-11.
+- **Variables opcionales del repo:** `EA_CLUB_NAME` y `SEASON`. Sin ellas, el colector usa el club de prueba.
 - **Clave del colector:** en proyectos nuevos, la clave *secret* (`sb_secret_...`) reemplaza a la `service_role` antigua y actúa con ese rol. Va **solo** en los secretos de GitHub y en el `.env` local, nunca en el repo.
 
 ### Supabase plan gratis (fuentes de 2026)
