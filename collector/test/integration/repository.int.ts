@@ -177,6 +177,13 @@ describe('SupabaseStatsRepository contra Postgres + PostgREST', () => {
       assert.equal(r.error, null, `${split}: ${r.error?.message}`);
       assert.ok((r.data as unknown[]).length > 0, split);
     }
+    for (const group of ['position', 'archetype']) {
+      const rel = await anon.rpc('relative_stats', { p_group: group });
+      assert.equal(rel.error, null, `${group}: ${rel.error?.message}`);
+      assert.ok((rel.data as unknown[]).length > 0, group);
+      const det = await anon.rpc('relative_stats_detail', { p_group: group });
+      assert.equal(det.error, null);
+    }
     // Excluir incompletos: el partido abandonado (165126453510292) deja de contar.
     const all = await anon.rpc('person_stats', { p_exclude_incomplete: false });
     const complete = await anon.rpc('person_stats', { p_exclude_incomplete: true });

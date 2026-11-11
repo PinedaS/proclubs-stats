@@ -230,6 +230,32 @@ end $$;
 reset role;
 
 -- =============================================================================
+-- 4c2. Rendimiento relativo al rol (migración 008).
+--      Para tener un rol compartido, PinedaDS juega de delantero en m2:
+--      delanteros = Hecodes m1 (7,5; 1 gol), Hecodes m2 (6,0; 1 asist.), Pineda m2 (6,5; 0)
+--      promedio de calificación de delanteros = 6,667; G+A/90 de delanteros = 2·5400/16200 = 0,667
+-- =============================================================================
+update public.player_match_stats set position = 'forward' where match_id = 'm2' and player_id = '333';
+set role anon;
+select pg_temp.assert_eq('relativo: Pineda como delantero (6,5 / 6,667)',
+  (select rating_idx from public.relative_stats_detail('position') where person_name <> 'Hecodes98' and group_key = 'forward'), 97.5::numeric);
+-- 6,75 / 6,6666… = 1,01249… (la media periódica queda apenas por encima de 20/3) -> 101,2
+select pg_temp.assert_eq('relativo: Hecodes como delantero (6,75 / 6,667)',
+  (select rating_idx from public.relative_stats_detail('position') where person_name = 'Hecodes98' and group_key = 'forward'), 101.2::numeric);
+select pg_temp.assert_eq('relativo: Pineda solo en su rol de medio = 100',
+  (select rating_idx from public.relative_stats_detail('position') where person_name <> 'Hecodes98' and group_key = 'midfielder'), 100.0::numeric);
+select pg_temp.assert_eq('relativo: índice final ponderado por minutos (97,5 y 100 con 5400 s cada uno)',
+  (select rating_idx from public.relative_stats('position') t join public.accounts a on a.person_id = t.person_id where a.player_id = '333'), 98.8::numeric);
+select pg_temp.assert_eq('relativo: G+A/90 de Hecodes vs delanteros (1,0 / 0,667)',
+  (select ga90_idx from public.relative_stats_detail('position') where person_name = 'Hecodes98' and group_key = 'forward'), 150.0::numeric);
+select pg_temp.assert_eq('relativo: roles jugados por Pineda',
+  (select roles_played from public.relative_stats('position') t join public.accounts a on a.person_id = t.person_id where a.player_id = '333'), 2::bigint);
+select pg_temp.assert_eq('relativo por arquetipo: devuelve filas',
+  (select count(*) > 0 from public.relative_stats('archetype')), true);
+reset role;
+update public.player_match_stats set position = 'midfielder' where match_id = 'm2' and player_id = '333';
+
+-- =============================================================================
 -- 4d. Análisis (migración 007). Datos: m1 liga 2-1 (Hecodes 1 gol MVP, Pineda),
 --     m2 amistoso 0-1 (Hecodes con su 2ª cuenta, Pineda). 2 jugadores por partido.
 -- =============================================================================
