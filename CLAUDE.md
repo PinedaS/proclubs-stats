@@ -253,16 +253,17 @@ No hay API oficial. Se usan los endpoints públicos que lee la web de Clubes de 
    - **Nunca publicar datos sin cifrar en el repo, que es público.** Un primer intento sin cifrar fue bloqueado por esa razón.
    - La restauración (`npm run restore-sql`) está probada en CI: se restaura en una base vacía y queda idéntica.
    - Contexto, verificado el 2026-11-11: el plan Free de Supabase **no incluye respaldos automáticos accesibles**, según su página de precios y su documentación. Los partidos no se pueden recuperar de EA, así que conviene una exportación periódica gratuita, por ejemplo con un workflow de GitHub Actions.
-8. **Confiabilidad del cron (URGENTE antes de que juegue el club real).** GitHub ejecutó 1 de ~25 corridas programadas en 12,5 h.
+8. ~~**Confiabilidad del cron (URGENTE antes de que juegue el club real).**~~ **Resuelto con la opción (a); ver abajo.** GitHub ejecutó 1 de ~25 corridas programadas en 12,5 h.
    - Alternativas gratuitas:
      - **(a)** `pg_cron` + `pg_net` en Supabase Free, que dispare `workflow_dispatch` cada 15 min con un token *fine-grained* guardado en Supabase Vault;
      - **(b)** cron-job.org, que llame a la misma API;
      - **(c)** un dispositivo en casa (plan B).
    - Las tres requieren que el usuario cree un token de GitHub con permiso de *Actions* solo sobre este repo. **Nunca** pedírselo por chat.
    - **Elegida la (a) (2026-11-11), migración 010 aplicada:** `pg_net` 0.20.4 y `pg_cron` 1.6.4 activos; la tarea `dispatch-collector` (minutos 2, 17, 32 y 47) llama a `public.dispatch_collector()`, que solo ejecuta `postgres`/`pg_cron`.
-     - **Falta:** que el usuario guarde el token en Vault con el nombre `github_dispatch_token` (pantalla Integrations → Vault, no el SQL Editor). Sin token, la función no hace nada y deja un aviso.
-     - Luego verificar: `net._http_response` con estado 204, ejecuciones `workflow_dispatch` en Actions y filas en `collector_runs`.
-     - El token vence: anotar la fecha; al vencer, los disparos fallan con 401 y solo queda el cron de GitHub.
+     - **✅ Funcionando (verificado el 2026-11-11, 19:09 UTC):** el usuario guardó el token *fine-grained* (solo este repo, *Actions: Read and write*) en Vault como `github_dispatch_token`.
+       - Un disparo manual recibió HTTP 204 de GitHub.
+       - La ejecución `workflow_dispatch` de `collect.yml` terminó con `success` y `collector_runs` la registró sin fallas.
+     - El token **vence** (fecha elegida por el usuario). Al vencer, GitHub responde 401 y el dashboard muestra en rojo "Disparo falló…" (`dispatch_status()`). Para renovarlo: crear otro token igual y reemplazar el valor en Vault con el mismo nombre.
 7. **Catálogo de datos de EA:** ver `docs/datos-ea.md`. Recoge los endpoints y campos verificados, los no usados y los que EA no expone.
 
 ## 8. Orden sugerido de trabajo
