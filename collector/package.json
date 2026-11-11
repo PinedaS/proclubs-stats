@@ -10,6 +10,8 @@
   "scripts": {
     "collect": "node --env-file-if-exists=.env src/main.ts",
     "fetch-fixture": "node --env-file-if-exists=.env scripts/fetch-fixture.ts",
+    "backup": "node --env-file-if-exists=.env scripts/backup.ts",
+    "restore-sql": "node scripts/restore-sql.ts",
     "test": "node --test \"test/**/*.test.ts\"",
     "test:integration": "bash test/integration/run.sh",
     "typecheck": "tsc --noEmit"

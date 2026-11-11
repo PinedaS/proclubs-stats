@@ -217,8 +217,14 @@ No hay API oficial. Se usan los endpoints públicos que lee la web de Clubes de 
      | Atajadas | 202 | 0 de 33 casos con valor (**mapeo incorrecto**) |
 
    - **Conclusión:** los códigos dan aproximaciones útiles, no valores exactos. Si se muestran, marcarlos como **experimentales**. El JSON crudo ya se guarda, así que se pueden calcular después, también para partidos ya capturados.
-5. **Conciliación:** comparar la suma de los partidos guardados contra `members/stats` para detectar partidos perdidos.
-6. **Respaldos.** Verificado el 2026-11-11: el plan Free de Supabase **no incluye respaldos automáticos accesibles**, según su página de precios y su documentación. Los partidos no se pueden recuperar de EA, así que conviene una exportación periódica gratuita, por ejemplo con un workflow de GitHub Actions.
+5. ~~Conciliación contra `members/stats`.~~ **Hecho (migración 006):**
+   - Foto diaria en `member_snapshots`. La vista `v_member_latest` compara los partidos que EA sumó desde la primera foto con los capturados.
+   - Además, `matches.opponent_skill_rating` guarda la fuerza del rival, y `person_stats` incluye métricas por 90 min, conversión, presencia, forma, regularidad y otras.
+   - CI (`ci.yml`) y Dependabot están activos.
+6. **Respaldos: el código está listo, pero falta decidir dónde se guardan.**
+   - `collector/src/backup.ts` exporta y genera el SQL de restauración. Está probado en CI: se restaura en una base vacía y queda idéntica.
+   - **No está automatizado todavía.** Un workflow que lo publicaba en una rama del repo (público) fue bloqueado por exponer los datos crudos. El usuario debe elegir el destino.
+   - Contexto, verificado el 2026-11-11: el plan Free de Supabase **no incluye respaldos automáticos accesibles**, según su página de precios y su documentación. Los partidos no se pueden recuperar de EA, así que conviene una exportación periódica gratuita, por ejemplo con un workflow de GitHub Actions.
 7. **Catálogo de datos de EA:** ver `docs/datos-ea.md`. Recoge los endpoints y campos verificados, los no usados y los que EA no expone.
 
 ## 8. Orden sugerido de trabajo

@@ -1,9 +1,14 @@
 // Patrón Repository: el colector solo conoce esta interfaz. Cambiar de
 // proveedor (o usar un doble en los tests) no toca la lógica.
 import { createClient, type SupabaseClient } from '@supabase/supabase-js';
-import type { ClubRow, NormalizedMatch, RawMatchRow, RunResult } from './domain.ts';
+import type { ClubRow, MemberSnapshotRow, NormalizedMatch, RawMatchRow, RunResult } from './domain.ts';
 
 export interface StatsRepository {
+  /** Foto diaria de members/stats (upsert por club, miembro y día). */
+  saveMemberSnapshots(rows: MemberSnapshotRow[]): Promise<void>;
+  /** De estos partidos, cuáles aún no tienen la fuerza del rival. */
+  findMatchesMissingOpponentSkill(matchIds: string[]): Promise<Set<string>>;
+  setOpponentSkill(matchId: string, skillRating: number): Promise<void>;
   startRun(runner: string): Promise<number>;
   finishRun(runId: number, result: RunResult): Promise<void>;
   upsertClub(club: ClubRow): Promise<void>;
@@ -83,6 +88,34 @@ export class SupabaseStatsRepository implements StatsRepository {
   async saveRawMatch(row: RawMatchRow): Promise<void> {
     const { error } = await this.#db.from('match_raw').upsert(row, { onConflict: 'match_id' });
     check('saveRawMatch', error);
+  }
+
+  async saveMemberSnapshots(rows: MemberSnapshotRow[]): Promise<void> {
+    if (rows.length === 0) return;
+    const { error } = await this.#db
+      .from('member_snapshots')
+      .upsert(rows, { onConflict: 'club_id,member_name,snapshot_date' });
+    check('saveMemberSnapshots', error);
+  }
+
+  async findMatchesMissingOpponentSkill(matchIds: string[]): Promise<Set<string>> {
+    if (matchIds.length === 0) return new Set();
+    const { data, error } = await this.#db
+      .from('matches')
+      .select('match_id')
+      .in('match_id', matchIds)
+      .is('opponent_skill_rating', null);
+    check('findMatchesMissingOpponentSkill', error);
+    return new Set((data as { match_id: string }[]).map((r) => r.match_id));
+  }
+
+  async setOpponentSkill(matchId: string, skillRating: number): Promise<void> {
+    // Update aparte: el upsert de matches nunca envía esta columna, así no la pisa con null.
+    const { error } = await this.#db
+      .from('matches')
+      .update({ opponent_skill_rating: skillRating })
+      .eq('match_id', matchId);
+    check('setOpponentSkill', error);
   }
 
   async saveNormalizedMatch(n: NormalizedMatch): Promise<void> {

@@ -56,8 +56,30 @@ done
 
 echo "== Pruebas de integración"
 cd "$ROOT/collector"
-INT_API_URL="http://127.0.0.1:$API_PORT" INT_JWT_SECRET="$JWT_SECRET" \
-  node --test --test-reporter=spec test/integration/*.int.ts
+RESTORE_SQL="$(mktemp)"
+INT_API_URL="http://127.0.0.1:$API_PORT" INT_JWT_SECRET="$JWT_SECRET" INT_RESTORE_SQL="$RESTORE_SQL" \
+  node --test --test-reporter=spec --test-concurrency=1 test/integration/*.int.ts
+
+echo "== Restauración del respaldo en una base vacía"
+docker exec "$PG" psql -U postgres -q -c 'create database restore_test'
+for f in "$ROOT"/supabase/migrations/*.sql; do
+  docker exec -i "$PG" psql -U postgres -d restore_test -v ON_ERROR_STOP=1 -q -f "/supabase/migrations/$(basename "$f")"
+done
+docker exec -i "$PG" psql -U postgres -d restore_test -v ON_ERROR_STOP=1 -q < "$RESTORE_SQL"
+COUNTS_SQL="select string_agg(t || '=' || n, ' ' order by t) from (
+  select 'clubs' t, count(*) n from public.clubs union all select 'persons', count(*) from public.persons
+  union all select 'accounts', count(*) from public.accounts union all select 'matches', count(*) from public.matches
+  union all select 'match_raw', count(*) from public.match_raw union all select 'stats', count(*) from public.player_match_stats
+  union all select 'runs', count(*) from public.collector_runs union all select 'members', count(*) from public.member_snapshots
+  union all select 'person_stats_sum', sum(goals) from public.person_stats()) x"
+ORIG="$(docker exec "$PG" psql -U postgres -tAc "$COUNTS_SQL")"
+REST="$(docker exec "$PG" psql -U postgres -d restore_test -tAc "$COUNTS_SQL")"
+echo "original:   $ORIG"
+echo "restaurada: $REST"
+[ "$ORIG" = "$REST" ] || { echo "FALLA: la restauración no coincide"; exit 1; }
+# Tras restaurar, una persona nueva debe recibir un ID libre (secuencia movida).
+docker exec "$PG" psql -U postgres -d restore_test -v ON_ERROR_STOP=1 -qc "insert into public.persons (display_name) values ('nuevo')"
+echo "Restauración OK"
 
 echo "== Coherencia del parser TypeScript vs SQL (match_event_aggregate)"
 MISMATCHES="$(docker exec "$PG" psql -U postgres -tAc "

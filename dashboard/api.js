@@ -47,7 +47,7 @@ export function getPersonStats(filters) {
 
 export function getMatches(filters) {
   const p = filterParams(filters);
-  p.set('select', 'match_id,match_type,played_at,goals_for,goals_against,outcome,winner_by_dnf,opponent_name');
+  p.set('select', 'match_id,match_type,played_at,goals_for,goals_against,outcome,winner_by_dnf,opponent_name,opponent_skill_rating');
   p.set('order', 'played_at.desc');
   p.set('limit', String(MATCH_LIST_LIMIT));
   return request(`matches?${p}`);
@@ -55,10 +55,27 @@ export function getMatches(filters) {
 
 export function getPersonMatches(personId, filters) {
   const p = filterParams(filters);
-  p.set('select', 'match_id,played_at,match_type,opponent_name,goals_for,goals_against,outcome,playername,position,rating,goals,assists,is_mom,shots,passes_made,pass_attempts,tackles_made,saves,dribbles_exp,interceptions_exp,possession_won_exp,possession_lost_exp');
+  p.set('select', 'match_id,played_at,match_type,opponent_name,opponent_skill_rating,goals_for,goals_against,outcome,playername,position,rating,goals,assists,is_mom,shots,passes_made,pass_attempts,tackles_made,saves,dribbles_exp,interceptions_exp,possession_won_exp,possession_lost_exp');
   p.set('person_id', `eq.${Number(personId)}`);
   p.set('order', 'played_at.asc');
   return request(`v_player_match_stats?${p}`);
+}
+
+/** Último estado de cada miembro según members/stats (página "Members" de EA). */
+export function getMembers() {
+  return request('v_member_latest?select=*&order=pro_overall.desc.nullslast,member_name.asc');
+}
+
+/** Evolución de la media del Pro de uno o varios gamertags. */
+export function getMemberHistory(names) {
+  if (!names.length) return Promise.resolve([]);
+  const list = names.map((n) => `"${String(n).replaceAll('"', '')}"`).join(',');
+  const p = new URLSearchParams({
+    select: 'member_name,snapshot_date,pro_overall,games_played',
+    member_name: `in.(${list})`,
+    order: 'snapshot_date.asc',
+  });
+  return request(`member_snapshots?${p}`);
 }
 
 export function getMatchPlayers(matchId) {

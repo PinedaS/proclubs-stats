@@ -5,6 +5,7 @@ import type { Config } from './config.ts';
 import type { RunResult } from './domain.ts';
 import type { MatchSource } from './ea-source.ts';
 import type { StatsRepository } from './repository.ts';
+import { toMemberSnapshotRows } from './members.ts';
 import { TransformError, normalizeMatch, toRawRow } from './transform.ts';
 
 export interface Logger {
@@ -55,6 +56,7 @@ export async function collect(deps: CollectDeps): Promise<RunResult> {
   let clubId: number | null = null;
   let matchesSeen = 0;
   let matchesNew = 0;
+  const opponents: { matchId: string; opponentId: string }[] = [];
 
   const finish = async (fatal?: unknown): Promise<RunResult> => {
     const all = fatal === undefined ? failures : [...failures, { code: errorCodeOf(fatal), message: messageOf(fatal) }];
@@ -104,13 +106,18 @@ export async function collect(deps: CollectDeps): Promise<RunResult> {
       for (const { source: m, row } of raws) {
         await repo.saveRawMatch(row);
         matchesSeen++;
+        let normalized;
         try {
-          await repo.saveNormalizedMatch(normalizeMatch(m, ctx));
+          normalized = normalizeMatch(m, ctx);
+          await repo.saveNormalizedMatch(normalized);
         } catch (err) {
           if (!(err instanceof TransformError)) throw err;
           failures.push({ code: 'TRANSFORM', message: err.message });
           log.error(err.message);
           continue;
+        }
+        if (normalized.match.opponent_club_id !== null) {
+          opponents.push({ matchId: row.match_id, opponentId: String(normalized.match.opponent_club_id) });
         }
         if (!existing.has(row.match_id)) newHere++;
       }
@@ -118,6 +125,9 @@ export async function collect(deps: CollectDeps): Promise<RunResult> {
       matchesNew += newHere;
       log.info(`${matchType}: ${matches.length} recibidos, ${newHere} nuevos`);
     }
+
+    await fillOpponentSkill(deps, opponents);
+    await captureMembers(deps, club.clubId, now(), failures);
   } catch (err) {
     log.error(`Ejecución abortada: ${messageOf(err)}`);
     try {
@@ -129,4 +139,49 @@ export async function collect(deps: CollectDeps): Promise<RunResult> {
   }
 
   return finish();
+}
+
+/**
+ * Fuerza del rival: skillRating del club rival para los partidos que aún no lo
+ * tienen. Es un dato complementario: si EA falla aquí NO se marca la ejecución
+ * como error (se reintenta solo en la próxima, mientras el partido siga entre
+ * los últimos 10).
+ */
+async function fillOpponentSkill(deps: CollectDeps, opponents: { matchId: string; opponentId: string }[]): Promise<void> {
+  if (opponents.length === 0) return;
+  const missing = await deps.repo.findMatchesMissingOpponentSkill(opponents.map((o) => o.matchId));
+  const cache = new Map<string, number | null>();
+  let filled = 0;
+  for (const { matchId, opponentId } of opponents) {
+    if (!missing.has(matchId)) continue;
+    try {
+      if (!cache.has(opponentId)) cache.set(opponentId, await deps.source.getClubSkillRating(opponentId));
+    } catch (err) {
+      if (!(err instanceof ProClubsError)) throw err;
+      deps.log.error(`No se pudo leer el nivel del rival ${opponentId}: ${messageOf(err)}`);
+      cache.set(opponentId, null);
+    }
+    const skill = cache.get(opponentId);
+    if (skill != null) {
+      await deps.repo.setOpponentSkill(matchId, skill);
+      filled++;
+    }
+  }
+  if (filled) deps.log.info(`Nivel del rival guardado en ${filled} partidos`);
+}
+
+/** Foto de members/stats. Si EA falla, se registra como falla (dato oficial). */
+async function captureMembers(deps: CollectDeps, clubId: string, at: Date, failures: SoftFailure[]): Promise<void> {
+  let response: unknown;
+  try {
+    response = await deps.source.getMemberStats(clubId);
+  } catch (err) {
+    if (!(err instanceof ProClubsError)) throw err;
+    failures.push({ code: errorCodeOf(err), message: `members/stats: ${messageOf(err)}` });
+    deps.log.error(`EA falló en members/stats: ${messageOf(err)}`);
+    return;
+  }
+  const rows = toMemberSnapshotRows(response, clubId, at);
+  await deps.repo.saveMemberSnapshots(rows);
+  deps.log.info(`Miembros: ${rows.length} guardados en la foto del ${rows[0]?.snapshot_date ?? '—'}`);
 }

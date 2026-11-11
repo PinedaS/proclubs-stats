@@ -2,6 +2,10 @@
 import assert from 'node:assert/strict';
 import { createHmac } from 'node:crypto';
 import { readFileSync } from 'node:fs';
+import { mkdtemp, writeFile } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import { buildRestoreSql, exportTables } from '../../src/backup.ts';
 import { describe, test } from 'node:test';
 import type { ClubMatch } from 'proclubs-sdk';
 import { collect } from '../../src/collect.ts';
@@ -34,6 +38,10 @@ const anon = createServiceClient(API_URL, jwt('anon'), stripPrefix);
 const source: MatchSource = {
   findClubByName: async () => ({ clubId: '1330384', name: 'Aston Huila' }),
   listMatches: async (_id: string, type: MatchType) => (type === 'leagueMatch' ? structuredClone(fixture) : []),
+  getMemberStats: async () => ({
+    members: [{ name: 'Jugador_01', proOverall: '78', gamesPlayed: '102', goals: '130', ratingAve: '6.9', proNationality: '56' }],
+  }),
+  getClubSkillRating: async (clubId: string) => 1500 + Number(clubId.slice(-2)),
 };
 
 const config = {
@@ -118,10 +126,44 @@ describe('SupabaseStatsRepository contra Postgres + PostgREST', () => {
     const raw = await anon.from('match_raw').select('match_id').limit(1);
     assert.ok(raw.error, 'anon no debe leer match_raw');
 
+    // Métricas calculadas: G+A por 90 y presencia, coherentes con los totales.
+    const one = (stats.data as Record<string, number>[]).find((p) => Number(p.matches) === 10)!;
+    assert.equal(Number(one.club_matches), 10);
+    assert.equal(Number(one.attendance_pct), 100);
+    assert.equal(
+      Number(one.ga_per90),
+      Math.round(((Number(one.goals) + Number(one.assists)) * 5400 / Number(one.seconds_played)) * 100) / 100,
+    );
+    assert.ok(Number(one.avg_opponent_skill) > 1500, 'la fuerza del rival llega a person_stats');
+
+    // Foto de miembros: anon lee la vista, pero no la columna raw.
+    const members = await anon.from('v_member_latest').select('member_name, pro_overall, games_played, ea_games_since_first');
+    assert.equal(members.error, null);
+    assert.deepEqual(members.data, [{ member_name: 'Jugador_01', pro_overall: 78, games_played: 102, ea_games_since_first: 0 }]);
+    const raw2 = await anon.from('member_snapshots').select('raw').limit(1);
+    assert.ok(raw2.error, 'anon no debe leer member_snapshots.raw');
+
     const ins = await anon.from('matches').insert({
       match_id: '1', club_id: 1330384, match_type: 'leagueMatch', played_at: new Date().toISOString(),
       goals_for: 0, goals_against: 0,
     });
     assert.ok(ins.error, 'anon no debe insertar');
+  });
+
+  test('fuerza del rival: se guarda en cada partido y no la pisa el upsert siguiente', async () => {
+    const { data, error } = await service.from('matches').select('match_id, opponent_skill_rating');
+    assert.equal(error, null);
+    assert.ok((data as { opponent_skill_rating: number | null }[]).every((m) => m.opponent_skill_rating! > 1500));
+  });
+
+  test('respaldo: exporta todas las tablas y genera el SQL de restauración', async () => {
+    const dir = await mkdtemp(join(tmpdir(), 'pc-backup-'));
+    const counts = await exportTables(service, dir);
+    assert.equal(counts.matches, 10);
+    assert.equal(counts.member_snapshots, 1);
+    assert.equal(counts.collector_runs, 2);
+    const sql = await buildRestoreSql(dir);
+    // run.sh lo aplica a una base vacía y compara contra la original.
+    if (process.env.INT_RESTORE_SQL) await writeFile(process.env.INT_RESTORE_SQL, sql);
   });
 });

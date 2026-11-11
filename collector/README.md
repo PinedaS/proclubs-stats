@@ -29,6 +29,12 @@ Sale con código **1** si EA, la transformación o Supabase fallaron. Así GitHu
 | `npm test` | Tests unitarios (sin red ni base de datos). |
 | `npm run test:integration` | Repositorio real → PostgREST → Postgres 17 en Docker, con las migraciones del repo. |
 | `npm run typecheck` | Verificación de tipos (`tsc --noEmit`). |
+| `npm run backup -- <dir>` | Exporta todas las tablas a `<dir>/*.jsonl` (requiere `.env`). |
+| `npm run restore-sql -- <dir> > restore.sql` | Genera el SQL para restaurar un respaldo en un proyecto con las migraciones aplicadas. |
+
+Cada ejecución, además de los partidos:
+- guarda una foto diaria de `members/stats` en `member_snapshots`, con la media del Pro y los totales oficiales;
+- guarda el `skillRating` del rival en los partidos que aún no lo tienen. Si EA falla aquí, no se marca error: se reintenta en la siguiente ejecución.
 | `npm run fetch-fixture` | Descarga partidos reales del club configurado a `test/fixtures/`, **anonimizados** (el repo es público). |
 
 ## Estructura

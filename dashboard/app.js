@@ -16,6 +16,8 @@ const state = {
   sort: { key: 'avg_rating', dir: -1 },
   minMatches: 1,
   showExp: true,
+  showAdv: true,
+  members: null,
   ranking: [],
   personId: null,
   requestId: 0,
@@ -151,7 +153,23 @@ const RANKING_COLUMNS = [
   { key: 'tackle_success_pct', label: 'Entradas %', title: 'Entradas ganadas / intentadas', digits: 1 },
   { key: 'saves', label: 'Atajadas' },
   { key: 'red_cards', label: 'Rojas', title: 'Tarjetas rojas' },
+  // Avanzadas: calculadas con datos oficiales.
+  { key: 'minutes_played', label: 'Min.', title: 'Minutos jugados (tiempo de juego)', adv: true },
+  { key: 'goals_per90', label: 'G/90', title: 'Goles por cada 90 minutos', digits: 2, adv: true },
+  { key: 'assists_per90', label: 'A/90', title: 'Asistencias por cada 90 minutos', digits: 2, adv: true },
+  { key: 'ga_per90', label: 'G+A/90', title: 'Goles + asistencias por cada 90 minutos', digits: 2, adv: true },
+  { key: 'shot_conversion_pct', label: 'Conv. %', title: 'Goles / tiros', digits: 1, adv: true },
+  { key: 'goal_participation_pct', label: 'Part. goles %', title: '(Goles + asistencias) / goles del equipo en sus partidos', digits: 1, adv: true },
+  { key: 'goal_diff', label: 'Dif. goles', title: 'Goles a favor menos en contra en los partidos que jugó', adv: true, render: (r) => r.goal_diff > 0 ? `+${r.goal_diff}` : String(r.goal_diff ?? '—') },
+  { key: 'attendance_pct', label: 'Presencia %', title: 'Partidos jugados / partidos del club en el rango filtrado', digits: 1, adv: true },
+  { key: 'form_rating', label: 'Forma', title: 'Calificación media de sus últimos 5 partidos', digits: 2, adv: true },
+  { key: 'rating_stddev', label: 'Variación', title: 'Desviación de su calificación: más bajo = más regular', digits: 2, adv: true },
+  { key: 'clean_sheets', label: 'Vallas', title: 'Vallas invictas (defensa + portero)', adv: true },
+  { key: 'save_pct', label: '% Atajadas', title: 'Porteros: atajadas / (atajadas + goles recibidos)', digits: 1, adv: true },
+  { key: 'avg_opponent_skill', label: 'Nivel rival', title: 'Nivel medio (skillRating) de los rivales que enfrentó', adv: true },
   // Experimentales: contadores sin documentar de EA (ver nota al pie del dashboard).
+  { key: 'shot_accuracy_exp_pct', label: 'A puerta %*', title: 'Experimental: tiros a puerta / tiros (códigos EA 217 y 218)', digits: 1, exp: true },
+  { key: 'second_assists_exp', label: '2ª asist.*', title: 'Experimental: segundas asistencias (código EA 115)', exp: true },
   { key: 'dribbles_exp', label: 'Regates*', title: 'Experimental: regates completados (código EA 174)', exp: true },
   { key: 'interceptions_exp', label: 'Intercep.*', title: 'Experimental: intercepciones (código EA 6)', exp: true },
   { key: 'possession_won_exp', label: 'Recup.*', title: 'Experimental: posesiones ganadas (códigos EA 108–110)', exp: true },
@@ -161,8 +179,8 @@ const RANKING_COLUMNS = [
   { key: 'yellow_cards_exp', label: 'Amarillas*', title: 'Experimental: tarjetas amarillas (códigos EA 95 y 213)', exp: true },
 ];
 
-const visibleColumns = () => RANKING_COLUMNS.filter((c) => state.showExp || !c.exp);
-const cellClass = (c) => [c.text ? 'left' : '', c.exp ? 'exp' : ''].join(' ').trim() || null;
+const visibleColumns = () => RANKING_COLUMNS.filter((c) => (state.showExp || !c.exp) && (state.showAdv || !c.adv));
+const cellClass = (c) => [c.text ? 'left' : '', c.exp ? 'exp' : '', c.adv ? 'adv' : ''].join(' ').trim() || null;
 
 function sortRows(rows) {
   const { key, dir } = state.sort;
@@ -218,20 +236,23 @@ async function renderMatches(filters, requestId) {
   const table = $('#matches-table');
   const head = el('thead', {}, el('tr', {},
     el('th', { scope: 'col' }, 'Fecha'), el('th', { scope: 'col', class: 'left' }, 'Tipo'),
-    el('th', { scope: 'col', class: 'left' }, 'Rival'), el('th', { scope: 'col' }, 'Marcador'),
+    el('th', { scope: 'col', class: 'left' }, 'Rival'),
+    el('th', { scope: 'col', title: 'skillRating del rival según EA' }, 'Nivel rival'),
+    el('th', { scope: 'col' }, 'Marcador'),
     el('th', { scope: 'col' }, 'Resultado')));
   const matches = filters.types.length ? await api.getMatches(filters) : [];
   if (requestId !== state.requestId) return;
 
   const body = el('tbody');
   if (!matches.length) {
-    body.append(el('tr', {}, el('td', { class: 'empty', colspan: 5 }, 'Sin partidos para estos filtros.')));
+    body.append(el('tr', {}, el('td', { class: 'empty', colspan: 6 }, 'Sin partidos para estos filtros.')));
   }
   for (const m of matches) {
     const row = el('tr', { class: 'clickable', tabindex: '0', 'aria-expanded': 'false' },
       el('td', { class: 'left' }, fmtDate(m.played_at)),
       el('td', { class: 'left' }, TYPE_LABEL[m.match_type] ?? m.match_type),
       el('td', { class: 'left' }, m.opponent_name ?? '—'),
+      el('td', {}, fmtNum(m.opponent_skill_rating)),
       el('td', {}, `${m.goals_for} – ${m.goals_against}`),
       el('td', {}, resultBadge(m.outcome, m.winner_by_dnf)));
     const toggle = () => toggleMatchPlayers(row, m.match_id);
@@ -250,7 +271,7 @@ async function toggleMatchPlayers(row, matchId) {
     return;
   }
   row.setAttribute('aria-expanded', 'true');
-  const cell = el('td', { colspan: 5 }, el('span', { class: 'muted' }, 'Cargando jugadores…'));
+  const cell = el('td', { colspan: 6 }, el('span', { class: 'muted' }, 'Cargando jugadores…'));
   row.after(el('tr', { class: 'match-players' }, cell));
   try {
     const players = await api.getMatchPlayers(matchId);
@@ -275,6 +296,47 @@ async function toggleMatchPlayers(row, matchId) {
 }
 
 // ---------------------------------------------------------------------------
+// Miembros (members/stats de EA)
+// ---------------------------------------------------------------------------
+
+async function renderMembers() {
+  const table = $('#members-table');
+  if (!state.members) state.members = await api.getMembers();
+  const members = state.members;
+  const cols = [
+    ['Miembro', 'left'], ['Personaje', 'left'], ['Pos. favorita', 'left'], ['Media', null, 'Media (overall) del Pro'],
+    ['Δ media', null, 'Cambio de la media desde la primera foto'], ['PJ (EA)', null, 'Partidos según EA'],
+    ['G', null], ['A', null], ['% Vic.', null], ['% Pases', null], ['% Tiros', null, 'Tiros acertados según EA'],
+    ['MVP', null], ['Calif.', null], ['Capturados / EA', null, 'Partidos desde la primera foto: capturados por el colector / sumados por EA'],
+  ];
+  const head = el('thead', {}, el('tr', {}, cols.map(([h, cls, title]) => el('th', { scope: 'col', class: cls, title }, h))));
+  const body = el('tbody', {}, members.length ? members.map((m) => {
+    const delta = m.pro_overall != null && m.first_overall != null ? m.pro_overall - m.first_overall : null;
+    const ea = m.ea_games_since_first, got = m.captured_since_first;
+    const recon = ea == null ? '—' : `${got} / ${ea}`;
+    const missing = ea != null && got < ea;
+    return el('tr', {
+      class: m.person_id ? 'clickable' : null,
+      tabindex: m.person_id ? '0' : null,
+      onclick: m.person_id ? () => openPerson(m.person_id) : null,
+      onkeydown: m.person_id ? (e) => { if (e.key === 'Enter') openPerson(m.person_id); } : null,
+    },
+      el('td', { class: 'left person' }, m.member_name),
+      el('td', { class: 'left' }, m.pro_name ?? '—'),
+      el('td', { class: 'left' }, POS_LABEL[m.favorite_position] ?? m.favorite_position ?? '—'),
+      el('td', {}, el('strong', {}, fmtNum(m.pro_overall))),
+      el('td', {}, delta == null ? '—' : delta > 0 ? `+${delta}` : String(delta)),
+      el('td', {}, fmtNum(m.games_played)),
+      el('td', {}, fmtNum(m.goals)), el('td', {}, fmtNum(m.assists)),
+      el('td', {}, fmtNum(m.win_rate)), el('td', {}, fmtNum(m.pass_success_rate)), el('td', {}, fmtNum(m.shot_success_rate)),
+      el('td', {}, fmtNum(m.man_of_the_match)), el('td', {}, fmtNum(m.rating_avg, 1)),
+      el('td', { title: missing ? 'EA sumó más partidos de los que capturamos: posible partido perdido' : null },
+        missing ? el('span', {}, el('span', { class: 'warn-icon', 'aria-hidden': 'true' }, '⚠ '), recon) : recon));
+  }) : [el('tr', {}, el('td', { class: 'empty', colspan: cols.length }, 'Todavía no hay fotos de members/stats.'))]);
+  table.replaceChildren(head, body);
+}
+
+// ---------------------------------------------------------------------------
 // Detalle de jugador
 // ---------------------------------------------------------------------------
 
@@ -293,14 +355,23 @@ async function renderPerson(filters, requestId) {
   const close = el('button', { type: 'button', class: 'close', onclick: () => { state.personId = null; box.hidden = true; } }, 'Cerrar');
   const name = summary?.person_name ?? matches.at(-1)?.playername ?? 'Jugador';
 
+  const pct = (v) => (v != null ? `${fmtNum(v, 1)} %` : '—');
   const tiles = el('div', { class: 'tiles' },
     tile('Partidos', fmtNum(summary?.matches ?? matches.length)),
     tile('Goles + asist.', fmtNum(summary?.goal_contributions)),
     tile('Calif. media', fmtNum(summary?.avg_rating, 2)),
-    tile('MVP', summary ? `${fmtNum(summary.mom_pct, 1)} %` : '—'),
-    tile('Pases', summary?.pass_accuracy_pct != null ? `${fmtNum(summary.pass_accuracy_pct, 1)} %` : '—'));
+    tile('MVP', pct(summary?.mom_pct)),
+    tile('Pases', pct(summary?.pass_accuracy_pct)),
+    state.showAdv ? [
+      tile('G+A por 90 min', fmtNum(summary?.ga_per90, 2)),
+      tile('Forma (últ. 5)', fmtNum(summary?.form_rating, 2)),
+      tile('Presencia', pct(summary?.attendance_pct)),
+      tile('Part. en goles', pct(summary?.goal_participation_pct)),
+      tile('Nivel rival medio', fmtNum(summary?.avg_opponent_skill)),
+    ] : []);
 
   const chartBox = el('div', { class: 'chart' }, el('h3', {}, 'Calificación por partido'));
+  const overallBox = el('div', { class: 'chart' }, el('h3', {}, 'Media del Pro (EA), día a día'));
   const table = el('div', { class: 'table-wrap' }, el('table', {},
     el('thead', {}, el('tr', {}, ['Fecha', 'Tipo', 'Rival', 'Res.', 'Pos.', 'Calif.', 'G', 'A', 'MVP'].map((h, i) =>
       el('th', { scope: 'col', class: i < 3 || i === 4 ? 'left' : null }, h)),
@@ -323,48 +394,80 @@ async function renderPerson(filters, requestId) {
   box.replaceChildren(
     el('div', { class: 'detail-head' }, el('div', {}, el('h2', {}, name),
       el('p', { class: 'subtitle' }, POS_LABEL[summary?.main_position] ?? '')), close),
-    tiles, chartBox, table);
+    tiles, chartBox, overallBox, table);
   box.hidden = false;
-  drawRatingChart(chartBox, matches.filter((m) => m.rating != null));
+  drawLineChart(chartBox, matches.filter((m) => m.rating != null), {
+    label: 'Calificación por partido', value: (p) => p.rating, date: (p) => p.played_at,
+    min: 0, max: 10, pad: 0.5, emptyText: 'Sin calificaciones en este rango.',
+    tooltip: (p) => [
+      el('div', {}, el('strong', {}, fmtNum(p.rating, 1)), ` · ${OUTCOME[p.outcome]?.label ?? ''} ${p.goals_for}–${p.goals_against}`),
+      el('div', { class: 'muted' }, `${fmtDate(p.played_at, false)} · ${p.opponent_name ?? ''}${p.opponent_skill_rating ? ` (nivel ${p.opponent_skill_rating})` : ''}`),
+      el('div', {}, `G ${p.goals} · A ${p.assists}${p.is_mom ? ' · ★ MVP' : ''}`),
+    ],
+  });
   box.scrollIntoView({ behavior: 'smooth', block: 'start' });
+
+  // Media del Pro: fotos diarias de members/stats enlazadas a esta persona por gamertag.
+  try {
+    if (!state.members) state.members = await api.getMembers();
+    const names = state.members.filter((m) => m.person_id === state.personId).map((m) => m.member_name);
+    const history = (await api.getMemberHistory(names)).filter((h) => h.pro_overall != null);
+    if (requestId !== state.requestId) return;
+    drawLineChart(overallBox, history, {
+      label: 'Media del Pro', value: (h) => h.pro_overall, date: (h) => `${h.snapshot_date}T12:00:00Z`,
+      min: 40, max: 99, pad: 1, emptyText: 'Sin fotos de members/stats para este jugador.',
+      tooltip: (h) => [
+        el('div', {}, el('strong', {}, `Media ${h.pro_overall}`), names.length > 1 ? ` · ${h.member_name}` : ''),
+        el('div', { class: 'muted' }, `${fmtDate(`${h.snapshot_date}T12:00:00Z`, false)} · ${h.games_played} partidos según EA`),
+      ],
+    });
+  } catch (err) {
+    overallBox.append(el('p', { class: 'muted' }, `No se pudo cargar la media: ${err.message}`));
+  }
 }
 
 function tile(label, value) {
   return el('div', { class: 'tile' }, el('div', { class: 'label' }, label), el('div', { class: 'value' }, value));
 }
 
-/** Línea de calificación (una sola serie: sin leyenda; el título la nombra). */
-function drawRatingChart(container, points) {
+/**
+ * Línea de una sola serie (sin leyenda: el título la nombra), con hover.
+ * opts: value(p), date(p) ISO, tooltip(p) -> nodos, min/max (límites del eje),
+ *       pad (margen del eje), step (cada cuánto una línea guía), label (accesible).
+ */
+function drawLineChart(container, points, opts) {
   if (points.length === 0) {
-    container.append(el('p', { class: 'muted' }, 'Sin calificaciones en este rango.'));
+    container.append(el('p', { class: 'muted' }, opts.emptyText ?? 'Sin datos en este rango.'));
     return;
   }
   const W = Math.max(280, container.clientWidth || 600), H = 200;
   const pad = { l: 30, r: 12, t: 10, b: 24 };
-  const ratings = points.map((p) => Number(p.rating));
-  const yMin = Math.max(0, Math.floor(Math.min(...ratings) - 0.5));
-  const yMax = Math.min(10, Math.ceil(Math.max(...ratings) + 0.5));
+  const vals = points.map((p) => Number(opts.value(p)));
+  const step = opts.step ?? 1;
+  const yMin = Math.max(opts.min, Math.floor((Math.min(...vals) - opts.pad) / step) * step);
+  const yMax = Math.min(opts.max, Math.ceil((Math.max(...vals) + opts.pad) / step) * step);
   const x = (i) => points.length === 1 ? (pad.l + W - pad.r) / 2 : pad.l + (i * (W - pad.l - pad.r)) / (points.length - 1);
   const y = (v) => pad.t + ((yMax - v) * (H - pad.t - pad.b)) / (yMax - yMin || 1);
+  const valueAt = (i) => Number(opts.value(points[i]));
 
-  const chart = svg('svg', { viewBox: `0 0 ${W} ${H}`, role: 'img', 'aria-label': `Calificación en ${points.length} partidos, entre ${yMin} y ${yMax}` });
-  for (let v = yMin; v <= yMax; v++) {
+  const chart = svg('svg', { viewBox: `0 0 ${W} ${H}`, role: 'img', 'aria-label': `${opts.label}: ${points.length} puntos, entre ${yMin} y ${yMax}` });
+  for (let v = yMin; v <= yMax; v += step) {
     chart.append(svg('line', { class: 'gridline', x1: pad.l, x2: W - pad.r, y1: y(v), y2: y(v) }));
     const label = svg('text', { class: 'axis-label', x: pad.l - 6, y: y(v) + 4, 'text-anchor': 'end' });
     label.textContent = String(v);
     chart.append(label);
   }
   const first = svg('text', { class: 'axis-label', x: x(0), y: H - 6, 'text-anchor': points.length === 1 ? 'middle' : 'start' });
-  first.textContent = fmtDate(points[0].played_at, false);
+  first.textContent = fmtDate(opts.date(points[0]), false);
   chart.append(first);
   if (points.length > 1) {
     const last = svg('text', { class: 'axis-label', x: x(points.length - 1), y: H - 6, 'text-anchor': 'end' });
-    last.textContent = fmtDate(points.at(-1).played_at, false);
+    last.textContent = fmtDate(opts.date(points.at(-1)), false);
     chart.append(last);
   }
-  chart.append(svg('path', { class: 'line', d: points.map((p, i) => `${i ? 'L' : 'M'}${x(i)},${y(Number(p.rating))}`).join('') }));
+  chart.append(svg('path', { class: 'line', d: points.map((_, i) => `${i ? 'L' : 'M'}${x(i)},${y(valueAt(i))}`).join('') }));
   if (points.length <= 40) {
-    points.forEach((p, i) => chart.append(svg('circle', { class: 'dot', cx: x(i), cy: y(Number(p.rating)), r: 4 })));
+    points.forEach((_, i) => chart.append(svg('circle', { class: 'dot', cx: x(i), cy: y(valueAt(i)), r: 4 })));
   }
 
   // Capa de hover: línea guía + punto resaltado + tooltip.
@@ -380,19 +483,16 @@ function drawRatingChart(container, points) {
     let i = 0;
     for (let k = 1; k < points.length; k++) if (Math.abs(x(k) - px) < Math.abs(x(i) - px)) i = k;
     const p = points[i];
-    for (const [node, attrs] of [[cross, { x1: x(i), x2: x(i) }], [focus, { cx: x(i), cy: y(Number(p.rating)) }]]) {
+    for (const [node, attrs] of [[cross, { x1: x(i), x2: x(i) }], [focus, { cx: x(i), cy: y(valueAt(i)) }]]) {
       for (const [k, v] of Object.entries(attrs)) node.setAttribute(k, v);
       node.setAttribute('visibility', 'visible');
     }
-    tip.replaceChildren(
-      el('div', {}, el('strong', {}, fmtNum(p.rating, 1)), ` · ${OUTCOME[p.outcome]?.label ?? ''} ${p.goals_for}–${p.goals_against}`),
-      el('div', { class: 'muted' }, `${fmtDate(p.played_at, false)} · ${p.opponent_name ?? ''}`),
-      el('div', {}, `G ${p.goals} · A ${p.assists}${p.is_mom ? ' · ★ MVP' : ''}`));
+    tip.replaceChildren(...opts.tooltip(p));
     tip.hidden = false;
     // Coordenadas relativas al contenedor (que también incluye el título).
     const box = container.getBoundingClientRect();
     const left = rect.left - box.left + (x(i) / W) * rect.width;
-    const top = rect.top - box.top + (y(Number(p.rating)) / H) * rect.height;
+    const top = rect.top - box.top + (y(valueAt(i)) / H) * rect.height;
     tip.style.left = `${Math.min(Math.max(left - 70, 0), box.width - 170)}px`;
     tip.style.top = `${top + 14}px`;
   };
@@ -429,7 +529,9 @@ function setView(view) {
   for (const b of document.querySelectorAll('.tab')) b.setAttribute('aria-pressed', String(b.dataset.view === view));
   $('#view-ranking').hidden = view !== 'ranking';
   $('#view-matches').hidden = view !== 'matches';
+  $('#view-members').hidden = view !== 'members';
   if (view === 'matches') refresh();
+  if (view === 'members') renderMembers().catch(showError);
 }
 
 async function init() {
@@ -447,6 +549,13 @@ async function init() {
       state.sort = { key: 'avg_rating', dir: -1 };
     }
     refresh(); // vuelve a dibujar ranking, partidos abiertos y detalle
+  });
+  $('#show-adv').addEventListener('change', (e) => {
+    state.showAdv = e.target.checked;
+    if (!state.showAdv && RANKING_COLUMNS.find((c) => c.key === state.sort.key)?.adv) {
+      state.sort = { key: 'avg_rating', dir: -1 };
+    }
+    refresh();
   });
 
   api.getClub().then((club) => {

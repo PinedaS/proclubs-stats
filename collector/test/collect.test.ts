@@ -3,7 +3,7 @@ import { readFileSync } from 'node:fs';
 import { describe, test } from 'node:test';
 import { ProClubsError, type ClubMatch } from 'proclubs-sdk';
 import { collect, type CollectDeps } from '../src/collect.ts';
-import type { ClubRow, MatchType, NormalizedMatch, RawMatchRow, RunResult } from '../src/domain.ts';
+import type { ClubRow, MatchType, MemberSnapshotRow, NormalizedMatch, RawMatchRow, RunResult } from '../src/domain.ts';
 import { ClubNotFoundError, type FoundClub, type MatchSource } from '../src/ea-source.ts';
 import { RepositoryError, type StatsRepository } from '../src/repository.ts';
 
@@ -43,6 +43,17 @@ class FakeRepo implements StatsRepository {
     if (this.failOnNormalized) throw new RepositoryError('upsert matches: conexión rechazada');
     this.matches.set(n.match.match_id, n);
   }
+  members = new Map<string, MemberSnapshotRow>();
+  opponentSkill = new Map<string, number>();
+  async saveMemberSnapshots(rows: MemberSnapshotRow[]): Promise<void> {
+    for (const r of rows) this.members.set(`${r.member_name}|${r.snapshot_date}`, r);
+  }
+  async findMatchesMissingOpponentSkill(ids: string[]): Promise<Set<string>> {
+    return new Set(ids.filter((id) => this.matches.has(id) && !this.opponentSkill.has(id)));
+  }
+  async setOpponentSkill(id: string, skill: number): Promise<void> {
+    this.opponentSkill.set(id, skill);
+  }
 }
 
 class FakeSource implements MatchSource {
@@ -60,6 +71,18 @@ class FakeSource implements MatchSource {
     const d = this.data[type] ?? [];
     if (d instanceof Error) throw d;
     return structuredClone(d);
+  }
+  members: unknown = { members: [{ name: 'Jugador_01', proOverall: '78', gamesPlayed: '102', ratingAve: '6.9' }] };
+  skillCalls = 0;
+  skillError: Error | null = null;
+  async getMemberStats(): Promise<unknown> {
+    if (this.members instanceof Error) throw this.members;
+    return this.members;
+  }
+  async getClubSkillRating(clubId: string): Promise<number | null> {
+    this.skillCalls++;
+    if (this.skillError) throw this.skillError;
+    return 1000 + Number(clubId.slice(-3));
   }
 }
 
@@ -82,6 +105,46 @@ function deps(source: MatchSource, repo: StatsRepository): CollectDeps {
 }
 
 // ---------------------------------------------------------------------------
+
+describe('collect: miembros y fuerza del rival', () => {
+  test('guarda la foto de members/stats y el nivel de cada rival una sola vez', async () => {
+    const repo = new FakeRepo();
+    const source = new FakeSource({ leagueMatch: fixture });
+    const r = await collect(deps(source, repo));
+    assert.equal(r.status, 'success');
+
+    const snap = repo.members.get('Jugador_01|2026-11-10');
+    assert.equal(snap?.pro_overall, 78);
+    assert.equal(snap?.games_played, 102);
+    assert.equal(snap?.rating_avg, 6.9);
+
+    assert.equal(repo.opponentSkill.size, 10, 'cada partido recibe el nivel de su rival');
+    const callsFirstRun = source.skillCalls;
+    assert.ok(callsFirstRun <= 10, 'un mismo rival se consulta una sola vez por ejecución');
+
+    await collect(deps(source, repo));
+    assert.equal(source.skillCalls, callsFirstRun, 'la segunda ejecución no vuelve a consultar rivales');
+  });
+
+  test('si EA falla con el nivel del rival, NO marca la ejecución como error', async () => {
+    const repo = new FakeRepo();
+    const source = new FakeSource({ leagueMatch: fixture });
+    source.skillError = new ProClubsError('timeout', 'TIMEOUT');
+    const r = await collect(deps(source, repo));
+    assert.equal(r.status, 'success');
+    assert.equal(repo.opponentSkill.size, 0);
+  });
+
+  test('si EA falla con members/stats, la ejecución queda en error pero los partidos se guardan', async () => {
+    const repo = new FakeRepo();
+    const source = new FakeSource({ leagueMatch: fixture });
+    source.members = new ProClubsError('HTTP 503', 'HTTP');
+    const r = await collect(deps(source, repo));
+    assert.equal(r.status, 'error');
+    assert.match(r.errorMessage ?? '', /members\/stats/);
+    assert.equal(repo.matches.size, 10);
+  });
+});
 
 describe('collect', () => {
   test('primera ejecución guarda todo y registra éxito', async () => {

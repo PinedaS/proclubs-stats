@@ -31,6 +31,9 @@
     <label class="field" title="Mínimo de partidos para aparecer en el ranking">Mín. partidos
       <input type="number" id="min-matches" min="1" value="1" inputmode="numeric">
     </label>
+    <label class="toggle" title="Métricas calculadas con los datos oficiales: por 90 min, conversión, forma, presencia…">
+      <input type="checkbox" id="show-adv" checked> Métricas avanzadas
+    </label>
     <label class="toggle" title="Datos que EA no documenta; ver nota al pie">
       <input type="checkbox" id="show-exp" checked> Datos experimentales*
     </label>
@@ -39,6 +42,7 @@
   <nav class="tabs" aria-label="Vistas">
     <button type="button" class="tab" data-view="ranking" aria-pressed="true">Ranking</button>
     <button type="button" class="tab" data-view="matches" aria-pressed="false">Partidos</button>
+    <button type="button" class="tab" data-view="members" aria-pressed="false">Miembros (EA)</button>
   </nav>
 
   <main>
@@ -48,7 +52,12 @@
       <div class="table-wrap"><table id="ranking-table"></table></div>
     </section>
     <section id="view-matches" class="view" hidden>
+      <p class="hint"><strong>Nivel rival:</strong> skillRating del club rival según EA, leído cuando se capturó el partido.</p>
       <div class="table-wrap"><table id="matches-table"></table></div>
+    </section>
+    <section id="view-members" class="view" hidden>
+      <p class="hint">Datos oficiales de EA (members/stats), los mismos de la página "Members" del club: totales desde que cada jugador está en el club, no solo los partidos capturados. No dependen de los filtros. <strong>Capturados / EA</strong> compara, desde la primera foto, los partidos que EA le sumó con los que guardó el colector: si no coinciden, puede haberse perdido algún partido.</p>
+      <div class="table-wrap"><table id="members-table"></table></div>
     </section>
     <section id="person-detail" class="detail" hidden aria-live="polite"></section>
   </main>

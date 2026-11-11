@@ -1,0 +1,20 @@
+# Dependabot (gratis): propone actualizaciones semanales como pull requests.
+# La CI corre sobre cada una antes de aceptarla.
+version: 2
+updates:
+  - package-ecosystem: npm
+    directory: /collector
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 5
+    groups:
+      dependencias:
+        patterns: ['*']
+
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+    groups:
+      acciones:
+        patterns: ['*']

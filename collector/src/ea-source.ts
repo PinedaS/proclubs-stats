@@ -11,6 +11,10 @@ export interface FoundClub {
 export interface MatchSource {
   findClubByName(name: string): Promise<FoundClub>;
   listMatches(clubId: string, type: MatchType): Promise<ClubMatch[]>;
+  /** members/stats tal cual: { members: [...] }. */
+  getMemberStats(clubId: string): Promise<unknown>;
+  /** skillRating del club (clubs/overallStats), o null si EA no lo da. */
+  getClubSkillRating(clubId: string): Promise<number | null>;
 }
 
 export class ClubNotFoundError extends Error {
@@ -48,5 +52,15 @@ export class EaMatchSource implements MatchSource {
 
   listMatches(clubId: string, type: MatchType): Promise<ClubMatch[]> {
     return this.#client.matches.list({ clubId, type, limit: EA_MAX_MATCHES, platform: this.#platform });
+  }
+
+  getMemberStats(clubId: string): Promise<unknown> {
+    return this.#client.members.stats({ clubId, platform: this.#platform });
+  }
+
+  async getClubSkillRating(clubId: string): Promise<number | null> {
+    const stats = await this.#client.clubs.overallStats({ clubId, platform: this.#platform });
+    const value = Number((stats as { skillRating?: unknown } | null)?.skillRating);
+    return Number.isInteger(value) && value > 0 ? value : null;
   }
 }

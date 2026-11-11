@@ -1,0 +1,67 @@
+# Pruebas automáticas en cada push y pull request (gratis en repos públicos).
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  colector:
+    name: Colector (tipos y tests unitarios)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    defaults:
+      run:
+        working-directory: collector
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: '22.x'
+          cache: npm
+          cache-dependency-path: collector/package-lock.json
+      - run: npm ci
+      - run: npm run typecheck
+      - run: npm test
+
+  base-de-datos:
+    name: Base de datos (esquema, integración y respaldo)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: '22.x'
+          cache: npm
+          cache-dependency-path: collector/package-lock.json
+      - run: npm ci
+        working-directory: collector
+      - name: Migraciones y pruebas del esquema (Postgres 17 en Docker)
+        run: bash supabase/tests/run_tests.sh
+      - name: Integración (colector -> PostgREST -> Postgres) y prueba de restauración
+        run: bash collector/test/integration/run.sh
+
+  dashboard:
+    name: Dashboard (sintaxis)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: '22.x'
+      - name: Comprobar sintaxis de los módulos
+        run: |
+          for f in dashboard/*.js; do
+            cp "$f" "$RUNNER_TEMP/$(basename "$f" .js).mjs"
+            node --check "$RUNNER_TEMP/$(basename "$f" .js).mjs"
+          done

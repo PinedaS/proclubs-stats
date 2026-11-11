@@ -94,6 +94,7 @@ h1 { margin: 0; font-size: 1.5rem; }
 th.exp, td.exp { background-image: linear-gradient(var(--exp-tint), var(--exp-tint)); }
 :root { --exp-tint: rgb(37 99 168 / .06); }
 .foot p { margin: 0 0 6px; }
+.warn-icon { color: var(--warning); font-weight: 700; }
 
 .tabs { display: flex; gap: 4px; border-bottom: 1px solid var(--border); }
 .tab {

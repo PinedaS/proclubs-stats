@@ -79,6 +79,33 @@ export interface NormalizedMatch {
   stats: PlayerMatchStatsRow[];
 }
 
+/** Foto diaria de members/stats (una fila por miembro y día). */
+export interface MemberSnapshotRow {
+  club_id: number;
+  member_name: string;
+  snapshot_date: string; // YYYY-MM-DD (UTC)
+  captured_at: string;
+  pro_overall: number | null;
+  games_played: number | null;
+  goals: number | null;
+  assists: number | null;
+  win_rate: number | null;
+  pass_success_rate: number | null;
+  shot_success_rate: number | null;
+  tackle_success_rate: number | null;
+  passes_made: number | null;
+  tackles_made: number | null;
+  clean_sheets_def: number | null;
+  clean_sheets_gk: number | null;
+  rating_avg: number | null;
+  man_of_the_match: number | null;
+  red_cards: number | null;
+  favorite_position: string | null;
+  pro_name: string | null;
+  pro_height: number | null;
+  raw: unknown;
+}
+
 export type RunStatus = 'success' | 'error';
 
 export interface RunResult {
