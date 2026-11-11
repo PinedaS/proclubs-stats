@@ -43,8 +43,9 @@ jobs:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
           # Variables del repo (Settings -> Secrets and variables -> Variables).
-          # Cambiar de club no requiere tocar código. Por defecto: el club de prueba.
-          EA_CLUB_NAME: ${{ vars.EA_CLUB_NAME || 'Aston Huila' }}
+          # EA_CLUB_NAMES: uno o varios clubes separados por ";" (p. ej. "FC Aston Huila;Otro Club").
+          # Agregar o cambiar clubes no requiere tocar código. Por defecto: el club de prueba.
+          EA_CLUB_NAMES: ${{ vars.EA_CLUB_NAMES || vars.EA_CLUB_NAME || 'Aston Huila' }}
           SEASON: ${{ vars.SEASON || 'FC27' }}
           COLLECTOR_RUNNER: github-actions
         # Sale con código 1 si EA, la transformación o Supabase fallan,

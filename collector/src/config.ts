@@ -6,7 +6,10 @@ import { MATCH_TYPES, type MatchType } from './domain.ts';
 const envSchema = z.object({
   SUPABASE_URL: z.url(),
   SUPABASE_SERVICE_ROLE_KEY: z.string().min(20),
-  EA_CLUB_NAME: z.string().trim().min(1),
+  // Uno o varios clubes. EA_CLUB_NAMES separa con ";" (un nombre puede tener comas).
+  // EA_CLUB_NAME (uno solo) se sigue aceptando por compatibilidad.
+  EA_CLUB_NAMES: z.string().optional(),
+  EA_CLUB_NAME: z.string().optional(),
   // common-gen4 no funciona desde FC 27 (HTTP 400), por eso no se admite.
   EA_PLATFORM: z.enum(['common-gen5', 'nx']).default('common-gen5'),
   SEASON: z.string().trim().min(1),
@@ -21,7 +24,8 @@ const envSchema = z.object({
 export interface Config {
   supabaseUrl: string;
   supabaseServiceRoleKey: string;
-  clubName: string;
+  /** Clubes a seguir, sin repetidos (sin distinguir mayúsculas). Al menos uno. */
+  clubNames: string[];
   platform: 'common-gen5' | 'nx';
   season: string;
   runner: string;
@@ -39,10 +43,17 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
     throw new ConfigError(`Configuración inválida:\n${z.prettifyError(parsed.error)}`);
   }
   const e = parsed.data;
+  const seen = new Set<string>();
+  const clubNames = [...(e.EA_CLUB_NAMES ?? '').split(';'), e.EA_CLUB_NAME ?? '']
+    .map((n) => n.trim())
+    .filter((n) => n && !seen.has(n.toLowerCase()) && seen.add(n.toLowerCase()));
+  if (clubNames.length === 0) {
+    throw new ConfigError('Configuración inválida:\nFalta EA_CLUB_NAMES (nombres separados por ";") o EA_CLUB_NAME.');
+  }
   return {
     supabaseUrl: e.SUPABASE_URL,
     supabaseServiceRoleKey: e.SUPABASE_SERVICE_ROLE_KEY,
-    clubName: e.EA_CLUB_NAME,
+    clubNames,
     platform: e.EA_PLATFORM,
     season: e.SEASON,
     runner: e.COLLECTOR_RUNNER,

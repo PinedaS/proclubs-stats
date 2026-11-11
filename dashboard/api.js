@@ -23,13 +23,17 @@ async function request(path, { method = 'GET', body } = {}) {
 
 /** Parámetros comunes de las funciones de análisis (RPC). */
 function rpcFilters(f) {
-  return { p_match_types: f.types, p_from: f.from, p_to: f.to, p_exclude_incomplete: f.excludeIncomplete };
+  return { p_match_types: f.types, p_from: f.from, p_to: f.to, p_exclude_incomplete: f.excludeIncomplete, p_club_id: f.clubId ?? null };
 }
+
+/** Filtro por club para consultas directas (null = todos). */
+const clubParam = (clubId) => (clubId ? `&club_id=eq.${Number(clubId)}` : '');
 
 /** Filtros comunes como parámetros de PostgREST (consultas directas a tablas/vistas). */
 function filterParams(f) {
   const p = new URLSearchParams();
   p.append('match_type', `in.(${f.types.join(',')})`);
+  if (f.clubId) p.append('club_id', `eq.${Number(f.clubId)}`);
   if (f.from) p.append('played_at', `gte.${f.from}`);
   if (f.to) p.append('played_at', `lt.${f.to}`);
   return p;
@@ -45,12 +49,13 @@ export const getPersonRecords = (f) => rpc('person_records', rpcFilters(f));
 export const getRelativeStats = (group, f) => rpc('relative_stats', { p_group: group, ...rpcFilters(f) });
 export const getRelativeDetail = (group, f) => rpc('relative_stats_detail', { p_group: group, ...rpcFilters(f) });
 
-export function getClub() {
-  return request('clubs?select=club_id,name,season&order=first_seen_at.desc&limit=1').then((r) => r[0] ?? null);
+/** Todos los clubes seguidos, el más reciente primero. */
+export function getClubs() {
+  return request('clubs?select=club_id,name,season&order=first_seen_at.desc');
 }
 
-export function getClubSnapshots() {
-  return request('club_snapshots?select=snapshot_date,skill_rating,current_division,best_division,season_points,season_games,season_wins,season_draws,season_losses,season_goals,season_goals_against,games_played,wins,draws,losses,promotions,relegations,win_streak,unbeaten_streak&order=snapshot_date.asc');
+export function getClubSnapshots(clubId) {
+  return request(`club_snapshots?select=snapshot_date,skill_rating,current_division,best_division,season_points,season_games,season_wins,season_draws,season_losses,season_goals,season_goals_against,games_played,wins,draws,losses,promotions,relegations,win_streak,unbeaten_streak&order=snapshot_date.asc${clubParam(clubId)}`);
 }
 
 export function getCollectorStatus() {
@@ -92,17 +97,17 @@ export function getMatchPlayers(matchId) {
 }
 
 /** Conciliación EA vs. capturado desde la primera foto (vista v_reconciliation). */
-export function getReconciliation() {
-  return request('v_reconciliation?select=*&order=status.asc,member_name.asc');
+export function getReconciliation(clubId) {
+  return request(`v_reconciliation?select=*&order=status.asc,member_name.asc${clubParam(clubId)}`);
 }
 
 /** Último estado de cada miembro según members/stats (página "Members" de EA). */
-export function getMembers() {
-  return request('v_member_latest?select=*&order=pro_overall.desc.nullslast,member_name.asc');
+export function getMembers(clubId) {
+  return request(`v_member_latest?select=*&order=pro_overall.desc.nullslast,member_name.asc${clubParam(clubId)}`);
 }
 
 /** Evolución de la media del Pro de uno o varios gamertags. */
-export function getMemberHistory(names) {
+export function getMemberHistory(names, clubId) {
   if (!names.length) return Promise.resolve([]);
   const list = names.map((n) => `"${String(n).replaceAll('"', '')}"`).join(',');
   const p = new URLSearchParams({
@@ -110,5 +115,6 @@ export function getMemberHistory(names) {
     member_name: `in.(${list})`,
     order: 'snapshot_date.asc',
   });
+  if (clubId) p.set('club_id', `eq.${Number(clubId)}`);
   return request(`member_snapshots?${p}`);
 }

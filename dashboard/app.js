@@ -29,6 +29,8 @@ const state = {
   roleGroup: 'position',
   roleSort: { key: 'rating_idx', dir: -1 },
   relative: new Map(),
+  clubs: [],
+  clubId: null, // club seleccionado (todas las consultas se filtran por él)
   requestId: 0,
 };
 
@@ -142,7 +144,7 @@ function readFilters() {
     return d.toISOString();
   };
   // "Hasta" es inclusivo para el usuario; en la API p_to es exclusivo (+1 día).
-  return { types, from: day($('#from').value), to: day($('#to').value, 1), excludeIncomplete: $('#exclude-incomplete').checked };
+  return { types, from: day($('#from').value), to: day($('#to').value, 1), excludeIncomplete: $('#exclude-incomplete').checked, clubId: state.clubId };
 }
 
 // ---------------------------------------------------------------------------
@@ -182,7 +184,8 @@ function kpi(label, value, hint, deltaClass) {
 }
 
 async function renderHeader() {
-  const [club, snaps] = await Promise.all([api.getClub(), api.getClubSnapshots().catch(() => [])]);
+  const club = state.clubs.find((c) => c.club_id === state.clubId) ?? null;
+  const snaps = await api.getClubSnapshots(state.clubId).catch(() => []);
   state.clubSnaps = snaps;
   if (club) {
     $('#club-name').textContent = club.name;
@@ -584,7 +587,7 @@ const RECON_STATUS = {
 
 /** Aviso discreto en la cabecera: solo aparece si algún miembro tiene partidos sin capturar. */
 async function renderReconAlert() {
-  const rows = await api.getReconciliation();
+  const rows = await api.getReconciliation(state.clubId);
   state.recon = rows;
   const missing = rows.filter((r) => r.status === 'faltan');
   const link = $('#recon-alert');
@@ -615,9 +618,9 @@ function renderRecon() {
 }
 
 async function renderMembers() {
-  if (!state.recon) state.recon = await api.getReconciliation();
+  if (!state.recon) state.recon = await api.getReconciliation(state.clubId);
   renderRecon();
-  if (!state.members) state.members = await api.getMembers();
+  if (!state.members) state.members = await api.getMembers(state.clubId);
   const cols = [
     ['Miembro', 'left'], ['Personaje', 'left'], ['Pos. favorita', 'left'], ['Media', null, 'Media (overall) del Pro'],
     ['Δ media', null, 'Cambio de la media desde la primera foto'], ['PJ (EA, histórico)', null, 'Partidos según EA, desde que está en el club'],
@@ -777,9 +780,9 @@ async function renderPerson(filters, requestId) {
 
   // Media del Pro: fotos diarias de members/stats enlazadas a esta persona por gamertag.
   try {
-    if (!state.members) state.members = await api.getMembers();
+    if (!state.members) state.members = await api.getMembers(state.clubId);
     const names = state.members.filter((m) => m.person_id === state.personId).map((m) => m.member_name);
-    const history = (await api.getMemberHistory(names)).filter((h) => h.pro_overall != null);
+    const history = (await api.getMemberHistory(names, state.clubId)).filter((h) => h.pro_overall != null);
     if (requestId !== state.requestId) return;
     drawLineChart(overallBox, history, {
       label: 'Media del Pro', value: (h) => h.pro_overall, date: (h) => `${h.snapshot_date}T12:00:00Z`,
@@ -891,7 +894,7 @@ async function refresh() {
     const [ranking, records, relative] = filters.types.length
       ? await Promise.all([api.getPersonStats(filters), api.getPersonRecords(filters), api.getRelativeStats('position', filters)])
       : [[], [], []];
-    if (!state.members) state.members = await api.getMembers().catch(() => []);
+    if (!state.members) state.members = await api.getMembers(state.clubId).catch(() => []);
     if (requestId !== state.requestId) return;
     // Media del Pro (EA) por persona: la más alta entre sus cuentas.
     const ea = new Map();
@@ -972,8 +975,35 @@ function updateFiltersSummary() {
   $('#filters-summary-text').textContent = parts.join(' · ');
 }
 
+/**
+ * Clubes seguidos: el elegido sale de la URL (?club=ID, para compartir enlaces)
+ * o, si no, del más reciente. El selector solo aparece si hay más de uno.
+ */
+async function initClubs() {
+  state.clubs = await api.getClubs().catch(() => []);
+  const fromUrl = Number(new URLSearchParams(location.search).get('club'));
+  state.clubId = state.clubs.some((c) => c.club_id === fromUrl) ? fromUrl : state.clubs[0]?.club_id ?? null;
+  const select = $('#club-select');
+  select.replaceChildren(...state.clubs.map((c) => el('option', { value: c.club_id }, `${c.name} · ${c.season}`)));
+  select.value = String(state.clubId ?? '');
+  $('#club-select-wrap').hidden = state.clubs.length < 2;
+  select.addEventListener('change', () => {
+    state.clubId = Number(select.value);
+    // Lo que depende del club se vuelve a pedir.
+    state.members = null;
+    state.recon = null;
+    state.personId = null;
+    $('#person-detail').hidden = true;
+    const url = new URL(location.href);
+    url.searchParams.set('club', String(state.clubId));
+    history.replaceState(null, '', url);
+    refresh();
+  });
+}
+
 async function init() {
   watchPlayerColumns();
+  await initClubs();
   // En el celular los filtros arrancan plegados para dejar ver los datos primero.
   if (window.matchMedia('(max-width: 700px)').matches) $('#filters-box').open = false;
   document.querySelector('.filters').addEventListener('change', updateFiltersSummary);

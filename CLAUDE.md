@@ -132,7 +132,12 @@ No hay API oficial. Se usan los endpoints públicos que lee la web de Clubes de 
   - `collector_runs` la registró como `success`, con 10 partidos vistos y 10 nuevos.
   - Desde entonces corre sola cada 30 min (minutos 7 y 37).
 - **Secretos del repo:** `SUPABASE_URL` y `SUPABASE_SERVICE_ROLE_KEY`, cargados el 2026-11-11.
-- **Variables opcionales del repo:** `EA_CLUB_NAME` y `SEASON`. Sin ellas, el colector usa el club de prueba.
+- **Variables opcionales del repo:** `EA_CLUB_NAMES` y `SEASON`. Sin ellas, el colector usa el club de prueba.
+  - **Varios clubes (2026-11-11):** el usuario seguirá un **segundo equipo propio**, con otras personas; el nombre aún no está definido.
+    - `EA_CLUB_NAMES` acepta varios nombres exactos separados por **`;`** (un nombre puede tener comas), p. ej. `FC Aston Huila;Otro Club`. `EA_CLUB_NAME` se sigue aceptando.
+    - El colector registra una ejecución en `collector_runs` por club. La falla de uno no impide capturar los demás, pero sale con código 1.
+    - El dashboard muestra un **selector de club** si hay más de uno. La URL lleva `?club=ID` para compartir; todo se filtra por `p_club_id` o `club_id`.
+    - Las **personas son globales**: si alguien juega en los dos clubes, se une igual con `merge_persons`, y sus números se separan por club gracias al filtro.
 - **Clave del colector:** en proyectos nuevos, la clave *secret* (`sb_secret_...`) reemplaza a la `service_role` antigua y actúa con ese rol. Va **solo** en los secretos de GitHub y en el `.env` local, nunca en el repo.
 
 ### Supabase plan gratis (fuentes de 2026)

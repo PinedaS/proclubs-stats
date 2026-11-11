@@ -38,9 +38,23 @@ describe('loadConfig', () => {
     } catch (e) {
       assert.ok(e instanceof ConfigError);
       assert.match(e.message, /SUPABASE_URL/);
-      assert.match(e.message, /EA_CLUB_NAME/);
       assert.match(e.message, /SEASON/);
       assert.doesNotMatch(e.message, new RegExp(secret));
     }
+  });
+
+  test('un solo club con EA_CLUB_NAME (compatibilidad)', () => {
+    assert.deepEqual(loadConfig(base).clubNames, ['Aston Huila']);
+  });
+
+  test('varios clubes con EA_CLUB_NAMES separados por ";" (admite comas en el nombre)', () => {
+    const { EA_CLUB_NAME: _omit, ...rest } = base;
+    const c = loadConfig({ ...rest, EA_CLUB_NAMES: ' FC Aston Huila ; Club, Con Coma;fc aston huila;' });
+    assert.deepEqual(c.clubNames, ['FC Aston Huila', 'Club, Con Coma']);
+  });
+
+  test('exige al menos un club', () => {
+    const { EA_CLUB_NAME: _omit, ...rest } = base;
+    assert.throws(() => loadConfig({ ...rest, EA_CLUB_NAMES: ' ; ' }), /EA_CLUB_NAMES/);
   });
 });

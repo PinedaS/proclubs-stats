@@ -15,7 +15,8 @@ export interface Logger {
 }
 
 export interface CollectDeps {
-  config: Pick<Config, 'clubName' | 'platform' | 'season' | 'runner' | 'matchTypes'>;
+  /** Un club por ejecución: main.ts llama a collect() una vez por cada club configurado. */
+  config: Pick<Config, 'platform' | 'season' | 'runner' | 'matchTypes'> & { clubName: string };
   source: MatchSource;
   repo: StatsRepository;
   log: Logger;

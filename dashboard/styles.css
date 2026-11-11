@@ -125,6 +125,13 @@ h1 { margin: 2px 0 0; font-size: clamp(1.6rem, 3.4vw, 2.4rem); font-weight: 800;
 a.status { text-decoration: none; }
 a.status:hover { border-color: var(--warning); }
 a.status[hidden] { display: none; }
+.club-select[hidden] { display: none; }
+.club-select select {
+  font: inherit; font-weight: 700; font-size: .88rem; color: var(--ink);
+  background: color-mix(in srgb, var(--surface) 85%, transparent);
+  border: 1px solid var(--accent); border-radius: 999px; padding: 7px 14px; cursor: pointer;
+}
+.visually-hidden { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
 .status.good .icon { color: var(--good); }
 .status.warning .icon { color: var(--warning); }
 .status.critical .icon { color: var(--critical); }
