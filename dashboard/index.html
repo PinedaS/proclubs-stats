@@ -31,6 +31,9 @@
     <label class="field" title="Mínimo de partidos para aparecer en el ranking">Mín. partidos
       <input type="number" id="min-matches" min="1" value="1" inputmode="numeric">
     </label>
+    <label class="toggle" title="Datos que EA no documenta; ver nota al pie">
+      <input type="checkbox" id="show-exp" checked> Datos experimentales*
+    </label>
   </section>
 
   <nav class="tabs" aria-label="Vistas">
@@ -51,8 +54,12 @@
   </main>
 
   <footer class="foot">
-    Datos de la API pública de EA, capturados automáticamente cada 30 min.
-    <a href="https://github.com/PinedaS/proclubs-stats">Código</a>
+    <p>Datos de la API pública de EA, capturados automáticamente cada 30 min.
+    <a href="https://github.com/PinedaS/proclubs-stats">Código</a></p>
+    <p>* <strong>Experimental:</strong> regates, intercepciones, posesión, duelos aéreos, faltas y amarillas
+    salen de contadores que EA no documenta, interpretados según la
+    <a href="https://github.com/Interactive-63/eafc-pro-clubs-api-research">investigación de la comunidad</a>.
+    Son aproximaciones: al compararlos con datos oficiales coinciden entre el 65 % y el 98 % de las veces.</p>
   </footer>
 </body>
 </html>

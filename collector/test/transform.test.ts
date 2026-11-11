@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { describe, test } from 'node:test';
 import type { ClubMatch } from 'proclubs-sdk';
-import { TransformError, normalizeMatch, toRawRow } from '../src/transform.ts';
+import { TransformError, normalizeMatch, parseEventAggregates, toRawRow } from '../src/transform.ts';
 
 // Fixture con estructura y stats REALES: 10 partidos de liga de "Aston Huila"
 // (club ajeno de prueba), descargados con `npm run fetch-fixture` el 2026-11-10.
@@ -92,6 +92,31 @@ describe('normalizeMatch con datos reales', () => {
     const before = structuredClone(m);
     normalizeMatch(m, ctx);
     assert.deepEqual(m, before);
+  });
+});
+
+describe('parseEventAggregates (datos experimentales)', () => {
+  test('suma por código las 4 cadenas', () => {
+    assert.deepEqual(
+      parseEventAggregates({ match_event_aggregate_0: '1:2,174:3', match_event_aggregate_1: '174:1', match_event_aggregate_2: '' }),
+      { 1: 2, 174: 4 },
+    );
+  });
+
+  test('con el fixture real: incluye regates (174) e intercepciones (6)', () => {
+    const { stats } = normalizeMatch(match('165590075320436'), ctx);
+    const j = stats.find((s) => s.player_id === '1000000001');
+    assert.equal(j?.event_counts?.['174'], 11);
+    assert.equal(j?.event_counts?.['6'], 3);
+  });
+
+  test('sin cadenas -> objeto vacío', () => {
+    assert.deepEqual(parseEventAggregates({}), {});
+  });
+
+  test('mal formado -> null, sin lanzar error (no se pierde el partido)', () => {
+    assert.equal(parseEventAggregates({ match_event_aggregate_0: '1:2,abc' }), null);
+    assert.equal(parseEventAggregates({ match_event_aggregate_0: 42 }), null);
   });
 });
 

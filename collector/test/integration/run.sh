@@ -58,3 +58,13 @@ echo "== Pruebas de integración"
 cd "$ROOT/collector"
 INT_API_URL="http://127.0.0.1:$API_PORT" INT_JWT_SECRET="$JWT_SECRET" \
   node --test --test-reporter=spec test/integration/*.int.ts
+
+echo "== Coherencia del parser TypeScript vs SQL (match_event_aggregate)"
+MISMATCHES="$(docker exec "$PG" psql -U postgres -tAc "
+  select count(*) from public.player_match_stats s
+  join public.match_raw r on r.match_id = s.match_id
+  where s.event_counts is distinct from
+        public.parse_event_aggregates(r.payload -> 'players' -> (r.club_id::text) -> s.player_id)")"
+ROWS="$(docker exec "$PG" psql -U postgres -tAc "select count(*) from public.player_match_stats where event_counts is not null")"
+echo "filas con contadores: $ROWS · diferencias TS vs SQL: $MISMATCHES"
+[ "$MISMATCHES" = "0" ] && [ "$ROWS" -gt 0 ] || { echo "FALLA: los parsers no coinciden"; exit 1; }

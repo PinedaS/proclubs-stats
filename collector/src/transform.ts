@@ -200,5 +200,32 @@ function toStatsRow(matchId: string, playerId: string, name: string, p: Dict): P
     cross_saves: optInt(p.crossSaves, f('crossSaves')),
     ball_dive_saves: optInt(p.ballDiveSaves, f('ballDiveSaves')),
     good_direction_saves: optInt(p.goodDirectionSaves, f('goodDirectionSaves')),
+    event_counts: parseEventAggregates(p),
   };
+}
+
+const EVENT_KEYS = ['match_event_aggregate_0', 'match_event_aggregate_1', 'match_event_aggregate_2', 'match_event_aggregate_3'];
+const EVENT_PAIR_RE = /^(\d+):(\d+)$/;
+
+/**
+ * Suma por código los pares "código:cantidad" de match_event_aggregate_0..3.
+ * Son datos SIN DOCUMENTAR: si algo viene mal formado devuelve null en vez de
+ * lanzar error, para no perder el partido por un campo experimental.
+ * Misma lógica que public.parse_event_aggregates() (migración 005).
+ */
+export function parseEventAggregates(player: Record<string, unknown>): Record<string, number> | null {
+  const counts: Record<string, number> = {};
+  for (const key of EVENT_KEYS) {
+    const raw = player[key];
+    if (isBlank(raw)) continue;
+    if (typeof raw !== 'string') return null;
+    for (const pair of raw.split(',')) {
+      if (pair === '') continue;
+      const m = EVENT_PAIR_RE.exec(pair);
+      if (!m) return null;
+      const code = m[1]!;
+      counts[code] = (counts[code] ?? 0) + Number(m[2]);
+    }
+  }
+  return counts;
 }

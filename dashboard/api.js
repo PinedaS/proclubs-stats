@@ -55,7 +55,7 @@ export function getMatches(filters) {
 
 export function getPersonMatches(personId, filters) {
   const p = filterParams(filters);
-  p.set('select', 'match_id,played_at,match_type,opponent_name,goals_for,goals_against,outcome,playername,position,rating,goals,assists,is_mom,shots,passes_made,pass_attempts,tackles_made,saves');
+  p.set('select', 'match_id,played_at,match_type,opponent_name,goals_for,goals_against,outcome,playername,position,rating,goals,assists,is_mom,shots,passes_made,pass_attempts,tackles_made,saves,dribbles_exp,interceptions_exp,possession_won_exp,possession_lost_exp');
   p.set('person_id', `eq.${Number(personId)}`);
   p.set('order', 'played_at.asc');
   return request(`v_player_match_stats?${p}`);
@@ -63,7 +63,7 @@ export function getPersonMatches(personId, filters) {
 
 export function getMatchPlayers(matchId) {
   const p = new URLSearchParams({
-    select: 'person_id,person_name,playername,position,rating,goals,assists,is_mom,shots,passes_made,pass_attempts,tackles_made,saves',
+    select: 'person_id,person_name,playername,position,rating,goals,assists,is_mom,shots,passes_made,pass_attempts,tackles_made,saves,dribbles_exp,interceptions_exp',
     match_id: `eq.${matchId}`,
     order: 'rating.desc.nullslast',
   });

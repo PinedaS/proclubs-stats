@@ -90,6 +90,10 @@ h1 { margin: 0; font-size: 1.5rem; }
   border-radius: 8px; padding: 5px 8px; min-width: 0;
 }
 #min-matches { width: 6em; }
+.toggle { display: inline-flex; gap: 6px; align-items: center; font-size: .9rem; color: var(--ink-2); padding-bottom: 6px; cursor: pointer; }
+th.exp, td.exp { background-image: linear-gradient(var(--exp-tint), var(--exp-tint)); }
+:root { --exp-tint: rgb(37 99 168 / .06); }
+.foot p { margin: 0 0 6px; }
 
 .tabs { display: flex; gap: 4px; border-bottom: 1px solid var(--border); }
 .tab {

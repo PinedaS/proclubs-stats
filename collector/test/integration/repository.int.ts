@@ -102,6 +102,15 @@ describe('SupabaseStatsRepository contra Postgres + PostgREST', () => {
     const total = (stats.data as { matches: number }[]).reduce((n, p) => n + p.matches, 0);
     assert.equal(total, statRows);
 
+    // Experimentales: los regates (código 174) totales deben coincidir con el fixture.
+    const expectedDribbles = fixture.reduce((n, m) => n + Object.values(
+      (m.players as Record<string, Record<string, Record<string, string>>>)['1330384'] ?? {},
+    ).reduce((k, p) => k + (p.match_event_aggregate_0 + ',' + (p.match_event_aggregate_1 ?? ''))
+      .split(',').filter((x) => x.startsWith('174:')).reduce((s, x) => s + Number(x.split(':')[1]), 0), 0), 0);
+    const dribbles = (stats.data as { dribbles_exp: number }[]).reduce((n, p) => n + Number(p.dribbles_exp ?? 0), 0);
+    assert.ok(expectedDribbles > 0);
+    assert.equal(dribbles, expectedDribbles);
+
     const status = await anon.from('v_collector_status').select('*').single();
     assert.equal(status.error, null);
     assert.equal((status.data as { consecutive_failures: number }).consecutive_failures, 0);

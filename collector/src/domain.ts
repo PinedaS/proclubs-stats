@@ -69,6 +69,8 @@ export interface PlayerMatchStatsRow {
   cross_saves: number | null;
   ball_dive_saves: number | null;
   good_direction_saves: number | null;
+  /** Contadores sin documentar de match_event_aggregate_0..3 ({"174": 11}). */
+  event_counts: Record<string, number> | null;
 }
 
 export interface NormalizedMatch {

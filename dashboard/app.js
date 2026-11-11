@@ -15,6 +15,7 @@ const state = {
   view: 'ranking',
   sort: { key: 'avg_rating', dir: -1 },
   minMatches: 1,
+  showExp: true,
   ranking: [],
   personId: null,
   requestId: 0,
@@ -150,7 +151,18 @@ const RANKING_COLUMNS = [
   { key: 'tackle_success_pct', label: 'Entradas %', title: 'Entradas ganadas / intentadas', digits: 1 },
   { key: 'saves', label: 'Atajadas' },
   { key: 'red_cards', label: 'Rojas', title: 'Tarjetas rojas' },
+  // Experimentales: contadores sin documentar de EA (ver nota al pie del dashboard).
+  { key: 'dribbles_exp', label: 'Regates*', title: 'Experimental: regates completados (código EA 174)', exp: true },
+  { key: 'interceptions_exp', label: 'Intercep.*', title: 'Experimental: intercepciones (código EA 6)', exp: true },
+  { key: 'possession_won_exp', label: 'Recup.*', title: 'Experimental: posesiones ganadas (códigos EA 108–110)', exp: true },
+  { key: 'possession_lost_exp', label: 'Pérdidas*', title: 'Experimental: posesiones perdidas (códigos EA 105–107)', exp: true },
+  { key: 'aerial_duels_won_exp', label: 'Aéreos*', title: 'Experimental: duelos aéreos ganados (códigos EA 265–266)', exp: true },
+  { key: 'fouls_exp', label: 'Faltas*', title: 'Experimental: faltas cometidas (códigos EA 2 y 3)', exp: true },
+  { key: 'yellow_cards_exp', label: 'Amarillas*', title: 'Experimental: tarjetas amarillas (códigos EA 95 y 213)', exp: true },
 ];
+
+const visibleColumns = () => RANKING_COLUMNS.filter((c) => state.showExp || !c.exp);
+const cellClass = (c) => [c.text ? 'left' : '', c.exp ? 'exp' : ''].join(' ').trim() || null;
 
 function sortRows(rows) {
   const { key, dir } = state.sort;
@@ -167,10 +179,11 @@ function sortRows(rows) {
 
 function renderRanking() {
   const table = $('#ranking-table');
-  const head = el('tr', {}, RANKING_COLUMNS.map((c) => {
+  const columns = visibleColumns();
+  const head = el('tr', {}, columns.map((c) => {
     const active = state.sort.key === c.key;
     return el('th', {
-      class: c.text ? 'left' : null,
+      class: cellClass(c),
       scope: 'col',
       title: c.title,
       'aria-sort': active ? (state.sort.dir === 1 ? 'ascending' : 'descending') : null,
@@ -190,9 +203,9 @@ function renderRanking() {
         tabindex: '0',
         onclick: () => openPerson(r.person_id),
         onkeydown: (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); openPerson(r.person_id); } },
-      }, RANKING_COLUMNS.map((c) => el('td', { class: c.text ? 'left' : null },
+      }, columns.map((c) => el('td', { class: cellClass(c) },
         c.render ? c.render(r) : fmtNum(r[c.key], c.digits ?? 0)))))
-    : [el('tr', {}, el('td', { class: 'empty', colspan: RANKING_COLUMNS.length }, 'Sin datos para estos filtros.'))];
+    : [el('tr', {}, el('td', { class: 'empty', colspan: columns.length }, 'Sin datos para estos filtros.'))];
 
   table.replaceChildren(el('thead', {}, head), el('tbody', {}, body));
 }
@@ -243,8 +256,9 @@ async function toggleMatchPlayers(row, matchId) {
     const players = await api.getMatchPlayers(matchId);
     const t = el('table', {},
       el('thead', {}, el('tr', {},
-        ['Jugador', 'Pos.', 'Calif.', 'G', 'A', 'Tiros', 'Pases', 'Entradas', 'Atajadas', 'MVP'].map((h, i) =>
-          el('th', { scope: 'col', class: i < 2 ? 'left' : null }, h)))),
+        ['Jugador', 'Pos.', 'Calif.', 'G', 'A', 'Tiros', 'Pases', 'Entradas', 'Atajadas', 'MVP']
+          .map((h, i) => el('th', { scope: 'col', class: i < 2 ? 'left' : null }, h)),
+        state.showExp ? ['Regates*', 'Intercep.*'].map((h) => el('th', { scope: 'col', class: 'exp' }, h)) : [])),
       el('tbody', {}, players.map((p) => el('tr', {},
         el('td', { class: 'left person' }, p.person_name),
         el('td', { class: 'left' }, POS_LABEL[p.position] ?? p.position),
@@ -252,7 +266,8 @@ async function toggleMatchPlayers(row, matchId) {
         el('td', {}, fmtNum(p.goals)), el('td', {}, fmtNum(p.assists)), el('td', {}, fmtNum(p.shots)),
         el('td', {}, `${p.passes_made}/${p.pass_attempts}`),
         el('td', {}, fmtNum(p.tackles_made)), el('td', {}, fmtNum(p.saves)),
-        el('td', {}, p.is_mom ? '★' : '')))));
+        el('td', {}, p.is_mom ? '★' : ''),
+        state.showExp ? [el('td', { class: 'exp' }, fmtNum(p.dribbles_exp)), el('td', { class: 'exp' }, fmtNum(p.interceptions_exp))] : []))));
     cell.replaceChildren(t);
   } catch (err) {
     cell.replaceChildren(el('span', { class: 'muted' }, `Error: ${err.message}`));
@@ -288,7 +303,8 @@ async function renderPerson(filters, requestId) {
   const chartBox = el('div', { class: 'chart' }, el('h3', {}, 'Calificación por partido'));
   const table = el('div', { class: 'table-wrap' }, el('table', {},
     el('thead', {}, el('tr', {}, ['Fecha', 'Tipo', 'Rival', 'Res.', 'Pos.', 'Calif.', 'G', 'A', 'MVP'].map((h, i) =>
-      el('th', { scope: 'col', class: i < 3 || i === 4 ? 'left' : null }, h)))),
+      el('th', { scope: 'col', class: i < 3 || i === 4 ? 'left' : null }, h)),
+      state.showExp ? ['Regates*', 'Intercep.*', 'Recup.*', 'Pérdidas*'].map((h) => el('th', { scope: 'col', class: 'exp' }, h)) : [])),
     el('tbody', {}, matches.length
       ? [...matches].reverse().map((m) => el('tr', {},
           el('td', { class: 'left' }, fmtDate(m.played_at, false)),
@@ -298,8 +314,11 @@ async function renderPerson(filters, requestId) {
           el('td', { class: 'left' }, POS_LABEL[m.position] ?? m.position),
           el('td', {}, fmtNum(m.rating, 1)),
           el('td', {}, fmtNum(m.goals)), el('td', {}, fmtNum(m.assists)),
-          el('td', {}, m.is_mom ? '★' : '')))
-      : [el('tr', {}, el('td', { class: 'empty', colspan: 9 }, 'Sin partidos para estos filtros.'))])));
+          el('td', {}, m.is_mom ? '★' : ''),
+          state.showExp
+            ? [m.dribbles_exp, m.interceptions_exp, m.possession_won_exp, m.possession_lost_exp].map((v) => el('td', { class: 'exp' }, fmtNum(v)))
+            : []))
+      : [el('tr', {}, el('td', { class: 'empty', colspan: state.showExp ? 13 : 9 }, 'Sin partidos para estos filtros.'))])));
 
   box.replaceChildren(
     el('div', { class: 'detail-head' }, el('div', {}, el('h2', {}, name),
@@ -422,6 +441,13 @@ async function init() {
     renderRanking();
   });
   for (const b of document.querySelectorAll('.tab')) b.addEventListener('click', () => setView(b.dataset.view));
+  $('#show-exp').addEventListener('change', (e) => {
+    state.showExp = e.target.checked;
+    if (!state.showExp && RANKING_COLUMNS.find((c) => c.key === state.sort.key)?.exp) {
+      state.sort = { key: 'avg_rating', dir: -1 };
+    }
+    refresh(); // vuelve a dibujar ranking, partidos abiertos y detalle
+  });
 
   api.getClub().then((club) => {
     if (!club) return;
