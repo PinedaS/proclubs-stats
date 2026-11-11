@@ -60,7 +60,7 @@ API no oficial de EA ──► Colector (GitHub Actions, cada 30 min) ──► 
    - Probado en Chrome con los datos del club de prueba.
    - **Migraciones aplicadas en Supabase:** 001–015, cada una verificada después de aplicarla.
    - **Mejoras del 2026-11-11 (noche):**
-     - **Vista simple:** "Métricas avanzadas" y "Experimentales" arrancan apagadas, y cada navegador recuerda lo elegido en `localStorage`.
+     - **Vista simple:** "Métricas avanzadas" arranca apagada y "Experimentales" activa (decisión del usuario). Cada navegador recuerda lo elegido en `localStorage`.
      - **Guía:** botón "Cómo leer esto" en la cabecera, un `<dialog>` con la explicación de cada pestaña.
      - **Título:** "EA SPORTS FC NN" sale de la temporada del club.
      - **Avisos de fallas:**

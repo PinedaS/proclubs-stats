@@ -16,8 +16,9 @@ const state = {
   view: 'ranking',
   sort: { key: 'avg_rating', dir: -1 },
   minMatches: 1,
-  // Vista simple por defecto; cada navegador recuerda lo que el usuario elija (prefs).
-  showExp: false,
+  // Experimentales activas y avanzadas apagadas por defecto (decisión del usuario);
+  // cada navegador recuerda lo que elija (prefs).
+  showExp: true,
   showAdv: false,
   ranking: [],
   records: new Map(),
