@@ -33,6 +33,7 @@
         </label>
         <div id="collector-status" class="status" role="status" aria-live="polite">Cargando estado…</div>
         <a id="recon-alert" class="status warning" href="#verificacion" hidden></a>
+        <div id="dispatch-alert" class="status warning" role="status" hidden></div>
       </div>
     </div>
     <div class="kpis" id="club-kpis" aria-label="Resumen del club"></div>
@@ -44,7 +45,6 @@
       <button type="button" class="tab" data-view="roles" aria-pressed="false">Por rol</button>
       <button type="button" class="tab" data-view="compare" aria-pressed="false">Comparar</button>
       <button type="button" class="tab" data-view="pairs" aria-pressed="false">Duplas</button>
-      <button type="button" class="tab" data-view="positions" aria-pressed="false">Por posición</button>
       <button type="button" class="tab" data-view="matches" aria-pressed="false">Partidos</button>
       <button type="button" class="tab" data-view="club" aria-pressed="false">Club</button>
     </div>
@@ -93,7 +93,13 @@
     </section>
 
     <section id="view-roles" class="view" hidden>
-      <div class="card table-card">
+      <div class="view-toolbar">
+        <div class="segmented" role="group" aria-label="Vista" id="role-mode-buttons">
+          <button type="button" data-mode="relative" aria-pressed="true">Relativo al rol</button>
+          <button type="button" data-mode="real" aria-pressed="false">Valores reales por posición</button>
+        </div>
+      </div>
+      <div class="card table-card" id="roles-card">
         <div class="card-head">
           <h2>Rendimiento relativo al rol <span class="tag">justo para quien rota</span></h2>
           <div class="segmented" role="group" aria-label="Comparar contra" id="role-group-buttons">
@@ -103,6 +109,19 @@
           <p class="muted small">Cada jugador se compara con el <strong>promedio del club en el mismo rol</strong> que jugó en cada partido: un defensa contra defensas, un delantero contra delanteros. <strong>100 = promedio del rol</strong>; 120 = 20 % mejor. Si jugó varios roles, se pondera por los minutos en cada uno. Toca una fila para ver el desglose por rol.</p>
         </div>
         <div class="table-wrap"><table id="roles-table" class="data"></table></div>
+      </div>
+      <div class="card table-card" id="positions-card" hidden>
+        <div class="card-head">
+          <h2>Valores reales por posición</h2>
+          <div class="segmented" role="group" aria-label="Posición" id="position-buttons">
+            <button type="button" data-pos="forward" aria-pressed="true">Delanteros</button>
+            <button type="button" data-pos="midfielder" aria-pressed="false">Mediocampistas</button>
+            <button type="button" data-pos="defender" aria-pressed="false">Defensas</button>
+            <button type="button" data-pos="goalkeeper" aria-pressed="false">Porteros</button>
+          </div>
+          <p class="muted small">Cada jugador aparece en las posiciones que jugó, con sus números solo en esa posición (sin comparar con el promedio).</p>
+        </div>
+        <div class="table-wrap"><table id="positions-table" class="data"></table></div>
       </div>
     </section>
 
@@ -139,22 +158,6 @@
           <p class="muted small">Cómo rinde cada jugador en los partidos <strong>con</strong> un compañero frente a los partidos <strong>sin</strong> él. Es una correlación: también influyen el rival, la posición y la suerte. Se muestra solo si hay al menos el mínimo de partidos en los dos casos; con pocos partidos, la diferencia no es confiable.</p>
         </div>
         <div class="table-wrap"><table id="withwithout-table" class="data"></table></div>
-      </div>
-    </section>
-
-    <section id="view-positions" class="view" hidden>
-      <div class="card table-card">
-        <div class="card-head">
-          <h2>Por posición</h2>
-          <div class="segmented" role="group" aria-label="Posición" id="position-buttons">
-            <button type="button" data-pos="forward" aria-pressed="true">Delanteros</button>
-            <button type="button" data-pos="midfielder" aria-pressed="false">Mediocampistas</button>
-            <button type="button" data-pos="defender" aria-pressed="false">Defensas</button>
-            <button type="button" data-pos="goalkeeper" aria-pressed="false">Porteros</button>
-          </div>
-          <p class="muted small">Cada jugador aparece en las posiciones que jugó, con sus números solo en esa posición.</p>
-        </div>
-        <div class="table-wrap"><table id="positions-table" class="data"></table></div>
       </div>
     </section>
 

@@ -27,6 +27,7 @@ const state = {
   splitMetric: 'avg_rating',
   position: 'forward',
   roleGroup: 'position',
+  roleMode: 'relative', // 'relative' (índices vs. el rol) | 'real' (valores por posición)
   roleSort: { key: 'rating_idx', dir: -1 },
   relative: new Map(),
   clubs: [],
@@ -151,7 +152,29 @@ function readFilters() {
 // Cabecera: estado del colector y tarjetas del club
 // ---------------------------------------------------------------------------
 
+/**
+ * Aviso del disparo desde Supabase (cada 15 min). Solo aparece si hay un problema:
+ * sin token, GitHub lo rechazó (p. ej. token vencido) o lleva rato sin responder.
+ */
+async function renderDispatchAlert() {
+  const box = $('#dispatch-alert');
+  let s;
+  try { s = await api.getDispatchStatus(); } catch { box.hidden = true; return; }
+  let level = null, text = null;
+  if (!s || !s.available) { box.hidden = true; return; }
+  const minutes = s.last_response_at ? (Date.now() - new Date(s.last_response_at).getTime()) / 60000 : Infinity;
+  if (!s.token_configured) { level = 'warning'; text = 'Disparo desde Supabase sin token'; }
+  else if (s.last_problem) { level = 'critical'; text = `Disparo falló${s.last_status_code ? ` (HTTP ${s.last_status_code})` : ''}: ${s.last_problem}`; }
+  else if (minutes > 45) { level = 'warning'; text = 'Disparo desde Supabase sin respuestas recientes'; }
+  if (!level) { box.hidden = true; return; }
+  box.className = `status ${level}`;
+  box.title = 'Supabase le pide a GitHub ejecutar el colector cada 15 min. Ver CLAUDE.md, pendiente 8.';
+  box.replaceChildren(el('span', { class: 'icon', 'aria-hidden': 'true' }, level === 'critical' ? '✕' : '⚠'), el('span', {}, text));
+  box.hidden = false;
+}
+
 async function renderStatus() {
+  renderDispatchAlert().catch(() => {});
   const box = $('#collector-status');
   try {
     const s = await api.getCollectorStatus();
@@ -756,8 +779,8 @@ function positionFitSection(fit) {
         el('th', { scope: 'col', class: 'left' }, 'Posición'),
         el('th', { scope: 'col' }, 'PJ'),
         el('th', { scope: 'col' }, 'Calif.'),
-        el('th', { scope: 'col', title: '100 = promedio del club en esa posición' }, 'Índice vs. la posición'),
-        el('th', { scope: 'col', title: 'Cómo se reparte su perfil (goles, asistencias, tiros, pases, entradas, atajadas, intercepciones* y regates* por 90 min) entre las posiciones, según qué tan cerca está del perfil de los demás jugadores en cada una. Suma 100 %.' }, 'Parecido de perfil'))),
+        el('th', { scope: 'col', title: 'Calificación vs. el promedio del club en esa posición (100 = promedio)' }, 'Índice'),
+        el('th', { scope: 'col', title: 'Cómo se reparte su perfil (goles, asistencias, tiros, pases, entradas, atajadas, intercepciones* y regates* por 90 min) entre las posiciones, según qué tan cerca está del perfil de los demás jugadores en cada una. Suma 100 %.' }, 'Perfil'))),
       el('tbody', {}, rows.map((f) => el('tr', { class: f === best && played.length >= 2 ? 'fit-best' : null },
         el('td', { class: 'left' }, posBadge(f.player_position)),
         el('td', {}, fmtNum(f.matches)),
@@ -765,7 +788,7 @@ function positionFitSection(fit) {
         idxCell(f.rating_idx),
         el('td', { title: f.others_matches < MIN_FIT_MATCHES ? 'Pocos datos de otros jugadores en esa posición' : null },
           f.profile_match_pct == null || f.others_matches < MIN_FIT_MATCHES ? '—' : fmtPct(f.profile_match_pct, 0))))))),
-    el('p', { class: 'muted small' }, `Orientativo. El índice solo cuenta posiciones con ${MIN_FIT_MATCHES}+ PJ. El parecido de perfil compara su forma de jugar con la de los demás jugadores del club en cada posición (no consigo mismo) y solo usa posiciones donde los demás suman ${MIN_FIT_MATCHES}+ registros.`));
+    el('p', { class: 'muted small' }, `Orientativo. Índice: su calificación frente al promedio del club en esa posición (100 = promedio), solo con ${MIN_FIT_MATCHES}+ PJ. Perfil: cuánto de su forma de jugar corresponde a cada posición (suma 100 %); compara con los demás jugadores del club en cada posición (no consigo mismo) y solo usa posiciones donde los demás suman ${MIN_FIT_MATCHES}+ registros.`));
 }
 
 function tile(label, value, cls = '') {
@@ -996,10 +1019,14 @@ async function refresh() {
     renderRanking();
     renderHeader().catch(() => {});
     const tasks = [];
-    if (state.view === 'roles') tasks.push(renderRoles(filters, requestId));
+    if (state.view === 'roles') {
+      const real = state.roleMode === 'real';
+      $('#roles-card').hidden = real;
+      $('#positions-card').hidden = !real;
+      tasks.push(real ? renderPositions(filters, requestId) : renderRoles(filters, requestId));
+    }
     if (state.view === 'compare') tasks.push(renderCompare(filters, requestId));
     if (state.view === 'pairs') tasks.push(renderPairs(filters, requestId));
-    if (state.view === 'positions') tasks.push(renderPositions(filters, requestId));
     if (state.view === 'matches') tasks.push(renderMatches(filters, requestId));
     if (state.view === 'members') tasks.push(renderMembers());
     if (state.view === 'club') renderClub();
@@ -1013,7 +1040,7 @@ async function refresh() {
 function setView(view) {
   state.view = view;
   for (const b of document.querySelectorAll('.tab')) b.setAttribute('aria-pressed', String(b.dataset.view === view));
-  for (const v of ['ranking', 'roles', 'compare', 'pairs', 'positions', 'matches', 'members', 'club']) $(`#view-${v}`).hidden = v !== view;
+  for (const v of ['ranking', 'roles', 'compare', 'pairs', 'matches', 'members', 'club']) $(`#view-${v}`).hidden = v !== view;
   refresh();
 }
 
@@ -1121,6 +1148,7 @@ async function init() {
   $('#show-exp').addEventListener('change', (e) => { state.showExp = e.target.checked; if (!state.showExp) resetSortIf('exp'); refresh(); });
   $('#show-adv').addEventListener('change', (e) => { state.showAdv = e.target.checked; if (!state.showAdv) resetSortIf('adv'); refresh(); });
   bindSegmented('#role-group-buttons', 'group', (v) => { state.roleGroup = v; refresh(); });
+  bindSegmented('#role-mode-buttons', 'mode', (v) => { state.roleMode = v; refresh(); });
   bindSegmented('#split-buttons', 'split', (v) => { state.split = v; refresh(); });
   bindSegmented('#split-metric', 'metric', (v) => { state.splitMetric = v; refresh(); });
   bindSegmented('#position-buttons', 'pos', (v) => { state.position = v; refresh(); });

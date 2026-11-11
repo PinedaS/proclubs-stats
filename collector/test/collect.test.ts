@@ -54,6 +54,10 @@ class FakeRepo implements StatsRepository {
   async setOpponentSkill(id: string, skill: number): Promise<void> {
     this.opponentSkill.set(id, skill);
   }
+  division = new Map<string, number>();
+  async setClubDivision(ids: string[], division: number): Promise<void> {
+    for (const id of ids) if (!this.division.has(id)) this.division.set(id, division);
+  }
   clubSnapshots: ClubSnapshotRow[] = [];
   async saveClubSnapshot(row: ClubSnapshotRow): Promise<void> {
     this.clubSnapshots.push(row);
@@ -180,6 +184,34 @@ describe('collect: foto del club', () => {
     assert.equal(r.status, 'error');
     assert.match(r.errorMessage ?? '', /club overview/);
     assert.equal(repo.matches.size, 10);
+  });
+
+  test('anota la división solo en partidos nuevos de las últimas 6 h', async () => {
+    const times = fixture.map((m) => Number(m.timestamp) * 1000).sort((a, b) => b - a);
+    const now = times[0]! + 60 * 60 * 1000; // 1 h después del más reciente
+    const expected = times.filter((t) => now - t <= 6 * 60 * 60 * 1000).length;
+    assert.ok(expected > 0 && expected < 10, 'el fixture tiene partidos dentro y fuera de la ventana');
+
+    const repo = new FakeRepo();
+    const source = new FakeSource({ leagueMatch: fixture });
+    const d = { ...deps(source, repo), now: () => new Date(now) };
+    await collect(d);
+    assert.equal(repo.division.size, expected);
+    assert.ok([...repo.division.values()].every((v) => v === 3));
+
+    // Segunda ejecución con otra división: no pisa nada (los partidos ya no son nuevos).
+    (source.overview as { season: { currentDivision: string } }).season.currentDivision = '2';
+    await collect(d);
+    assert.ok([...repo.division.values()].every((v) => v === 3));
+  });
+
+  test('sin la foto del club no anota división, y no es un error extra', async () => {
+    const repo = new FakeRepo();
+    const source = new FakeSource({ leagueMatch: fixture });
+    source.overview = new ProClubsError('HTTP 500', 'HTTP');
+    const latest = Math.max(...fixture.map((m) => Number(m.timestamp) * 1000));
+    await collect({ ...deps(source, repo), now: () => new Date(latest + 1000) });
+    assert.equal(repo.division.size, 0);
   });
 
   test('la plataforma de cada jugador llega a cuentas y stats', async () => {

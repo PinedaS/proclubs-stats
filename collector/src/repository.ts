@@ -11,6 +11,8 @@ export interface StatsRepository {
   /** De estos partidos, cuáles aún no tienen la fuerza del rival. */
   findMatchesMissingOpponentSkill(matchIds: string[]): Promise<Set<string>>;
   setOpponentSkill(matchId: string, skillRating: number): Promise<void>;
+  /** División del club al capturar. Solo llena partidos que aún no la tienen (nunca la pisa). */
+  setClubDivision(matchIds: string[], division: number): Promise<void>;
   startRun(runner: string): Promise<number>;
   finishRun(runId: number, result: RunResult): Promise<void>;
   upsertClub(club: ClubRow): Promise<void>;
@@ -123,6 +125,17 @@ export class SupabaseStatsRepository implements StatsRepository {
       .update({ opponent_skill_rating: skillRating })
       .eq('match_id', matchId);
     check('setOpponentSkill', error);
+  }
+
+  async setClubDivision(matchIds: string[], division: number): Promise<void> {
+    if (matchIds.length === 0) return;
+    // Igual que el nivel del rival: update aparte, y solo donde sigue vacío.
+    const { error } = await this.#db
+      .from('matches')
+      .update({ club_division: division })
+      .in('match_id', matchIds)
+      .is('club_division', null);
+    check('setClubDivision', error);
   }
 
   async saveNormalizedMatch(n: NormalizedMatch): Promise<void> {

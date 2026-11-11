@@ -60,6 +60,11 @@ export function getClubSnapshots(clubId) {
   return request(`club_snapshots?select=snapshot_date,skill_rating,current_division,best_division,season_points,season_games,season_wins,season_draws,season_losses,season_goals,season_goals_against,games_played,wins,draws,losses,promotions,relegations,win_streak,unbeaten_streak&order=snapshot_date.asc${clubParam(clubId)}`);
 }
 
+/** Estado del disparo desde Supabase (token presente, última respuesta de GitHub). */
+export function getDispatchStatus() {
+  return rpc('dispatch_status', {}).then((r) => r[0] ?? null);
+}
+
 export function getCollectorStatus() {
   return request('v_collector_status?select=*').then((r) => r[0] ?? null);
 }

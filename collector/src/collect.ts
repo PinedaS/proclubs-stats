@@ -31,6 +31,13 @@ interface SoftFailure {
 
 const MAX_ERROR_LENGTH = 2000;
 
+/**
+ * La división se guarda solo en partidos NUEVOS jugados hace menos de esto.
+ * Uno más viejo (p. ej., los 10 que se capturan la primera vez) pudo jugarse
+ * en otra división; para esos, la vista usa la foto diaria del club.
+ */
+export const DIVISION_MAX_AGE_MS = 6 * 60 * 60 * 1000;
+
 export function errorCodeOf(err: unknown): string {
   if (err instanceof ProClubsError) return `EA_${err.code}`;
   if (err instanceof TransformError) return 'TRANSFORM';
@@ -59,6 +66,7 @@ export async function collect(deps: CollectDeps): Promise<RunResult> {
   let matchesSeen = 0;
   let matchesNew = 0;
   const opponents: { matchId: string; opponentId: string }[] = [];
+  const recentNew: string[] = [];
 
   const finish = async (fatal?: unknown): Promise<RunResult> => {
     const all = fatal === undefined ? failures : [...failures, { code: errorCodeOf(fatal), message: messageOf(fatal) }];
@@ -121,7 +129,10 @@ export async function collect(deps: CollectDeps): Promise<RunResult> {
         if (normalized.match.opponent_club_id !== null) {
           opponents.push({ matchId: row.match_id, opponentId: String(normalized.match.opponent_club_id) });
         }
-        if (!existing.has(row.match_id)) newHere++;
+        if (!existing.has(row.match_id)) {
+          newHere++;
+          if (now().getTime() - Date.parse(normalized.match.played_at) <= DIVISION_MAX_AGE_MS) recentNew.push(row.match_id);
+        }
       }
 
       matchesNew += newHere;
@@ -130,7 +141,11 @@ export async function collect(deps: CollectDeps): Promise<RunResult> {
 
     await fillOpponentSkill(deps, opponents);
     await captureMembers(deps, club.clubId, now(), failures);
-    await captureClub(deps, club, now(), failures);
+    const division = await captureClub(deps, club, now(), failures);
+    if (division != null && recentNew.length) {
+      await deps.repo.setClubDivision(recentNew, division);
+      log.info(`División ${division} guardada en ${recentNew.length} partidos nuevos`);
+    }
   } catch (err) {
     log.error(`Ejecución abortada: ${messageOf(err)}`);
     try {
@@ -173,8 +188,11 @@ async function fillOpponentSkill(deps: CollectDeps, opponents: { matchId: string
   if (filled) deps.log.info(`Nivel del rival guardado en ${filled} partidos`);
 }
 
-/** Foto del club (nivel, división, temporada). Si EA falla, se registra como falla. */
-async function captureClub(deps: CollectDeps, club: FoundClub, at: Date, failures: SoftFailure[]): Promise<void> {
+/**
+ * Foto del club (nivel, división, temporada). Si EA falla, se registra como falla.
+ * Devuelve la división actual (o null) para anotarla en los partidos nuevos.
+ */
+async function captureClub(deps: CollectDeps, club: FoundClub, at: Date, failures: SoftFailure[]): Promise<number | null> {
   let overview: { overall: unknown; season: unknown };
   try {
     overview = await deps.source.getClubOverview(club.clubId, club.name);
@@ -182,12 +200,13 @@ async function captureClub(deps: CollectDeps, club: FoundClub, at: Date, failure
     if (!(err instanceof ProClubsError)) throw err;
     failures.push({ code: errorCodeOf(err), message: `club overview: ${messageOf(err)}` });
     deps.log.error(`EA falló al leer el resumen del club: ${messageOf(err)}`);
-    return;
+    return null;
   }
   const row = toClubSnapshotRow(overview.overall, overview.season, club.clubId, at);
-  if (!row) return;
+  if (!row) return null;
   await deps.repo.saveClubSnapshot(row);
   deps.log.info(`Club: nivel ${row.skill_rating ?? '—'}, división ${row.current_division ?? '—'}, ${row.season_points ?? '—'} pts`);
+  return row.current_division;
 }
 
 /** Foto de members/stats. Si EA falla, se registra como falla (dato oficial). */

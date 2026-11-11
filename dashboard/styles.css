@@ -445,3 +445,4 @@ td.delta-down { color: var(--loss); }
 .fit-summary { margin: 0 0 10px; line-height: 1.5; }
 .fit-summary li { margin: 2px 0; }
 tr.fit-best > td { background: var(--accent-soft); }
+.view-toolbar { margin: 0 0 12px; }

@@ -45,7 +45,6 @@ API no oficial de EA ──► Colector (GitHub Actions, cada 30 min) ──► 
      - **Por rol:** `relative_stats`, índices relativos a la posición o arquetipo; 100 = promedio del rol.
      - **Comparar:** `person_split_stats`, rival fuerte/débil, tipo de partido, jugadores en cancha y **división** (011).
      - **Duplas:** `pair_stats`, más la tabla **"Con y sin"** (`with_without_stats`, 011): cómo rinde cada jugador con y sin cada compañero. Es una correlación, no una causa.
-     - **Por posición:** `position_stats`.
      - **Partidos.**
      - **Club:** `club_snapshots`.
    - **Vista oculta `#verificacion`:** conciliación EA vs. capturado (`v_reconciliation`) y la antigua pestaña de miembros. Si faltan partidos, aparece un aviso en la cabecera.
@@ -59,7 +58,13 @@ API no oficial de EA ──► Colector (GitHub Actions, cada 30 min) ──► 
    - Filtros: tipo de partido, fechas, mínimo de partidos y excluir incompletos.
    - Los archivos se versionan con el commit en `pages.yml` (`__V__`), para no mezclar versiones viejas desde la caché de Pages.
    - Probado en Chrome con los datos del club de prueba.
-   - **Migraciones aplicadas en Supabase:** 001–013, cada una verificada después de aplicarla.
+   - **Migraciones aplicadas en Supabase:** 001–014, cada una verificada después de aplicarla.
+   - **Cambios del 2026-11-11 (tarde):**
+     - La pestaña "Por posición" se unió a "Por rol", con un selector "Relativo al rol / Valores reales por posición", porque era redundante.
+     - Se eliminó `ea-probe.yml`.
+     - La cabecera muestra un aviso del disparo desde Supabase (`dispatch_status()`, 014) solo si falta el token, si GitHub lo rechaza o si no hay respuestas recientes.
+     - **División al capturar (014):** el colector anota `matches.club_division` en partidos **nuevos** de menos de 6 h, con la división leída en esa misma ejecución. Nunca la pisa después. La vista usa esa división y, si falta, la foto diaria.
+     - Revisado en celular (375 px): ninguna pestaña desborda la página.
 
 ### Por qué así (no reabrir sin un motivo nuevo)
 
@@ -83,7 +88,7 @@ No hay API oficial. Se usan los endpoints públicos que lee la web de Clubes de 
 - **Los IDs de club cambian cada año.** Hay que buscar el club por nombre y no guardar un ID fijo de una temporada a otra.
 - **Prueba real:** una consulta desde un servidor de Anthropic recibió HTTP 200 con datos de FC 27.
   - La documentación de `proclubs-sdk` reporta 403 y tiempos de espera intermitentes desde servidores, y que `curl` falla mientras `fetch` de Node funciona.
-  - **Verificado desde GitHub Actions (2026-11-11, una ejecución):** el workflow `ea-probe.yml` (runner `ubuntu-latest`, `proclubs-sdk` 0.3.4) buscó el club y descargó sus 10 partidos de liga sin 403.
+  - **Verificado desde GitHub Actions (2026-11-11, una ejecución):** el workflow `ea-probe.yml` (eliminado el 2026-11-11 por redundante: el colector ya lo comprueba en cada ejecución; runner `ubuntu-latest`, `proclubs-sdk` 0.3.4) buscó el club y descargó sus 10 partidos de liga sin 403.
     - Es una sola muestra. Si EA bloquea de forma intermitente, se verá en `collector_runs` cuando el colector corra cada 30 min.
 
 ### Forma de un partido (`clubs/matches`)
