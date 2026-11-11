@@ -272,7 +272,7 @@ const RANKING_COLUMNS = [
   { key: 'pass_accuracy_pct', label: 'Pases %', title: 'Pases completados / intentados', digits: 1 },
   { key: 'tackle_success_pct', label: 'Entradas %', title: 'Entradas ganadas / intentadas', digits: 1 },
   { key: 'saves', label: 'Atajadas' },
-  { key: 'red_cards', label: 'Rojas', title: 'Tarjetas rojas' },
+  { key: 'red_cards', label: 'Rojas', title: 'Tarjetas rojas', better: 'low' },
   // Avanzadas: calculadas con datos oficiales.
   { key: 'minutes_played', label: 'Min.', title: 'Minutos jugados (tiempo de juego)', adv: true },
   { key: 'goals_per90', label: 'G/90', title: 'Goles por cada 90 minutos', digits: 2, adv: true },
@@ -283,30 +283,30 @@ const RANKING_COLUMNS = [
   { key: 'goal_diff', label: 'Dif. goles', title: 'Goles a favor menos en contra en los partidos que jugó', adv: true, render: (r) => fmtSigned(r.goal_diff) },
   { key: 'attendance_pct', label: 'Presencia %', title: 'Partidos jugados / partidos del club en el rango filtrado', digits: 1, adv: true },
   { key: 'form_rating', label: 'Forma', title: 'Calificación media de sus últimos 5 partidos', digits: 2, adv: true },
-  { key: 'rating_stddev', label: 'Variación', title: 'Desviación de su calificación: más bajo = más regular', digits: 2, adv: true },
+  { key: 'rating_stddev', label: 'Variación', title: 'Desviación de su calificación: más bajo = más regular', digits: 2, adv: true, better: 'low' },
   { key: 'clean_sheets', label: 'Vallas', title: 'Vallas invictas (defensa + portero)', adv: true },
   { key: 'save_pct', label: '% Atajadas', title: 'Porteros: atajadas / (atajadas + goles recibidos)', digits: 1, adv: true },
-  { key: 'avg_opponent_skill', label: 'Nivel rival', title: 'Nivel medio (skillRating) de los rivales que enfrentó', adv: true },
-  { key: 'avg_team_size', label: 'Jug. prom.', title: 'Jugadores del club en cancha, en promedio', digits: 1, adv: true },
-  { key: 'incomplete_matches', label: 'Incompl.', title: 'Partidos incompletos (abandono o < 90 % del tiempo)', adv: true },
+  { key: 'avg_opponent_skill', label: 'Nivel rival', title: 'Nivel medio (skillRating) de los rivales que enfrentó', adv: true, better: null },
+  { key: 'avg_team_size', label: 'Jug. prom.', title: 'Jugadores del club en cancha, en promedio', digits: 1, adv: true, better: null },
+  { key: 'incomplete_matches', label: 'Incompl.', title: 'Partidos incompletos (abandono o < 90 % del tiempo)', adv: true, better: null },
   // Experimentales: contadores sin documentar de EA (ver nota al pie del dashboard).
   { key: 'shot_accuracy_exp_pct', label: 'A puerta %*', title: 'Experimental: tiros a puerta / tiros (códigos EA 217 y 218)', digits: 1, exp: true },
   { key: 'second_assists_exp', label: '2ª asist.*', title: 'Experimental: segundas asistencias (código EA 115)', exp: true },
   { key: 'dribbles_exp', label: 'Regates*', title: 'Experimental: regates completados (código EA 174)', exp: true },
   { key: 'interceptions_exp', label: 'Intercep.*', title: 'Experimental: intercepciones (código EA 6)', exp: true },
   { key: 'possession_won_exp', label: 'Recup.*', title: 'Experimental: posesiones ganadas (códigos EA 108–110)', exp: true },
-  { key: 'possession_lost_exp', label: 'Pérdidas*', title: 'Experimental: posesiones perdidas (códigos EA 105–107)', exp: true },
+  { key: 'possession_lost_exp', label: 'Pérdidas*', title: 'Experimental: posesiones perdidas (códigos EA 105–107)', exp: true, better: 'low' },
   { key: 'aerial_duels_won_exp', label: 'Aéreos*', title: 'Experimental: duelos aéreos ganados (códigos EA 265–266)', exp: true },
   { key: 'forward_pass_pct_exp', label: 'Pase adel. %*', title: 'Experimental: pases hacia adelante completados (códigos EA 30 y 31)', digits: 1, exp: true },
   { key: 'through_passes_exp', label: 'Filtrados*', title: 'Experimental: pases filtrados (código EA 152)', exp: true },
   { key: 'cross_pct_exp', label: 'Centros %*', title: 'Experimental: centros completados (códigos EA 36 y 37)', digits: 1, exp: true },
   { key: 'in_position_pct_exp', label: 'En posición %*', title: 'Experimental: veces en posición / (en + fuera de posición) (códigos EA 111 y 219)', digits: 1, exp: true },
   { key: 'best_option_pct_exp', label: 'Decisiones %*', title: 'Experimental: "tomó la mejor opción" / (mejor + "debió pasar a otro") (códigos EA 177 y 182)', digits: 1, exp: true },
-  { key: 'fouls_exp', label: 'Faltas*', title: 'Experimental: faltas cometidas (códigos EA 2 y 3)', exp: true },
+  { key: 'fouls_exp', label: 'Faltas*', title: 'Experimental: faltas cometidas (códigos EA 2 y 3)', exp: true, better: 'low' },
   { key: 'fouls_won_exp', label: 'F. recibidas*', title: 'Experimental: faltas recibidas (código EA 4)', exp: true },
-  { key: 'offsides_exp', label: 'Fuera lugar*', title: 'Experimental: fueras de juego (código EA 104; tiende a contar de menos)', exp: true },
-  { key: 'penalties_conceded_exp', label: 'Penales*', title: 'Experimental: penales cometidos (código EA 94)', exp: true },
-  { key: 'yellow_cards_exp', label: 'Amarillas*', title: 'Experimental: tarjetas amarillas (códigos EA 95 y 213)', exp: true },
+  { key: 'offsides_exp', label: 'Fuera lugar*', title: 'Experimental: fueras de juego (código EA 104; tiende a contar de menos)', exp: true, better: 'low' },
+  { key: 'penalties_conceded_exp', label: 'Penales*', title: 'Experimental: penales cometidos (código EA 94)', exp: true, better: 'low' },
+  { key: 'yellow_cards_exp', label: 'Amarillas*', title: 'Experimental: tarjetas amarillas (códigos EA 95 y 213)', exp: true, better: 'low' },
 ];
 
 const visibleColumns = () => RANKING_COLUMNS.filter((c) => (state.showExp || !c.exp) && (state.showAdv || !c.adv));
@@ -325,14 +325,42 @@ function sortRows(rows) {
   });
 }
 
+/** 'high' (más es mejor, por defecto), 'low' (menos es mejor) o null (no es mérito: sin podio). */
+const betterOf = (col) => (col.text ? null : col.better === undefined ? 'high' : col.better);
+/** Mínimo de partidos para subir al podio: con 1 o 2 PJ cualquiera queda arriba por casualidad. */
+const PODIUM_MIN_MATCHES = 3;
+
+/** Filas de mejor a peor según la columna, sin importar cómo esté ordenada la tabla. */
+function bestFirst(rows, col) {
+  const better = betterOf(col);
+  if (!better) return null;
+  const sign = better === 'high' ? -1 : 1;
+  return rows.filter((r) => r[col.key] != null).sort((a, b) => (Number(a[col.key]) - Number(b[col.key])) * sign);
+}
+
+/** Puestos con empates: quienes tienen el mismo valor comparten puesto (1, 1, 3…). */
+function placesOf(ordered, col) {
+  const places = new Map();
+  ordered.forEach((r, i) => {
+    const prev = ordered[i - 1];
+    const same = prev && Number(prev[col.key]) === Number(r[col.key]);
+    places.set(r.person_id, same ? places.get(prev.person_id) : i + 1);
+  });
+  return places;
+}
+
 function renderPodium(rows) {
   const col = RANKING_COLUMNS.find((c) => c.key === state.sort.key);
   const box = $('#podium');
-  if (!col || col.text || rows.length < 3) { box.replaceChildren(); return; }
-  const top = rows.filter((r) => r[col.key] != null).slice(0, 3);
-  if (top.length < 3) { box.replaceChildren(); return; }
-  box.replaceChildren(...top.map((r, i) => el('div', { class: `podium-card p${i + 1}`, ...onActivate(() => openPerson(r.person_id)), 'aria-label': `${i + 1}º ${r.person_name}` },
-    el('div', { class: 'medal' }, String(i + 1)),
+  const ordered = col ? bestFirst(rows.filter((r) => r.matches >= Math.max(state.minMatches, PODIUM_MIN_MATCHES)), col) : null;
+  if (!ordered || ordered.length < 3) { box.replaceChildren(); return; }
+  const places = placesOf(ordered, col);
+  // Si más de 3 comparten el primer puesto, el podio no distingue a nadie: no se muestra.
+  if (ordered.filter((r) => places.get(r.person_id) === 1).length > 3) { box.replaceChildren(); return; }
+  const top = ordered.slice(0, 3);
+  // p1/p2/p3 = lugar en el podio (diseño); m1/m2/m3 = medalla según el puesto (con empates).
+  box.replaceChildren(...top.map((r, i) => el('div', { class: `podium-card p${i + 1} m${places.get(r.person_id)}`, ...onActivate(() => openPerson(r.person_id)), 'aria-label': `${places.get(r.person_id)}º ${r.person_name}` },
+    el('div', { class: 'medal' }, String(places.get(r.person_id))),
     el('div', { class: 'name' }, r.person_name),
     el('div', { class: 'metric' }, col.render ? col.render(r) : fmtNum(r[col.key], col.digits ?? 0)),
     el('div', { class: 'metric-label' }, col.title ?? col.label),
@@ -358,9 +386,14 @@ function renderRanking() {
 
   const rows = sortRows(state.ranking.filter((r) => r.matches >= state.minMatches));
   renderPodium(rows);
+  // El puesto (#) es siempre de mejor a peor en ese dato, aunque la tabla esté
+  // ordenada al revés: así el peor nunca aparece como "1". Sin mérito, sin puesto.
+  const sortCol = RANKING_COLUMNS.find((c) => c.key === state.sort.key);
+  const best = sortCol ? bestFirst(rows, sortCol) : null;
+  const place = best ? placesOf(best, sortCol) : new Map();
   const body = rows.length
-    ? rows.map((r, i) => el('tr', { class: 'clickable', ...onActivate(() => openPerson(r.person_id)) },
-        el('td', { class: 'rank' }, String(i + 1)),
+    ? rows.map((r) => el('tr', { class: 'clickable', ...onActivate(() => openPerson(r.person_id)) },
+        el('td', { class: 'rank' }, place.has(r.person_id) ? String(place.get(r.person_id)) : '—'),
         columns.map((c) => el('td', { class: cellClass(c, c.key === state.sort.key && !c.text ? 'sorted' : '') },
           c.render ? c.render(r) : fmtNum(r[c.key], c.digits ?? 0)))))
     : [emptyRow(columns.length + 1)];

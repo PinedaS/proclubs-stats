@@ -77,6 +77,13 @@ API no oficial de EA ──► Colector (GitHub Actions, cada 30 min) ──► 
        - **Marcador arriba:** datos ganados, empates y datos perdidos.
        - **Qué se juzga:** solo tasas (por partido, por 90 min, %), nunca totales. Primero van los índices relativos al rol. Las diferencias menores al 3 % son empate.
        - El enlace `?a=ID&b=ID` sirve para compartir, y el detalle de cada jugador tiene un botón "Comparar con…".
+     - **Podio y puesto (#):** siguen siempre al **mejor** de cada dato, no al orden de la tabla. Así el peor no sale "1º" al ordenar de menor a mayor.
+       - Las columnas llevan `better`: `'low'` en rojas, variación, pérdidas, faltas, fueras de juego, penales y amarillas; `null` (sin podio) en nivel del rival, jugadores en cancha e incompletos.
+       - Los empates comparten puesto. Sin podio si más de 3 empatan en el primero.
+       - Solo suben al podio quienes tienen 3 o más PJ.
+     - **Mejor división (verificado el 2026-11-11):** EA manda dos `bestDivision` contradictorios: `overallStats` = 4 y ranking de la temporada = 3, con la actual también en 3. La 1 es la más alta.
+       - Hipótesis sin confirmar: la de `overallStats` cuenta otra cosa o está desactualizada.
+       - `club.ts` ahora guarda la más alta entre las dos y la actual. Las fotos de días anteriores conservan el 4.
      - **Nombres de arquetipos:** mapeo de la comunidad (Interactive-63, issue #5, nov. 2026), no oficial.
        - Los deducidos sin confirmar llevan "?": 1 y 2 (porteros), 4 (Boss), 7 y 9.
        - Contrastado con nuestros datos: 4, 5 y 8 cuadran con las posiciones jugadas. El 13 (Target Man) aparece sobre todo en el medio, aunque la comunidad lo ve un 95 % de las veces como delantero.

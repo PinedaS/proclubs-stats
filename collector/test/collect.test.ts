@@ -170,6 +170,8 @@ describe('collect: foto del club', () => {
     const s = repo.clubSnapshots[0]!;
     assert.equal(s.skill_rating, 1595);
     assert.equal(s.current_division, 3);
+    // EA dice "mejor: 4" en overallStats estando en 3ª: la mejor nunca es peor que la actual.
+    assert.equal(s.best_division, 3);
     assert.equal(s.season_points, 47);
     assert.equal(s.season_draws, 7);
     assert.equal(s.unbeaten_streak, 2);

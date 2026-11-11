@@ -20,13 +20,19 @@ export function toClubSnapshotRow(overall: unknown, season: unknown, clubId: str
   if (!o && !s) return null;
   const iso = capturedAt.toISOString();
   const positive = (v: unknown) => { const n = int(v); return n !== null && n >= 0 ? n : null; };
+  const current = positive(s?.currentDivision);
+  // Verificado el 2026-11-11: EA manda DOS "bestDivision" que se contradicen
+  // (overallStats: 4; ranking de la temporada: 3, con la actual en 3). La 1 es
+  // la más alta, así que la mejor nunca puede ser peor que la actual: se toma la
+  // más alta (número menor) entre las dos y la actual.
+  const bests = [positive(o?.bestDivision), positive(s?.bestDivision), current].filter((n): n is number => n !== null && n > 0);
   return {
     club_id: Number(clubId),
     snapshot_date: iso.slice(0, 10),
     captured_at: iso,
     skill_rating: positive(o?.skillRating),
-    current_division: positive(s?.currentDivision),
-    best_division: positive(o?.bestDivision ?? s?.bestDivision),
+    current_division: current,
+    best_division: bests.length ? Math.min(...bests) : null,
     season_points: positive(s?.points),
     season_games: positive(s?.gamesPlayed),
     season_wins: positive(s?.wins),

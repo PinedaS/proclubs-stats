@@ -252,7 +252,8 @@ main > *, .view > * { min-width: 0; }
   width: 34px; height: 34px; border-radius: 50%; display: grid; place-items: center; margin: 0 auto 8px;
   font-weight: 800; color: #111; font-size: .95rem;
 }
-.p1 .medal { background: var(--gold); } .p2 .medal { background: var(--silver); } .p3 .medal { background: var(--bronze); }
+/* Color de la medalla según el puesto real (m1–m3), que admite empates. */
+.m1 .medal { background: var(--gold); } .m2 .medal { background: var(--silver); } .m3 .medal { background: var(--bronze); }
 .podium-card .name { font-weight: 800; font-size: 1.05rem; overflow-wrap: anywhere; }
 .podium-card .metric { font-size: 1.9rem; font-weight: 800; font-variant-numeric: tabular-nums; color: var(--accent); line-height: 1.15; }
 .podium-card .metric-label { font-size: .75rem; color: var(--ink-3); text-transform: uppercase; letter-spacing: .08em; }
