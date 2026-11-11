@@ -58,7 +58,20 @@ API no oficial de EA ──► Colector (GitHub Actions, cada 30 min) ──► 
    - Filtros: tipo de partido, fechas, mínimo de partidos y excluir incompletos.
    - Los archivos se versionan con el commit en `pages.yml` (`__V__`), para no mezclar versiones viejas desde la caché de Pages.
    - Probado en Chrome con los datos del club de prueba.
-   - **Migraciones aplicadas en Supabase:** 001–014, cada una verificada después de aplicarla.
+   - **Migraciones aplicadas en Supabase:** 001–015, cada una verificada después de aplicarla.
+   - **Mejoras del 2026-11-11 (noche):**
+     - **Vista simple:** "Métricas avanzadas" y "Experimentales" arrancan apagadas, y cada navegador recuerda lo elegido en `localStorage`.
+     - **Guía:** botón "Cómo leer esto" en la cabecera, un `<dialog>` con la explicación de cada pestaña.
+     - **Título:** "EA SPORTS FC NN" sale de la temporada del club.
+     - **Avisos de fallas:**
+       - **Correo:** verificado en la configuración del usuario, *Actions: Email, Failed workflows only*. Los disparos van con su token, así que los correos le llegan a él.
+       - **Discord, opcional:** `collector/scripts/notify.ts` (lógica en `src/alerts.ts`, con tests) avisa a la 3.ª falla seguida, cada 24 fallas después, y cuando el colector se recupera. Solo actúa si existe el secreto `DISCORD_WEBHOOK_URL`, que debe crear el usuario.
+     - **API de GitHub `2026-03-10` (015):** la `2022-11-28` vence el 10-mar-2028. En la versión nueva el disparo responde 200, no 204.
+     - **Dependabot:**
+       - PR #1 (acciones v7) integrado.
+       - Del PR #2 solo se aplicó `zod` 4.6.7.
+       - `@types/node` queda en 22.x mientras el colector use Node 22: `dependabot.yml` ignora sus saltos mayores.
+     - **Cambio de club y de temporada:** paso a paso en `docs/cambio-de-temporada.md`.
    - **Cambios del 2026-11-11 (tarde):**
      - La pestaña "Por posición" se unió a "Por rol", con un selector "Relativo al rol / Valores reales por posición", porque era redundante.
      - Se eliminó `ea-probe.yml`.

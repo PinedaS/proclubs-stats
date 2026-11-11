@@ -446,3 +446,21 @@ td.delta-down { color: var(--loss); }
 .fit-summary li { margin: 2px 0; }
 tr.fit-best > td { background: var(--accent-soft); }
 .view-toolbar { margin: 0 0 12px; }
+
+/* Guía "Cómo leer esto" */
+.guide-btn { cursor: pointer; font: inherit; color: inherit; }
+.guide-btn:hover { border-color: var(--accent); }
+dialog.guide {
+  width: min(680px, calc(100vw - 32px)); max-height: calc(100dvh - 48px);
+  padding: 0; border: 1px solid var(--border); border-radius: var(--radius);
+  background: var(--surface); color: var(--ink); box-shadow: var(--shadow);
+}
+dialog.guide::backdrop { background: rgb(0 0 0 / .55); }
+.guide-head {
+  position: sticky; top: 0; display: flex; justify-content: space-between; align-items: center;
+  gap: 12px; padding: 16px 20px; background: var(--surface); border-bottom: 1px solid var(--border);
+}
+.guide-head h2 { margin: 0; font-size: 1.15rem; }
+.guide-body { padding: 4px 20px 20px; line-height: 1.55; }
+.guide-body h3 { margin: 18px 0 4px; font-size: .95rem; color: var(--accent); }
+.guide-body p { margin: 0; }

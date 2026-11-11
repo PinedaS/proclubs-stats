@@ -2,3 +2,6 @@ node_modules/
 .env
 .env.*
 !.env.example
+
+# Configuración local de la vista previa de Claude Code (rutas de esta máquina)
+.claude/launch.json

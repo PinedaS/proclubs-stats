@@ -3,8 +3,8 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Stats del club · EA FC 27</title>
-  <meta name="description" content="Estadísticas de nuestro club de Clubes (Pro Clubs) en EA FC 27">
+  <title>Stats del club · EA FC</title>
+  <meta name="description" content="Estadísticas de nuestro club de Clubes (Pro Clubs) en EA SPORTS FC">
   <meta name="referrer" content="no-referrer">
   <meta name="theme-color" content="#0b1410">
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Cpath d='M16 2l12 5v8c0 8-5.5 13-12 15C9.5 28 4 23 4 15V7z' fill='%2322c55e'/%3E%3C/svg%3E">
@@ -21,7 +21,7 @@
           <span id="crest-initials">FC</span>
         </div>
         <div>
-          <p class="eyebrow">EA SPORTS FC 27 · Clubes</p>
+          <p class="eyebrow" id="game-label">EA SPORTS FC · Clubes</p>
           <h1 id="club-name">Stats del club</h1>
           <p class="subtitle" id="club-season">Temporada FC27</p>
         </div>
@@ -34,6 +34,9 @@
         <div id="collector-status" class="status" role="status" aria-live="polite">Cargando estado…</div>
         <a id="recon-alert" class="status warning" href="#verificacion" hidden></a>
         <div id="dispatch-alert" class="status warning" role="status" hidden></div>
+        <button type="button" class="status guide-btn" id="open-guide" aria-haspopup="dialog">
+          <span class="icon" aria-hidden="true">?</span><span>Cómo leer esto</span>
+        </button>
       </div>
     </div>
     <div class="kpis" id="club-kpis" aria-label="Resumen del club"></div>
@@ -73,10 +76,10 @@
           <input type="checkbox" id="exclude-incomplete"><span class="track" aria-hidden="true"></span>Excluir incompletos
         </label>
         <label class="switch" title="Métricas calculadas con datos oficiales: por 90 min, conversión, forma, presencia…">
-          <input type="checkbox" id="show-adv" checked><span class="track" aria-hidden="true"></span>Métricas avanzadas
+          <input type="checkbox" id="show-adv"><span class="track" aria-hidden="true"></span>Métricas avanzadas
         </label>
         <label class="switch" title="Datos que EA no documenta; ver nota al pie">
-          <input type="checkbox" id="show-exp" checked><span class="track" aria-hidden="true"></span>Experimentales*
+          <input type="checkbox" id="show-exp"><span class="track" aria-hidden="true"></span>Experimentales*
         </label>
       </div>
     </section>
@@ -196,8 +199,43 @@
     <section id="person-detail" class="detail card" hidden aria-live="polite"></section>
   </main>
 
+  <dialog id="guide" class="guide" aria-labelledby="guide-title">
+    <div class="guide-head">
+      <h2 id="guide-title">Cómo leer esto</h2>
+      <button type="button" class="close" id="close-guide">Cerrar</button>
+    </div>
+    <div class="guide-body">
+      <h3>De dónde salen los datos</h3>
+      <p>De la web pública de Clubes de EA, que se consulta sola cada 15 minutos. Nadie carga nada a mano. EA solo guarda los <strong>últimos 10 partidos</strong> de cada tipo, por eso hay que capturarlos seguido. Cuentan liga, play-off y amistosos; arriba puedes filtrar por tipo, fechas y un mínimo de partidos.</p>
+
+      <h3>Ranking</h3>
+      <p>Totales y promedios de cada jugador. Toca un encabezado para ordenar y un jugador para ver su detalle. <strong>Métricas avanzadas</strong> agrega columnas calculadas (por 90 minutos, forma de los últimos 5, presencia…). <strong>Experimentales</strong> agrega datos marcados con <strong>*</strong> (ver abajo). Las dos opciones se recuerdan en este navegador.</p>
+
+      <h3>Índice 100 (Por rol)</h3>
+      <p>Compara a cada uno con el <strong>promedio del club en su misma posición</strong> o arquetipo. <strong>100 = promedio</strong>; 120 = 20 % mejor; 80 = 20 % peor. Así un defensa no queda abajo por marcar pocos goles. Si alguien jugó varias posiciones, cuenta cada una según los minutos. Con el selector <em>Valores reales por posición</em> ves los números sin comparar.</p>
+
+      <h3>Posición recomendada (detalle del jugador)</h3>
+      <p><strong>Índice:</strong> su calificación en cada posición que jugó frente al promedio del club ahí (solo con 3 o más partidos). <strong>Perfil:</strong> cuánto de su forma de jugar (goles, asistencias, tiros, pases, entradas…) se parece a cada posición, comparado con los demás jugadores; suma 100 %. Es una pista, no una orden.</p>
+
+      <h3>Comparar</h3>
+      <p>El mismo jugador en distintas situaciones: rival fuerte o débil, liga o amistoso, cuántos estábamos en cancha y en qué división. Fíjate en los <strong>PJ</strong> de cada celda: 2 partidos no se comparan con 30.</p>
+
+      <h3>Duplas y "Con y sin"</h3>
+      <p><strong>Duplas:</strong> cómo le va al equipo cuando dos juegan juntos. <strong>Con y sin:</strong> cómo rinde cada uno con un compañero en cancha y sin él. Muestra que van juntos, no que uno cause el rendimiento del otro: también influyen el rival, la posición y la suerte.</p>
+
+      <h3>* Experimentales</h3>
+      <p>Regates, intercepciones, posesión y otros salen de contadores que EA no documenta. Son aproximaciones: frente a datos oficiales coinciden entre el 65 % y el 98 %.</p>
+
+      <h3>Partidos incompletos</h3>
+      <p>Abandonos o partidos donde nadie del club llegó al 90 % del tiempo. Puedes excluirlos con el filtro.</p>
+
+      <h3>¿Y el mejor jugador?</h3>
+      <p>Todavía no hay fórmula: por ahora solo juntamos los datos. Se definirá más adelante, de forma transparente y sin castigar a quien rota de posición.</p>
+    </div>
+  </dialog>
+
   <footer class="foot">
-    <p>Datos de la API pública de EA, capturados automáticamente cada 30 min. <a href="https://github.com/PinedaS/proclubs-stats">Código</a></p>
+    <p>Datos de la API pública de EA, capturados automáticamente cada 15 min. <a href="https://github.com/PinedaS/proclubs-stats">Código</a></p>
     <p>* <strong>Experimental:</strong> regates, intercepciones, posesión, duelos, faltas, pases filtrados, posicionamiento, decisiones y similares salen de contadores que EA no documenta,
     interpretados según la <a href="https://github.com/Interactive-63/eafc-pro-clubs-api-research">investigación de la comunidad</a>. Son aproximaciones: frente a datos oficiales coinciden entre el 65 % y el 98 %.</p>
   </footer>

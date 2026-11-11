@@ -1,6 +1,8 @@
-# Colector: guarda en Supabase los partidos nuevos del club, cada 30 minutos.
-# EA solo muestra los últimos 10 partidos por tipo (~3 h de juego), así que
-# 30 min deja mucho margen aunque GitHub retrase o salte alguna ejecución.
+# Colector: guarda en Supabase los partidos nuevos del club.
+# EA solo muestra los últimos 10 partidos por tipo (~3 h de juego).
+# Disparo principal: Supabase (pg_cron) lo pide cada 15 min por workflow_dispatch
+# (migración 010), porque el cron de GitHub resultó poco confiable (1 de ~25
+# ejecuciones el 2026-11-11). El cron de abajo queda como respaldo.
 name: Colector
 
 on:
@@ -51,6 +53,19 @@ jobs:
         # Sale con código 1 si EA, la transformación o Supabase fallan,
         # y GitHub marca la ejecución en rojo.
         run: npm run collect
+
+      # Aviso opcional a Discord: a la 3.ª falla seguida (y cada ~6 h si sigue)
+      # y cuando se recupera. Sin el secreto DISCORD_WEBHOOK_URL no hace nada.
+      # Corre aunque el colector haya fallado (always), pero nunca lo hace fallar.
+      - name: Avisar si falla seguido
+        if: always()
+        continue-on-error: true
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: node scripts/notify.ts
 
   # GitHub desactiva los workflows programados de un repo público tras 60 días
   # sin actividad en el repo. Volver a "habilitar" el workflow por la API

@@ -16,8 +16,9 @@ const state = {
   view: 'ranking',
   sort: { key: 'avg_rating', dir: -1 },
   minMatches: 1,
-  showExp: true,
-  showAdv: true,
+  // Vista simple por defecto; cada navegador recuerda lo que el usuario elija (prefs).
+  showExp: false,
+  showAdv: false,
   ranking: [],
   records: new Map(),
   members: null,
@@ -36,6 +37,20 @@ const state = {
 };
 
 const $ = (sel) => document.querySelector(sel);
+
+/**
+ * Preferencias de vista guardadas en este navegador (localStorage). Solo son
+ * comodidades: si el navegador no deja guardar (modo privado), se usa lo de por defecto.
+ */
+const PREFS_KEY = 'proclubs-stats:prefs';
+const prefs = {
+  load() {
+    try { return JSON.parse(localStorage.getItem(PREFS_KEY) ?? '{}') ?? {}; } catch { return {}; }
+  },
+  save(patch) {
+    try { localStorage.setItem(PREFS_KEY, JSON.stringify({ ...prefs.load(), ...patch })); } catch { /* sin almacenamiento */ }
+  },
+};
 
 // ---------------------------------------------------------------------------
 // Utilidades de DOM y formato
@@ -213,8 +228,11 @@ async function renderHeader() {
   if (club) {
     $('#club-name').textContent = club.name;
     $('#crest-initials').textContent = initials(club.name);
+    // "FC27" -> "FC 27": el título sigue a la temporada del club (FC 28 sin tocar código).
+    const game = String(club.season ?? '').replace(/^FC\s*(\d+)$/i, 'FC $1') || 'FC';
     $('#club-season').textContent = `Temporada ${club.season}`;
-    document.title = `${club.name} · Stats EA FC 27`;
+    $('#game-label').textContent = `EA SPORTS ${game} · Clubes`;
+    document.title = `${club.name} · Stats EA ${game}`;
   }
   const last = snaps.at(-1);
   const first = snaps[0];
@@ -1145,8 +1163,19 @@ async function init() {
   const resetSortIf = (flag) => {
     if (RANKING_COLUMNS.find((c) => c.key === state.sort.key)?.[flag]) state.sort = { key: 'avg_rating', dir: -1 };
   };
-  $('#show-exp').addEventListener('change', (e) => { state.showExp = e.target.checked; if (!state.showExp) resetSortIf('exp'); refresh(); });
-  $('#show-adv').addEventListener('change', (e) => { state.showAdv = e.target.checked; if (!state.showAdv) resetSortIf('adv'); refresh(); });
+  // Guía: <dialog> nativo (Esc cierra; clic fuera del contenido también).
+  const guide = $('#guide');
+  $('#open-guide').addEventListener('click', () => guide.showModal());
+  $('#close-guide').addEventListener('click', () => guide.close());
+  guide.addEventListener('click', (e) => { if (e.target === guide) guide.close(); });
+
+  const saved = prefs.load();
+  if (typeof saved.showExp === 'boolean') state.showExp = saved.showExp;
+  if (typeof saved.showAdv === 'boolean') state.showAdv = saved.showAdv;
+  $('#show-exp').checked = state.showExp;
+  $('#show-adv').checked = state.showAdv;
+  $('#show-exp').addEventListener('change', (e) => { state.showExp = e.target.checked; prefs.save({ showExp: state.showExp }); if (!state.showExp) resetSortIf('exp'); refresh(); });
+  $('#show-adv').addEventListener('change', (e) => { state.showAdv = e.target.checked; prefs.save({ showAdv: state.showAdv }); if (!state.showAdv) resetSortIf('adv'); refresh(); });
   bindSegmented('#role-group-buttons', 'group', (v) => { state.roleGroup = v; refresh(); });
   bindSegmented('#role-mode-buttons', 'mode', (v) => { state.roleMode = v; refresh(); });
   bindSegmented('#split-buttons', 'split', (v) => { state.split = v; refresh(); });

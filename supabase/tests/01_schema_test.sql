@@ -428,6 +428,8 @@ select pg_temp.assert_eq('división: la anotada al capturar gana a la foto diari
 select pg_temp.assert_eq('división: anon lee la columna en matches',
   (select club_division from public.matches where match_id = 'm1'), 2::smallint);
 -- Sin pg_net ni vault (Docker) la función responde "no disponible" en vez de fallar.
+select pg_temp.assert_eq('disparo: anon NO puede ejecutar dispatch_collector (tras 015 sigue revocado)',
+  has_function_privilege('anon', 'public.dispatch_collector()', 'execute'), false);
 select pg_temp.assert_eq('estado del disparo: anon lo consulta sin error',
   (select available::text || '/' || token_configured::text from public.dispatch_status()), 'false/false'::text);
 reset role;
