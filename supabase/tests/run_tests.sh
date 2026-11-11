@@ -39,5 +39,6 @@ done
 
 echo "== Pruebas"
 # -o /dev/null oculta las filas vacías de assert_eq; los PASS salen como NOTICE.
-psql_run -o /dev/null -f /supabase/tests/01_schema_test.sql 2>&1 | sed -n 's/.*NOTICE:  //p'
+# Los errores (FAIL o SQL) también se muestran, con su línea.
+psql_run -o /dev/null -f /supabase/tests/01_schema_test.sql 2>&1 | sed -n -e 's/.*NOTICE:  //p' -e '/ERROR/p'
 echo "TODAS LAS PRUEBAS PASARON"

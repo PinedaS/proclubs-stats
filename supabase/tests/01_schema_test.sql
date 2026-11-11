@@ -215,6 +215,13 @@ select pg_temp.assert_eq('miembro: enlazado con su persona por gamertag',
 select pg_temp.assert_eq('fuerza media de los rivales',
   (select avg_opponent_skill from public.person_stats() t
      join public.accounts a on a.person_id = t.person_id where a.player_id = '333'), 1500::numeric);
+-- Conciliación (migración 009): EA sumó 2 partidos (40 -> 42) y capturamos m1 y m2.
+select pg_temp.assert_eq('conciliación: partidos que EA sumó',
+  (select ea_games from public.v_reconciliation where member_name = 'PinedaDS'), 2);
+select pg_temp.assert_eq('conciliación: partidos capturados en el mismo período',
+  (select cap_games from public.v_reconciliation where member_name = 'PinedaDS'), 2::bigint);
+select pg_temp.assert_eq('conciliación: todo cuadra',
+  (select status from public.v_reconciliation where member_name = 'PinedaDS'), 'ok'::text);
 do $$ begin
   begin
     perform raw from public.member_snapshots;
@@ -228,6 +235,22 @@ do $$ begin
   end;
 end $$;
 reset role;
+
+-- Conciliación con un partido perdido: EA dice 45 partidos en la foto siguiente (+5),
+-- pero solo capturamos 2. Además, un miembro sin ningún partido capturado no desaparece.
+set role service_role;
+insert into public.member_snapshots (club_id, member_name, snapshot_date, captured_at, games_played, raw)
+values (1330384, 'PinedaDS', '2026-11-03', '2026-11-03T00:00:00Z', 45, '{}'),
+       (1330384, 'SinPartidos', '2026-11-01', '2026-11-01T00:00:00Z', 3, '{}'),
+       (1330384, 'SinPartidos', '2026-11-03', '2026-11-03T00:00:00Z', 4, '{}');
+reset role;
+set role anon;
+select pg_temp.assert_eq('conciliación: detecta partidos perdidos',
+  (select status || ' ' || diff_games from public.v_reconciliation where member_name = 'PinedaDS'), 'faltan -3'::text);
+select pg_temp.assert_eq('conciliación: miembro sin partidos capturados sigue apareciendo',
+  (select status || ' ' || cap_games from public.v_reconciliation where member_name = 'SinPartidos'), 'faltan 0'::text);
+reset role;
+delete from public.member_snapshots where snapshot_date = '2026-11-03' or member_name = 'SinPartidos';
 
 -- =============================================================================
 -- 4c2. Rendimiento relativo al rol (migración 008).
