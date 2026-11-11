@@ -332,6 +332,57 @@ select pg_temp.assert_eq('incompleto: se puede excluir del ranking',
 select pg_temp.assert_eq('incompleto: se cuenta aparte',
   (select incomplete_matches from public.person_stats() where person_name = 'Hecodes98'), 1::bigint);
 reset role;
+update public.player_match_stats set seconds_played = 5400 where match_id = 'm2';
+
+-- =============================================================================
+-- 4e. Sugerencias del equipo (migración 011).
+-- =============================================================================
+-- División: los partidos son del 2026-11-01 y la única foto es del 2026-11-02 -> sin dato.
+set role anon;
+select pg_temp.assert_eq('división: sin foto previa -> sin dato',
+  (select count(*) from public.v_player_match_stats where club_division is not null), 0::bigint);
+select pg_temp.assert_eq('comparar por división: sin dato',
+  (select bucket from public.person_split_stats('division') where person_name = 'Hecodes98'), 'Sin dato'::text);
+reset role;
+set role service_role;
+insert into public.club_snapshots (club_id, snapshot_date, current_division, raw)
+values (1330384, '2026-10-30', 5, '{"x":1}'), (1330384, '2026-11-01', 4, '{"x":1}');
+reset role;
+set role anon;
+select pg_temp.assert_eq('división: foto del mismo día (no la anterior ni la siguiente)',
+  (select string_agg(distinct club_division::text, ',') from public.v_player_match_stats), '4'::text);
+select pg_temp.assert_eq('comparar por división: 2 partidos en 4ª',
+  (select bucket || '=' || matches from public.person_split_stats('division') where person_name = 'Hecodes98'), 'División 4=2'::text);
+
+-- Posición recomendada. Hecodes solo juega de delantero y Pineda solo de medio:
+-- con dos posiciones, el perfil de cada una es el opuesto del otro -> afinidad 0.
+select pg_temp.assert_eq('posición: una fila por persona y posición',
+  (select count(*) from public.position_fit()), 4::bigint);
+select pg_temp.assert_eq('posición: Hecodes como delantero (2 PJ, índice 100)',
+  (select matches || '/' || rating_idx from public.position_fit() where person_name = 'Hecodes98' and player_position = 'forward'), '2/100.0'::text);
+select pg_temp.assert_eq('posición: sin calificación donde no jugó',
+  (select rating from public.position_fit() where person_name = 'Hecodes98' and player_position = 'midfielder'), null::numeric);
+select pg_temp.assert_eq('posición: no se compara consigo mismo (nadie más es delantero)',
+  (select profile_match_pct from public.position_fit() where person_name = 'Hecodes98' and player_position = 'forward'), null::numeric);
+select pg_temp.assert_eq('posición: perfil opuesto al del medio -> afinidad 0',
+  (select profile_match_pct from public.position_fit() where person_name = 'Hecodes98' and player_position = 'midfielder'), 0::numeric);
+select pg_temp.assert_eq('posición: registros de los demás en esa posición',
+  (select others_matches from public.position_fit() where person_name = 'Hecodes98' and player_position = 'midfielder'), 2::bigint);
+reset role;
+
+-- Con y sin: se quita a Pineda de m2 (dentro de una transacción que se deshace).
+begin;
+delete from public.player_match_stats where match_id = 'm2' and player_id = '333';
+set local role anon;
+select pg_temp.assert_eq('con y sin: Hecodes con Pineda 1 PJ, sin él 1 PJ',
+  (select matches_with || '/' || matches_without from public.with_without_stats() where person_name = 'Hecodes98'), '1/1'::text);
+select pg_temp.assert_eq('con y sin: diferencia de calificación (7,5 - 6,0)',
+  (select rating_delta from public.with_without_stats() where person_name = 'Hecodes98'), 1.50::numeric);
+select pg_temp.assert_eq('con y sin: diferencia de % victorias',
+  (select win_pct_delta from public.with_without_stats() where person_name = 'Hecodes98'), 100.0::numeric);
+select pg_temp.assert_eq('con y sin: Pineda nunca jugó sin Hecodes',
+  (select matches_without || '/' || coalesce(rating_without::text, '-') from public.with_without_stats() where mate_name = 'Hecodes98'), '0/-'::text);
+rollback;
 
 -- =============================================================================
 -- 5. Borrar el club de prueba
