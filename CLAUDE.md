@@ -221,9 +221,12 @@ No hay API oficial. Se usan los endpoints públicos que lee la web de Clubes de 
    - Foto diaria en `member_snapshots`. La vista `v_member_latest` compara los partidos que EA sumó desde la primera foto con los capturados.
    - Además, `matches.opponent_skill_rating` guarda la fuerza del rival, y `person_stats` incluye métricas por 90 min, conversión, presencia, forma, regularidad y otras.
    - CI (`ci.yml`) y Dependabot están activos.
-6. **Respaldos: el código está listo, pero falta decidir dónde se guardan.**
-   - `collector/src/backup.ts` exporta y genera el SQL de restauración. Está probado en CI: se restaura en una base vacía y queda idéntica.
-   - **No está automatizado todavía.** Un workflow que lo publicaba en una rama del repo (público) fue bloqueado por exponer los datos crudos. El usuario debe elegir el destino.
+6. **Respaldos: cifrados en la rama `backups`** (decidido el 2026-11-11).
+   - `backup.yml` corre los domingos. Exporta (`collector/src/backup.ts`), comprime y cifra con AES-256 (GPG simétrico, `collector/scripts/encrypt-backup.sh`).
+   - Conserva los últimos 12, en un solo commit con *force push*.
+   - La contraseña es el secreto `BACKUP_PASSPHRASE`. Solo la tiene el usuario: **nunca** escribirla ni pedirla en el chat.
+   - **Nunca publicar datos sin cifrar en el repo, que es público.** Un primer intento sin cifrar fue bloqueado por esa razón.
+   - La restauración (`npm run restore-sql`) está probada en CI: se restaura en una base vacía y queda idéntica.
    - Contexto, verificado el 2026-11-11: el plan Free de Supabase **no incluye respaldos automáticos accesibles**, según su página de precios y su documentación. Los partidos no se pueden recuperar de EA, así que conviene una exportación periódica gratuita, por ejemplo con un workflow de GitHub Actions.
 7. **Catálogo de datos de EA:** ver `docs/datos-ea.md`. Recoge los endpoints y campos verificados, los no usados y los que EA no expone.
 
