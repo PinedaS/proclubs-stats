@@ -94,7 +94,10 @@ function initials(name) {
 }
 
 const avatar = (name, big = false) => el('span', { class: big ? 'avatar lg' : 'avatar', 'aria-hidden': 'true' }, initials(name));
-const posBadge = (pos) => (pos ? el('span', { class: `badge pos-${pos}` }, POS_LABEL[pos] ?? pos) : null);
+const POS_SHORT = { forward: 'DEL', midfielder: 'MED', defender: 'DEF', goalkeeper: 'POR' };
+/** Insignia de posición: texto completo en escritorio, abreviado en el celular (CSS). */
+const posBadge = (pos) => (pos ? el('span', { class: `badge pos-${pos}`, title: POS_LABEL[pos] ?? pos },
+  el('span', { class: 'pos-long' }, POS_LABEL[pos] ?? pos), el('span', { class: 'pos-short' }, POS_SHORT[pos] ?? pos)) : null);
 const platformLabel = (p) => PLATFORM_LABEL[p] ?? p;
 
 function playerCell(name, sub) {
@@ -935,7 +938,46 @@ function bindSegmented(containerSel, attr, onPick) {
   }
 }
 
+/**
+ * Marca la columna del jugador en cada tabla (class "player-col") para que el CSS
+ * la deje fija al desplazar horizontalmente en el celular. Se hace en un solo
+ * lugar, observando los cambios del DOM, en vez de tocar cada tabla.
+ */
+function watchPlayerColumns() {
+  const mark = (table) => {
+    const row = table.querySelector(':scope > tbody > tr:not(.match-players):not(.role-detail)');
+    const cells = row ? [...row.children] : [];
+    const idx = cells.findIndex((td) => td.querySelector(':scope > .player-cell'));
+    if (idx < 0) return;
+    for (const r of table.querySelectorAll(':scope > thead > tr, :scope > tbody > tr:not(.match-players):not(.role-detail)')) {
+      r.children[idx]?.classList.add('player-col');
+    }
+  };
+  let pending = false;
+  new MutationObserver(() => {
+    if (pending) return;
+    pending = true;
+    requestAnimationFrame(() => { pending = false; document.querySelectorAll('table.data').forEach(mark); });
+  }).observe(document.querySelector('main'), { childList: true, subtree: true });
+}
+
+/** Resumen de los filtros activos (se ve en el celular, con los filtros plegados). */
+function updateFiltersSummary() {
+  const f = readFilters();
+  const types = f.types.length === 3 ? 'Todos los tipos' : f.types.map((t) => TYPE_LABEL[t]).join(', ') || 'Ningún tipo';
+  const parts = [types];
+  if ($('#from').value || $('#to').value) parts.push('fechas');
+  if (f.excludeIncomplete) parts.push('sin incompletos');
+  if (state.minMatches > 1) parts.push(`mín. ${state.minMatches} PJ`);
+  $('#filters-summary-text').textContent = parts.join(' · ');
+}
+
 async function init() {
+  watchPlayerColumns();
+  // En el celular los filtros arrancan plegados para dejar ver los datos primero.
+  if (window.matchMedia('(max-width: 700px)').matches) $('#filters-box').open = false;
+  document.querySelector('.filters').addEventListener('change', updateFiltersSummary);
+  updateFiltersSummary();
   for (const input of document.querySelectorAll('input[name="type"], #from, #to, #exclude-incomplete')) {
     input.addEventListener('change', refresh);
   }

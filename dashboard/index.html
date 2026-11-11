@@ -47,7 +47,10 @@
   </nav>
 
   <main>
-    <section class="filters card" aria-label="Filtros">
+    <!-- En el celular los filtros se pliegan (app.js cierra el <details>); en escritorio siempre abiertos. -->
+    <details class="filters-box card" id="filters-box" open>
+    <summary class="filters-summary"><span>Filtros</span><span class="muted small" id="filters-summary-text"></span></summary>
+    <section class="filters" aria-label="Filtros">
       <div class="filter-group">
         <span class="filter-label">Tipo de partido</span>
         <div class="chips">
@@ -73,6 +76,7 @@
         </label>
       </div>
     </section>
+    </details>
 
     <p id="error" class="error" hidden></p>
 
