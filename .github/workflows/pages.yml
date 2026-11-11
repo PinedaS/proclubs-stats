@@ -24,15 +24,15 @@ jobs:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
     steps:
-      - uses: actions/checkout@v5
-      - uses: actions/configure-pages@v5
+      - uses: actions/checkout@v7
+      - uses: actions/configure-pages@v6
       - name: Versionar archivos (evita mezclar versiones viejas desde la caché)
         run: |
           V="${GITHUB_SHA::7}"
           sed -i "s/__V__/${V}/g" dashboard/index.html dashboard/app.js dashboard/api.js
           grep -c "$V" dashboard/index.html dashboard/app.js dashboard/api.js
-      - uses: actions/upload-pages-artifact@v4
+      - uses: actions/upload-pages-artifact@v5
         with:
           path: dashboard
       - id: deployment
-        uses: actions/deploy-pages@v4
+        uses: actions/deploy-pages@v5
