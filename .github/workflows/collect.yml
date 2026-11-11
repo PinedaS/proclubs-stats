@@ -1,0 +1,69 @@
+# Colector: guarda en Supabase los partidos nuevos del club, cada 30 minutos.
+# EA solo muestra los últimos 10 partidos por tipo (~3 h de juego), así que
+# 30 min deja mucho margen aunque GitHub retrase o salte alguna ejecución.
+name: Colector
+
+on:
+  schedule:
+    # Minutos 7 y 37: se evita el minuto 0, cuando GitHub tiene más carga y
+    # más retrasos en los cron.
+    - cron: '7,37 * * * *'
+  workflow_dispatch:
+
+# Nunca dos colectores a la vez: el segundo espera a que termine el primero.
+concurrency:
+  group: colector
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  collect:
+    # Versión fija: ubuntu-latest está migrando a Ubuntu 26, y fijarla evita sorpresas.
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    defaults:
+      run:
+        working-directory: collector
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version: '22.x'
+          cache: npm
+          cache-dependency-path: collector/package-lock.json
+
+      - name: Instalar dependencias
+        run: npm ci
+
+      - name: Ejecutar colector
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          # Variables del repo (Settings -> Secrets and variables -> Variables).
+          # Cambiar de club no requiere tocar código. Por defecto: el club de prueba.
+          EA_CLUB_NAME: ${{ vars.EA_CLUB_NAME || 'Aston Huila' }}
+          SEASON: ${{ vars.SEASON || 'FC27' }}
+          COLLECTOR_RUNNER: github-actions
+        # Sale con código 1 si EA, la transformación o Supabase fallan,
+        # y GitHub marca la ejecución en rojo.
+        run: npm run collect
+
+  # GitHub desactiva los workflows programados de un repo público tras 60 días
+  # sin actividad en el repo. Volver a "habilitar" el workflow por la API
+  # reinicia ese contador (supuesto basado en la práctica de la comunidad;
+  # no verificado en la documentación oficial).
+  # Va en un job aparte para que el colector conserve un token de solo lectura.
+  keepalive:
+    if: github.event_name == 'schedule'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 2
+    permissions:
+      actions: write
+    steps:
+      - name: Mantener activo el cron
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh api --method PUT "repos/${{ github.repository }}/actions/workflows/collect.yml/enable"
