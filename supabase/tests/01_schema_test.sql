@@ -144,6 +144,37 @@ select pg_temp.assert_eq('estado del colector: hay última captura exitosa',
 reset role;
 
 -- =============================================================================
+-- 4b. Datos experimentales (migración 005)
+-- =============================================================================
+select pg_temp.assert_eq('parse_event_aggregates suma por código',
+  public.parse_event_aggregates('{"match_event_aggregate_0":"1:2,174:3","match_event_aggregate_1":"174:1","match_event_aggregate_2":""}'),
+  '{"1": 2, "174": 4}'::jsonb);
+select pg_temp.assert_eq('parse_event_aggregates sin cadenas -> {}',
+  public.parse_event_aggregates('{}'), '{}'::jsonb);
+select pg_temp.assert_eq('event_sum suma códigos y trata ausentes como 0',
+  public.event_sum('{"105":2,"107":1}', array['105','106','107']), 3);
+select pg_temp.assert_eq('event_sum sin contadores -> null',
+  public.event_sum(null, array['174']), null::integer);
+
+update public.player_match_stats set event_counts = '{"174": 5, "6": 2}'
+ where match_id = 'm1' and player_id = '333';
+
+set role anon;
+select pg_temp.assert_eq('person_stats: regates experimentales (null de otro partido se ignora)',
+  (select dribbles_exp from public.person_stats() t
+     join public.accounts a on a.person_id = t.person_id where a.player_id = '333'), 5::bigint);
+select pg_temp.assert_eq('vista por partido: intercepciones experimentales',
+  (select interceptions_exp from public.v_player_match_stats where match_id = 'm1' and player_id = '333'), 2);
+do $$ begin
+  begin
+    perform public.parse_event_aggregates('{}');
+    raise exception 'FAIL: anon pudo ejecutar parse_event_aggregates';
+  exception when insufficient_privilege then raise notice 'PASS anon no ejecuta parse_event_aggregates';
+  end;
+end $$;
+reset role;
+
+-- =============================================================================
 -- 5. Borrar el club de prueba
 -- =============================================================================
 select public.purge_club(1330384);
