@@ -124,7 +124,8 @@ h1 { margin: 2px 0 0; font-size: clamp(1.6rem, 3.4vw, 2.4rem); font-weight: 800;
 .hero-side { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
 a.status { text-decoration: none; }
 a.status:hover { border-color: var(--warning); }
-a.status[hidden] { display: none; }
+/* display: inline-flex anula el atributo hidden: se restablece para todos los avisos. */
+.status[hidden] { display: none; }
 .club-select[hidden] { display: none; }
 .club-select select {
   font: inherit; font-weight: 700; font-size: .88rem; color: var(--ink);
