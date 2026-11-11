@@ -114,6 +114,7 @@
             <button type="button" data-split="rival" aria-pressed="true">Rival fuerte / débil</button>
             <button type="button" data-split="type" aria-pressed="false">Liga / Amistoso</button>
             <button type="button" data-split="team_size" aria-pressed="false">Jugadores en cancha</button>
+            <button type="button" data-split="division" aria-pressed="false">División</button>
           </div>
           <div class="segmented" role="group" aria-label="Métrica" id="split-metric">
             <button type="button" data-metric="avg_rating" aria-pressed="true">Calificación</button>
@@ -131,6 +132,13 @@
       <div class="card table-card">
         <div class="card-head"><h2>Duplas</h2><p class="muted small">Resultados de cada pareja cuando juegan juntos en el mismo partido.</p></div>
         <div class="table-wrap"><table id="pairs-table" class="data"></table></div>
+      </div>
+      <div class="card table-card">
+        <div class="card-head">
+          <h2>Con y sin</h2>
+          <p class="muted small">Cómo rinde cada jugador en los partidos <strong>con</strong> un compañero frente a los partidos <strong>sin</strong> él. Es una correlación: también influyen el rival, la posición y la suerte. Se muestra solo si hay al menos el mínimo de partidos en los dos casos; con pocos partidos, la diferencia no es confiable.</p>
+        </div>
+        <div class="table-wrap"><table id="withwithout-table" class="data"></table></div>
       </div>
     </section>
 

@@ -419,6 +419,7 @@ const SPLIT_HELP = {
   rival: 'Rival fuerte = nivel (skillRating) igual o mayor que la mediana de los rivales del rango filtrado.',
   type: 'Útil para ver si los amistosos inflan los números frente a la liga.',
   team_size: 'Cuántos jugadores del club estaban en cancha en ese partido.',
+  division: 'División del club el día del partido, según la foto diaria del club (aproximada; los partidos anteriores a la primera foto salen como "Sin dato"). Mira los PJ de cada celda: pocos partidos en una división no son comparables con muchos en otra.',
 };
 const METRIC = {
   avg_rating: { label: 'Calificación', digits: 2 },
@@ -485,6 +486,35 @@ async function renderPairs(filters, requestId) {
       el('td', {}, fmtNum(r.goals_against_avg, 2)),
       el('td', {}, fmtSigned(r.goal_diff)),
       el('td', {}, fmtNum(r.combined_ga)))) : [emptyRow(cols.length, 'Sin duplas con ese mínimo de partidos.')]));
+  await renderWithWithout(filters, requestId);
+}
+
+/** Diferencia con signo y color: positivo = rinde mejor con el compañero. */
+function deltaCell(v, digits, suffix = '') {
+  if (v == null) return el('td', { class: 'muted' }, '—');
+  const n = Number(v);
+  const text = `${n > 0 ? '+' : ''}${fmtNum(n, digits)}${suffix}`;
+  return el('td', { class: n > 0 ? 'delta-up' : n < 0 ? 'delta-down' : null }, el('strong', {}, text));
+}
+
+async function renderWithWithout(filters, requestId) {
+  const rows = filters.types.length ? await api.getWithWithout(filters) : [];
+  if (requestId !== state.requestId) return;
+  const list = rows.filter((r) => r.matches_with >= state.minMatches && r.matches_without >= state.minMatches)
+    .sort((a, b) => a.person_name.localeCompare(b.person_name, 'es') || Number(b.rating_delta) - Number(a.rating_delta));
+  const cols = ['Jugador', 'Con…', 'PJ con / sin', 'Calif. con', 'Calif. sin', 'Δ Calif.', '% Vic. con', '% Vic. sin', 'Δ % Vic.', 'G+A/90 con / sin'];
+  $('#withwithout-table').replaceChildren(
+    el('thead', {}, el('tr', {}, cols.map((h, i) => el('th', { scope: 'col', class: i < 2 ? 'left' : null }, h)))),
+    el('tbody', {}, list.length ? list.map((r) => el('tr', { class: 'clickable', ...onActivate(() => openPerson(r.person_id)) },
+      el('td', {}, playerCell(r.person_name)),
+      el('td', { class: 'left' }, r.mate_name),
+      el('td', {}, `${r.matches_with} / ${r.matches_without}`),
+      el('td', {}, fmtNum(r.rating_with, 2)), el('td', {}, fmtNum(r.rating_without, 2)),
+      deltaCell(r.rating_delta, 2),
+      el('td', {}, fmtPct(r.win_pct_with, 0)), el('td', {}, fmtPct(r.win_pct_without, 0)),
+      deltaCell(r.win_pct_delta, 0, ' pts'),
+      el('td', {}, `${fmtNum(r.ga90_with, 2)} / ${fmtNum(r.ga90_without, 2)}`)))
+      : [emptyRow(cols.length, `Nadie tiene al menos ${state.minMatches} PJ con y sin cada compañero todavía. Baja el mínimo de partidos o espera más partidos.`)]));
 }
 
 // ---------------------------------------------------------------------------
@@ -524,7 +554,7 @@ async function renderMatches(filters, requestId) {
     : [[], new Map()];
   if (requestId !== state.requestId) return;
   const shown = filters.excludeIncomplete ? matches.filter((m) => !flags.get(m.match_id)?.incomplete) : matches;
-  const cols = ['Fecha', 'Tipo', 'Rival', 'Nivel rival', 'Jug.', 'Marcador', 'Res.'];
+  const cols = ['Fecha', 'Tipo', 'Rival', 'Nivel rival', 'Div.', 'Jug.', 'Marcador', 'Res.'];
   const body = el('tbody');
   if (!shown.length) body.append(emptyRow(cols.length, 'Sin partidos para estos filtros.'));
   for (const m of shown) {
@@ -534,6 +564,7 @@ async function renderMatches(filters, requestId) {
       el('td', { class: 'left' }, el('span', { class: 'badge' }, TYPE_LABEL[m.match_type] ?? m.match_type)),
       el('td', { class: 'left' }, m.opponent_name ?? '—', f?.incomplete ? [' ', el('span', { class: 'badge warn', title: 'Abandono o menos del 90 % del tiempo' }, 'incompleto')] : null),
       el('td', {}, fmtNum(m.opponent_skill_rating)),
+      el('td', { title: 'División del club ese día (según la foto diaria del club)' }, f?.club_division != null ? `${f.club_division}ª` : '—'),
       el('td', { title: 'Jugadores del club en cancha' }, fmtNum(f?.team_size)),
       el('td', {}, el('strong', {}, `${m.goals_for} – ${m.goals_against}`)),
       el('td', {}, resultBadge(m.outcome, m.winner_by_dnf)));
@@ -686,6 +717,57 @@ function openPerson(personId) {
   renderPerson(readFilters(), state.requestId).catch(showError);
 }
 
+const MIN_FIT_MATCHES = 3;
+const POS_ORDER = ['forward', 'midfielder', 'defender', 'goalkeeper'];
+
+/**
+ * Posición recomendada (sugerencia del equipo). Dos lecturas distintas:
+ *  - rendimiento: su calificación en cada posición que jugó vs. el promedio del club ahí;
+ *  - perfil: a qué posición se parece su forma de jugar (aunque no la haya jugado).
+ * Solo orientativo: no es la fórmula de "mejor jugador".
+ */
+function positionFitSection(fit) {
+  if (!fit.length) return null;
+  const played = fit.filter((f) => f.matches >= MIN_FIT_MATCHES && f.rating_idx != null)
+    .sort((a, b) => Number(b.rating_idx) - Number(a.rating_idx));
+  const profiled = fit.filter((f) => f.profile_match_pct != null && f.others_matches >= MIN_FIT_MATCHES)
+    .sort((a, b) => Number(b.profile_match_pct) - Number(a.profile_match_pct));
+  const best = played[0], like = profiled[0];
+  const name = (p) => POS_LABEL[p]?.toLowerCase() ?? p;
+  const notes = [];
+  if (played.length >= 2) {
+    notes.push(el('li', {}, 'Rinde mejor como ', el('strong', {}, name(best.player_position)),
+      `: índice ${fmtNum(best.rating_idx, 0)} en ${best.matches} PJ (100 = promedio del club en esa posición).`));
+  } else if (played.length === 1) {
+    notes.push(el('li', {}, `Solo tiene ${MIN_FIT_MATCHES}+ PJ como ${name(best.player_position)}: hacen falta al menos dos posiciones para comparar su rendimiento.`));
+  } else {
+    notes.push(el('li', {}, `Todavía no tiene ${MIN_FIT_MATCHES} PJ en ninguna posición para comparar su rendimiento.`));
+  }
+  if (like && profiled.length >= 2) {
+    notes.push(el('li', {}, 'Su forma de jugar se parece más a la de un ', el('strong', {}, name(like.player_position)),
+      ` (${fmtNum(like.profile_match_pct, 0)} % de su perfil).`,
+      Number(like.matches) === 0 ? ' Nunca jugó ahí: podría probarse, pero es solo una pista.' : ''));
+  }
+  const rows = [...fit].sort((a, b) => POS_ORDER.indexOf(a.player_position) - POS_ORDER.indexOf(b.player_position));
+  return el('div', {},
+    el('ul', { class: 'fit-summary' }, notes),
+    el('div', { class: 'table-wrap' }, el('table', { class: 'data' },
+      el('thead', {}, el('tr', {},
+        el('th', { scope: 'col', class: 'left' }, 'Posición'),
+        el('th', { scope: 'col' }, 'PJ'),
+        el('th', { scope: 'col' }, 'Calif.'),
+        el('th', { scope: 'col', title: '100 = promedio del club en esa posición' }, 'Índice vs. la posición'),
+        el('th', { scope: 'col', title: 'Cómo se reparte su perfil (goles, asistencias, tiros, pases, entradas, atajadas, intercepciones* y regates* por 90 min) entre las posiciones, según qué tan cerca está del perfil de los demás jugadores en cada una. Suma 100 %.' }, 'Parecido de perfil'))),
+      el('tbody', {}, rows.map((f) => el('tr', { class: f === best && played.length >= 2 ? 'fit-best' : null },
+        el('td', { class: 'left' }, posBadge(f.player_position)),
+        el('td', {}, fmtNum(f.matches)),
+        el('td', {}, fmtNum(f.rating, 2)),
+        idxCell(f.rating_idx),
+        el('td', { title: f.others_matches < MIN_FIT_MATCHES ? 'Pocos datos de otros jugadores en esa posición' : null },
+          f.profile_match_pct == null || f.others_matches < MIN_FIT_MATCHES ? '—' : fmtPct(f.profile_match_pct, 0))))))),
+    el('p', { class: 'muted small' }, `Orientativo. El índice solo cuenta posiciones con ${MIN_FIT_MATCHES}+ PJ. El parecido de perfil compara su forma de jugar con la de los demás jugadores del club en cada posición (no consigo mismo) y solo usa posiciones donde los demás suman ${MIN_FIT_MATCHES}+ registros.`));
+}
+
 function tile(label, value, cls = '') {
   return el('div', { class: `tile ${cls}`.trim() }, el('div', { class: 'label' }, label), el('div', { class: 'value' }, value));
 }
@@ -695,8 +777,11 @@ async function renderPerson(filters, requestId) {
   if (state.personId == null) { box.hidden = true; return; }
   const summary = state.ranking.find((r) => r.person_id === state.personId);
   const rec = state.records.get(state.personId);
-  const matches = filters.types.length ? await api.getPersonMatches(state.personId, filters) : [];
+  const [matches, fitAll] = filters.types.length
+    ? await Promise.all([api.getPersonMatches(state.personId, filters), api.getPositionFit(filters).catch(() => [])])
+    : [[], []];
   if (requestId !== state.requestId) return;
+  const fit = positionFitSection(fitAll.filter((f) => f.person_id === state.personId));
 
   const name = summary?.person_name ?? matches.at(-1)?.playername ?? 'Jugador';
   const platforms = [...new Set(matches.map((m) => m.platform).filter(Boolean))];
@@ -761,6 +846,7 @@ async function renderPerson(filters, requestId) {
       close),
     el('p', { class: 'section-title' }, 'Resumen'), basics,
     relTiles ? [el('p', { class: 'section-title' }, 'Relativo a su rol (100 = promedio de su posición)'), relTiles] : null,
+    fit ? [el('p', { class: 'section-title' }, 'Posición recomendada'), fit] : null,
     advanced ? [el('p', { class: 'section-title' }, 'Avanzadas'), advanced] : null,
     records ? [el('p', { class: 'section-title' }, 'Récords y rachas'), records] : null,
     el('div', { class: 'grid-2' }, chartBox, overallBox),

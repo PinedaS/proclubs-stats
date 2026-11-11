@@ -438,3 +438,10 @@ table.data { border-collapse: separate; border-spacing: 0; width: 100%; font-var
 @media (prefers-reduced-motion: reduce) {
   * { transition: none !important; scroll-behavior: auto !important; }
 }
+
+/* Con y sin / posición recomendada (011) */
+td.delta-up { color: var(--win); }
+td.delta-down { color: var(--loss); }
+.fit-summary { margin: 0 0 10px; line-height: 1.5; }
+.fit-summary li { margin: 2px 0; }
+tr.fit-best > td { background: var(--accent-soft); }

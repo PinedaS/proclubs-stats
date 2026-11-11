@@ -48,6 +48,8 @@ export const getPositionStats = (f) => rpc('position_stats', rpcFilters(f));
 export const getPersonRecords = (f) => rpc('person_records', rpcFilters(f));
 export const getRelativeStats = (group, f) => rpc('relative_stats', { p_group: group, ...rpcFilters(f) });
 export const getRelativeDetail = (group, f) => rpc('relative_stats_detail', { p_group: group, ...rpcFilters(f) });
+export const getPositionFit = (f) => rpc('position_fit', rpcFilters(f));
+export const getWithWithout = (f) => rpc('with_without_stats', rpcFilters(f));
 
 /** Todos los clubes seguidos, el más reciente primero. */
 export function getClubs() {
@@ -73,7 +75,7 @@ export function getMatches(f) {
 /** Tamaño del equipo e "incompleto" por partido (salen de la vista por jugador). */
 export async function getMatchFlags(f) {
   const p = filterParams(f);
-  p.set('select', 'match_id,team_size,incomplete');
+  p.set('select', 'match_id,team_size,incomplete,club_division');
   const rows = await request(`v_player_match_stats?${p}`);
   return new Map(rows.map((r) => [r.match_id, r]));
 }

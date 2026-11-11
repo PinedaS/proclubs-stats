@@ -43,17 +43,23 @@ API no oficial de EA ──► Colector (GitHub Actions, cada 30 min) ──► 
    - Pestañas (2026-11-11):
      - **Ranking:** `person_stats`, con podio, columna "Media (EA)" y columnas avanzadas y experimentales.
      - **Por rol:** `relative_stats`, índices relativos a la posición o arquetipo; 100 = promedio del rol.
-     - **Comparar:** `person_split_stats`, rival fuerte/débil, tipo de partido y jugadores en cancha.
-     - **Duplas:** `pair_stats`.
+     - **Comparar:** `person_split_stats`, rival fuerte/débil, tipo de partido, jugadores en cancha y **división** (011).
+     - **Duplas:** `pair_stats`, más la tabla **"Con y sin"** (`with_without_stats`, 011): cómo rinde cada jugador con y sin cada compañero. Es una correlación, no una causa.
      - **Por posición:** `position_stats`.
      - **Partidos.**
      - **Club:** `club_snapshots`.
    - **Vista oculta `#verificacion`:** conciliación EA vs. capturado (`v_reconciliation`) y la antigua pestaña de miembros. Si faltan partidos, aparece un aviso en la cabecera.
-   - Detalle por jugador: resumen, relativo a su rol, avanzadas, récords (`person_records`) y gráficos de calificación y de media del Pro.
+   - Detalle por jugador: resumen, relativo a su rol, **posición recomendada**, avanzadas, récords (`person_records`) y gráficos de calificación y de media del Pro.
+   - **Sugerencias de Campuzano (compañero de equipo, 2026-11-11), implementadas en 011–013:**
+     - **Posición recomendada** (`position_fit`): índice de calificación en cada posición jugada (100 = promedio del club ahí; solo con 3+ PJ) y "parecido de perfil", el reparto en % entre posiciones según la distancia de su perfil por 90 min al de los **demás** jugadores en cada posición.
+       - La escala es la dispersión entre perfiles individuales (013). Con la coseno (011) y con la escala entre promedios de posición (012), los resultados con datos reales eran engañosos.
+       - Es orientativo y no es la fórmula de "mejor jugador".
+     - **División por partido** (`v_player_match_stats.club_division`): sale de la foto diaria `club_snapshots` del mismo día o la anterior. Es **aproximada**, y los partidos previos a la primera foto (2026-11-11) quedan sin dato. EA no da la división del rival.
+     - **Química por pases: imposible.** EA no expone quién le pasa a quién. Se reemplazó por "Con y sin".
    - Filtros: tipo de partido, fechas, mínimo de partidos y excluir incompletos.
    - Los archivos se versionan con el commit en `pages.yml` (`__V__`), para no mezclar versiones viejas desde la caché de Pages.
    - Probado en Chrome con los datos del club de prueba.
-   - **Migraciones aplicadas en Supabase:** 001–009, cada una verificada después de aplicarla.
+   - **Migraciones aplicadas en Supabase:** 001–013, cada una verificada después de aplicarla.
 
 ### Por qué así (no reabrir sin un motivo nuevo)
 
@@ -248,6 +254,10 @@ No hay API oficial. Se usan los endpoints públicos que lee la web de Clubes de 
      - **(b)** cron-job.org, que llame a la misma API;
      - **(c)** un dispositivo en casa (plan B).
    - Las tres requieren que el usuario cree un token de GitHub con permiso de *Actions* solo sobre este repo. **Nunca** pedírselo por chat.
+   - **Elegida la (a) (2026-11-11), migración 010 aplicada:** `pg_net` 0.20.4 y `pg_cron` 1.6.4 activos; la tarea `dispatch-collector` (minutos 2, 17, 32 y 47) llama a `public.dispatch_collector()`, que solo ejecuta `postgres`/`pg_cron`.
+     - **Falta:** que el usuario guarde el token en Vault con el nombre `github_dispatch_token` (pantalla Integrations → Vault, no el SQL Editor). Sin token, la función no hace nada y deja un aviso.
+     - Luego verificar: `net._http_response` con estado 204, ejecuciones `workflow_dispatch` en Actions y filas en `collector_runs`.
+     - El token vence: anotar la fecha; al vencer, los disparos fallan con 401 y solo queda el cron de GitHub.
 7. **Catálogo de datos de EA:** ver `docs/datos-ea.md`. Recoge los endpoints y campos verificados, los no usados y los que EA no expone.
 
 ## 8. Orden sugerido de trabajo
