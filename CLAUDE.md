@@ -14,6 +14,10 @@ Guardar **todos los stats de los jugadores de nuestro club de Clubes (Pro Clubs)
 - **Captura 100 % automática.** Nadie carga datos a mano, y el colector **no puede depender de la PC del usuario**, porque él no está en todos los partidos.
 - **Tipos de partido:** liga (`leagueMatch`), play-off (`playoffMatch`) y amistosos (`friendlyMatch`). Los tres cuentan para el ranking, pero el dashboard debe permitir filtrar por tipo, porque en amistosos el rival puede ser más débil y eso infla los números.
 - **Usuarios:** todo el equipo **consulta** el dashboard; nadie escribe.
+- **Costo cero (requisito del usuario, 2026-11-11):** todo debe ser **gratis**, sin excepciones.
+  - Solo planes gratuitos: GitHub Free con repo público, Supabase Free y GitHub Pages.
+  - No activar nada que pueda cobrar: complementos (*add-ons*), cómputo mayor, *spend cap* desactivado ni tarjeta registrada.
+  - Ante cualquier opción con costo, preguntar antes.
 - **Preferencias del usuario (es programador):**
   - Buenas prácticas, indicando cuáles se aplicaron.
   - Explicar el porqué de las decisiones.

@@ -9,6 +9,7 @@ Se aplican en orden; los nombres siguen el formato del Supabase CLI (`AAAAMMDDhh
 | `20261110000001_core_schema.sql` | Tablas, índices, trigger de personas y funciones de administración. |
 | `20261110000002_rls_read_only.sql` | RLS y privilegios: `anon`/`authenticated` solo leen; `match_raw` queda oculto. |
 | `20261110000003_stats_views.sql` | Vistas y la función `person_stats()` que usa el dashboard. |
+| `20261111000004_explicit_grants.sql` | Permisos explícitos para `service_role` (el colector). El proyecto real tiene desactivado *Automatically expose new tables*. |
 
 ### Cómo aplicarlas
 
