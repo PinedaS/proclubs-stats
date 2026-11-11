@@ -354,8 +354,7 @@ select pg_temp.assert_eq('división: foto del mismo día (no la anterior ni la s
 select pg_temp.assert_eq('comparar por división: 2 partidos en 4ª',
   (select bucket || '=' || matches from public.person_split_stats('division') where person_name = 'Hecodes98'), 'División 4=2'::text);
 
--- Posición recomendada. Hecodes solo juega de delantero y Pineda solo de medio:
--- con dos posiciones, el perfil de cada una es el opuesto del otro -> afinidad 0.
+-- Posición recomendada (011/012). Hecodes solo juega de delantero y Pineda solo de medio.
 select pg_temp.assert_eq('posición: una fila por persona y posición',
   (select count(*) from public.position_fit()), 4::bigint);
 select pg_temp.assert_eq('posición: Hecodes como delantero (2 PJ, índice 100)',
@@ -364,10 +363,42 @@ select pg_temp.assert_eq('posición: sin calificación donde no jugó',
   (select rating from public.position_fit() where person_name = 'Hecodes98' and player_position = 'midfielder'), null::numeric);
 select pg_temp.assert_eq('posición: no se compara consigo mismo (nadie más es delantero)',
   (select profile_match_pct from public.position_fit() where person_name = 'Hecodes98' and player_position = 'forward'), null::numeric);
-select pg_temp.assert_eq('posición: perfil opuesto al del medio -> afinidad 0',
-  (select profile_match_pct from public.position_fit() where person_name = 'Hecodes98' and player_position = 'midfielder'), 0::numeric);
+select pg_temp.assert_eq('posición: con menos de 3 registros de los demás no hay afinidad',
+  (select profile_match_pct from public.position_fit() where person_name = 'Hecodes98' and player_position = 'midfielder'), null::numeric);
 select pg_temp.assert_eq('posición: registros de los demás en esa posición',
   (select others_matches from public.position_fit() where person_name = 'Hecodes98' and player_position = 'midfielder'), 2::bigint);
+reset role;
+
+-- Reparto del perfil: 3 partidos más con un defensa (444) que hace muchas entradas
+-- y no tira. Su perfil se parece más al del medio (Pineda) que al del delantero.
+begin;
+insert into public.match_raw (match_id, club_id, match_type, payload) values
+  ('m3', 1330384, 'friendlyMatch', '{}'), ('m4', 1330384, 'friendlyMatch', '{}'), ('m5', 1330384, 'friendlyMatch', '{}');
+insert into public.matches (match_id, club_id, match_type, played_at, goals_for, goals_against, outcome) values
+  ('m3', 1330384, 'friendlyMatch', '2026-11-03T20:00:00Z', 1, 0, 'win'),
+  ('m4', 1330384, 'friendlyMatch', '2026-11-03T21:00:00Z', 1, 0, 'win'),
+  ('m5', 1330384, 'friendlyMatch', '2026-11-03T22:00:00Z', 1, 0, 'win');
+insert into public.accounts (player_id, last_known_name) values ('444', 'Defensor');
+insert into public.player_match_stats (
+  match_id, player_id, playername, position, archetype_id, rating,
+  goals, assists, shots, pass_attempts, passes_made, tackle_attempts, tackles_made,
+  is_mom, red_cards, saves, goals_conceded, clean_sheets_def, clean_sheets_gk, seconds_played, game_time)
+select m, p.player_id, p.n, p.pos, 1, 7.0, p.g, p.a, p.sh, p.pa, p.pm, p.ta, p.tk, false, 0, 0, 0, 0, 0, 5400, 5400
+from unnest(array['m3', 'm4', 'm5']) m
+cross join (values ('111', 'Hecodes98', 'forward',    1, 0, 3, 10,  8, 2, 1),
+                   ('333', 'PinedaDS',  'midfielder', 0, 1, 1, 20, 15, 4, 3),
+                   ('444', 'Defensor',  'defender',   0, 0, 0, 12, 10, 6, 5)) p(player_id, n, pos, g, a, sh, pa, pm, ta, tk);
+-- Sin contadores experimentales (las pruebas 4b se los pusieron solo a m1/m2).
+update public.player_match_stats set event_counts = null;
+set local role anon;
+select pg_temp.assert_eq('reparto: el defensa se compara con 2 posiciones y suman 100',
+  (select count(*) || '/' || sum(profile_match_pct) from public.position_fit() where person_name = 'Defensor' and profile_match_pct is not null), '2/100'::text);
+select pg_temp.assert_eq('reparto: el defensa se parece más al medio que al delantero',
+  (select bool_and(m.profile_match_pct > f.profile_match_pct)
+     from public.position_fit() m join public.position_fit() f on f.person_id = m.person_id
+    where m.person_name = 'Defensor' and m.player_position = 'midfielder' and f.player_position = 'forward'), true);
+rollback;
+set role anon;
 reset role;
 
 -- Con y sin: se quita a Pineda de m2 (dentro de una transacción que se deshace).
