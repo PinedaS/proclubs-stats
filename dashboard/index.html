@@ -1,0 +1,58 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Stats del club · EA FC 27</title>
+  <meta name="description" content="Estadísticas de nuestro club de Clubes (Pro Clubs) en EA FC 27">
+  <meta name="referrer" content="no-referrer">
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Ccircle cx='8' cy='8' r='7' fill='%232f7d5b'/%3E%3C/svg%3E">
+  <link rel="stylesheet" href="styles.css">
+  <script type="module" src="app.js"></script>
+</head>
+<body>
+  <header class="top">
+    <div class="title">
+      <h1 id="club-name">Stats del club</h1>
+      <p class="subtitle" id="club-season">EA FC 27 · Clubes</p>
+    </div>
+    <div id="collector-status" class="status" role="status" aria-live="polite">Cargando estado…</div>
+  </header>
+
+  <section class="filters" aria-label="Filtros">
+    <fieldset class="chips">
+      <legend>Tipo de partido</legend>
+      <label><input type="checkbox" name="type" value="leagueMatch" checked> Liga</label>
+      <label><input type="checkbox" name="type" value="playoffMatch" checked> Play-off</label>
+      <label><input type="checkbox" name="type" value="friendlyMatch" checked> Amistoso</label>
+    </fieldset>
+    <label class="field">Desde <input type="date" id="from"></label>
+    <label class="field">Hasta <input type="date" id="to"></label>
+    <label class="field" title="Mínimo de partidos para aparecer en el ranking">Mín. partidos
+      <input type="number" id="min-matches" min="1" value="1" inputmode="numeric">
+    </label>
+  </section>
+
+  <nav class="tabs" aria-label="Vistas">
+    <button type="button" class="tab" data-view="ranking" aria-pressed="true">Ranking</button>
+    <button type="button" class="tab" data-view="matches" aria-pressed="false">Partidos</button>
+  </nav>
+
+  <main>
+    <p id="error" class="error" hidden></p>
+    <section id="view-ranking" class="view">
+      <p class="hint">La fórmula de <strong>mejor jugador</strong> aún no está definida: ordena por cualquier columna haciendo clic en su título. Toca un jugador para ver su detalle.</p>
+      <div class="table-wrap"><table id="ranking-table"></table></div>
+    </section>
+    <section id="view-matches" class="view" hidden>
+      <div class="table-wrap"><table id="matches-table"></table></div>
+    </section>
+    <section id="person-detail" class="detail" hidden aria-live="polite"></section>
+  </main>
+
+  <footer class="foot">
+    Datos de la API pública de EA, capturados automáticamente cada 30 min.
+    <a href="https://github.com/PinedaS/proclubs-stats">Código</a>
+  </footer>
+</body>
+</html>
