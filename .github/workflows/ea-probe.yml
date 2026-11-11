@@ -1,0 +1,47 @@
+# Prueba de conectividad: ¿EA responde a los servidores de GitHub Actions?
+# Solo lee de EA (sin secretos ni base de datos). Se ejecuta a mano.
+name: Prueba de EA desde Actions
+
+on:
+  workflow_dispatch:
+    inputs:
+      club_name:
+        description: Nombre exacto del club a consultar
+        default: Aston Huila
+        required: true
+
+permissions:
+  contents: read
+
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    defaults:
+      run:
+        working-directory: collector
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version: '22.x'
+          cache: npm
+          cache-dependency-path: collector/package-lock.json
+
+      - name: Instalar dependencias
+        run: npm ci
+
+      - name: IP pública del runner
+        run: curl -s https://api.ipify.org && echo
+
+      - name: Consultar EA (búsqueda + 3 tipos de partido)
+        env:
+          EA_CLUB_NAME: ${{ inputs.club_name }}
+        run: npm run fetch-fixture
+
+      - name: Resumen
+        if: always()
+        run: |
+          echo "### Archivos obtenidos" >> "$GITHUB_STEP_SUMMARY"
+          ls -la test/fixtures >> "$GITHUB_STEP_SUMMARY" 2>&1 || true
