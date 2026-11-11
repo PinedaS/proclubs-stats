@@ -3,7 +3,7 @@ import { readFileSync } from 'node:fs';
 import { describe, test } from 'node:test';
 import { ProClubsError, type ClubMatch } from 'proclubs-sdk';
 import { collect, type CollectDeps } from '../src/collect.ts';
-import type { ClubRow, MatchType, MemberSnapshotRow, NormalizedMatch, RawMatchRow, RunResult } from '../src/domain.ts';
+import type { ClubRow, ClubSnapshotRow, MatchType, MemberSnapshotRow, NormalizedMatch, RawMatchRow, RunResult } from '../src/domain.ts';
 import { ClubNotFoundError, type FoundClub, type MatchSource } from '../src/ea-source.ts';
 import { RepositoryError, type StatsRepository } from '../src/repository.ts';
 
@@ -54,6 +54,10 @@ class FakeRepo implements StatsRepository {
   async setOpponentSkill(id: string, skill: number): Promise<void> {
     this.opponentSkill.set(id, skill);
   }
+  clubSnapshots: ClubSnapshotRow[] = [];
+  async saveClubSnapshot(row: ClubSnapshotRow): Promise<void> {
+    this.clubSnapshots.push(row);
+  }
 }
 
 class FakeSource implements MatchSource {
@@ -83,6 +87,14 @@ class FakeSource implements MatchSource {
     this.skillCalls++;
     if (this.skillError) throw this.skillError;
     return 1000 + Number(clubId.slice(-3));
+  }
+  overview: { overall: unknown; season: unknown } | Error = {
+    overall: { skillRating: '1595', bestDivision: '4', gamesPlayed: '104', wins: '48', ties: '10', losses: '46', wstreak: '0', unbeatenstreak: '2' },
+    season: { clubId: '1330384', points: '47', currentDivision: '3', gamesPlayed: '63', wins: '30', ties: '7', losses: '26', goals: '157', goalsAgainst: '127' },
+  };
+  async getClubOverview(): Promise<{ overall: unknown; season: unknown }> {
+    if (this.overview instanceof Error) throw this.overview;
+    return this.overview;
   }
 }
 
@@ -143,6 +155,39 @@ describe('collect: miembros y fuerza del rival', () => {
     assert.equal(r.status, 'error');
     assert.match(r.errorMessage ?? '', /members\/stats/);
     assert.equal(repo.matches.size, 10);
+  });
+});
+
+describe('collect: foto del club', () => {
+  test('guarda nivel, división y puntos de la temporada', async () => {
+    const repo = new FakeRepo();
+    const r = await collect(deps(new FakeSource({ leagueMatch: fixture }), repo));
+    assert.equal(r.status, 'success');
+    const s = repo.clubSnapshots[0]!;
+    assert.equal(s.skill_rating, 1595);
+    assert.equal(s.current_division, 3);
+    assert.equal(s.season_points, 47);
+    assert.equal(s.season_draws, 7);
+    assert.equal(s.unbeaten_streak, 2);
+    assert.equal(s.snapshot_date, '2026-11-10');
+  });
+
+  test('si EA falla con el resumen del club, marca error pero conserva los partidos', async () => {
+    const repo = new FakeRepo();
+    const source = new FakeSource({ leagueMatch: fixture });
+    source.overview = new ProClubsError('HTTP 500', 'HTTP');
+    const r = await collect(deps(source, repo));
+    assert.equal(r.status, 'error');
+    assert.match(r.errorMessage ?? '', /club overview/);
+    assert.equal(repo.matches.size, 10);
+  });
+
+  test('la plataforma de cada jugador llega a cuentas y stats', async () => {
+    const repo = new FakeRepo();
+    await collect(deps(new FakeSource({ leagueMatch: fixture }), repo));
+    const n = [...repo.matches.values()][0]!;
+    assert.ok(n.accounts.every((a) => a.platform === 'ps5'));
+    assert.ok(n.stats.every((s) => s.platform === 'ps5'));
   });
 });
 

@@ -71,6 +71,7 @@ COUNTS_SQL="select string_agg(t || '=' || n, ' ' order by t) from (
   union all select 'accounts', count(*) from public.accounts union all select 'matches', count(*) from public.matches
   union all select 'match_raw', count(*) from public.match_raw union all select 'stats', count(*) from public.player_match_stats
   union all select 'runs', count(*) from public.collector_runs union all select 'members', count(*) from public.member_snapshots
+  union all select 'club_snaps', count(*) from public.club_snapshots
   union all select 'person_stats_sum', sum(goals) from public.person_stats()) x"
 ORIG="$(docker exec "$PG" psql -U postgres -tAc "$COUNTS_SQL")"
 REST="$(docker exec "$PG" psql -U postgres -d restore_test -tAc "$COUNTS_SQL")"

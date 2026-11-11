@@ -15,6 +15,8 @@ export interface MatchSource {
   getMemberStats(clubId: string): Promise<unknown>;
   /** skillRating del club (clubs/overallStats), o null si EA no lo da. */
   getClubSkillRating(clubId: string): Promise<number | null>;
+  /** clubs/overallStats y la fila de nuestro club en el ranking de la temporada. */
+  getClubOverview(clubId: string, clubName: string): Promise<{ overall: unknown; season: unknown }>;
 }
 
 export class ClubNotFoundError extends Error {
@@ -56,6 +58,14 @@ export class EaMatchSource implements MatchSource {
 
   getMemberStats(clubId: string): Promise<unknown> {
     return this.#client.members.stats({ clubId, platform: this.#platform });
+  }
+
+  async getClubOverview(clubId: string, clubName: string): Promise<{ overall: unknown; season: unknown }> {
+    const overall = await this.#client.clubs.overallStats({ clubId, platform: this.#platform });
+    const ranking = await this.#client.rankings.searchCurrentSeason({ name: clubName, platform: this.#platform });
+    // La búsqueda es parcial: se elige la fila con nuestro clubId exacto.
+    const season = ranking.find((r) => String(r.clubId) === String(clubId)) ?? null;
+    return { overall, season };
   }
 
   async getClubSkillRating(clubId: string): Promise<number | null> {

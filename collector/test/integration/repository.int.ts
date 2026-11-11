@@ -42,6 +42,10 @@ const source: MatchSource = {
     members: [{ name: 'Jugador_01', proOverall: '78', gamesPlayed: '102', goals: '130', ratingAve: '6.9', proNationality: '56' }],
   }),
   getClubSkillRating: async (clubId: string) => 1500 + Number(clubId.slice(-2)),
+  getClubOverview: async () => ({
+    overall: { skillRating: '1595', bestDivision: '4', gamesPlayed: '104', wins: '48', ties: '10', losses: '46' },
+    season: { clubId: '1330384', points: '47', currentDivision: '3', gamesPlayed: '63' },
+  }),
 };
 
 const config = {
@@ -148,6 +152,36 @@ describe('SupabaseStatsRepository contra Postgres + PostgREST', () => {
       goals_for: 0, goals_against: 0,
     });
     assert.ok(ins.error, 'anon no debe insertar');
+  });
+
+  test('análisis (anon): foto del club, plataforma, duplas, posiciones, récords y comparativas', async () => {
+    const club = await anon.from('club_snapshots').select('skill_rating, current_division, season_points');
+    assert.equal(club.error, null);
+    assert.deepEqual(club.data, [{ skill_rating: 1595, current_division: 3, season_points: 47 }]);
+    assert.ok((await anon.from('club_snapshots').select('raw').limit(1)).error, 'anon no lee club_snapshots.raw');
+
+    const ps = await anon.rpc('person_stats', {});
+    assert.equal(ps.error, null);
+    assert.ok((ps.data as { platforms: string }[]).every((p) => p.platforms === 'ps5'));
+
+    const pairs = await anon.rpc('pair_stats', {});
+    assert.equal(pairs.error, null);
+    assert.ok((pairs.data as unknown[]).length > 0);
+
+    const pos = await anon.rpc('position_stats', {});
+    assert.equal(pos.error, null);
+    const rec = await anon.rpc('person_records', {});
+    assert.equal(rec.error, null);
+    for (const split of ['rival', 'type', 'team_size']) {
+      const r = await anon.rpc('person_split_stats', { p_split: split });
+      assert.equal(r.error, null, `${split}: ${r.error?.message}`);
+      assert.ok((r.data as unknown[]).length > 0, split);
+    }
+    // Excluir incompletos: el partido abandonado (165126453510292) deja de contar.
+    const all = await anon.rpc('person_stats', { p_exclude_incomplete: false });
+    const complete = await anon.rpc('person_stats', { p_exclude_incomplete: true });
+    const total = (d: unknown) => (d as { matches: number }[]).reduce((n, p) => n + Number(p.matches), 0);
+    assert.ok(total(complete.data) < total(all.data));
   });
 
   test('fuerza del rival: se guarda en cada partido y no la pisa el upsert siguiente', async () => {

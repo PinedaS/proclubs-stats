@@ -1,0 +1,32 @@
+# Revisa cada semana si EA cambió la forma de sus respuestas (campos quitados o
+# con otro tipo). Si encuentra algo que puede romper el colector, la ejecución
+# falla y GitHub lo notifica. Solo lee de EA: sin secretos.
+name: Cambios en la API de EA
+
+on:
+  schedule:
+    - cron: '41 7 * * 1' # lunes 07:41 UTC
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  drift:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    defaults:
+      run:
+        working-directory: collector
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: '22.x'
+          cache: npm
+          cache-dependency-path: collector/package-lock.json
+      - run: npm ci
+      - name: Comparar respuestas reales con los contratos del SDK
+        env:
+          EA_CLUB_NAME: ${{ vars.EA_CLUB_NAME || 'Aston Huila' }}
+        run: node scripts/check-ea-drift.ts

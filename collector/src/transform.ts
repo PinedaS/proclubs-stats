@@ -148,8 +148,9 @@ function normalizeUnsafe(raw: ClubMatch, matchId: string, ctx: TransformContext)
     if (!p) throw new TransformError(`jugador ${playerId} sin datos`);
     const name = text(p.playername, `players.${playerId}.playername`);
 
-    accounts.push({ player_id: playerId, last_known_name: name, last_seen_at: nowIso });
-    stats.push(toStatsRow(matchId, playerId, name, p));
+    const platform = platformOf(p);
+    accounts.push({ player_id: playerId, last_known_name: name, last_seen_at: nowIso, platform });
+    stats.push({ ...toStatsRow(matchId, playerId, name, p), platform });
   }
 
   return { match, accounts, stats };
@@ -170,7 +171,13 @@ function outcomeOf(club: Dict): Outcome | null {
   return set.length === 1 ? set[0]![0] : null;
 }
 
-function toStatsRow(matchId: string, playerId: string, name: string, p: Dict): PlayerMatchStatsRow {
+/** Plataforma que deduce el SDK (derivedLabels.exactPlatform); null si no está. */
+function platformOf(p: Dict): string | null {
+  const v = asDict(p.derivedLabels)?.exactPlatform;
+  return typeof v === 'string' && v.trim() !== '' ? v.trim() : null;
+}
+
+function toStatsRow(matchId: string, playerId: string, name: string, p: Dict): Omit<PlayerMatchStatsRow, 'platform'> {
   const f = (key: string) => `players.${playerId}.${key}`;
   return {
     match_id: matchId,

@@ -1,9 +1,11 @@
 // Patrón Repository: el colector solo conoce esta interfaz. Cambiar de
 // proveedor (o usar un doble en los tests) no toca la lógica.
 import { createClient, type SupabaseClient } from '@supabase/supabase-js';
-import type { ClubRow, MemberSnapshotRow, NormalizedMatch, RawMatchRow, RunResult } from './domain.ts';
+import type { ClubRow, ClubSnapshotRow, MemberSnapshotRow, NormalizedMatch, RawMatchRow, RunResult } from './domain.ts';
 
 export interface StatsRepository {
+  /** Foto diaria del club (upsert por club y día). */
+  saveClubSnapshot(row: ClubSnapshotRow): Promise<void>;
   /** Foto diaria de members/stats (upsert por club, miembro y día). */
   saveMemberSnapshots(rows: MemberSnapshotRow[]): Promise<void>;
   /** De estos partidos, cuáles aún no tienen la fuerza del rival. */
@@ -88,6 +90,11 @@ export class SupabaseStatsRepository implements StatsRepository {
   async saveRawMatch(row: RawMatchRow): Promise<void> {
     const { error } = await this.#db.from('match_raw').upsert(row, { onConflict: 'match_id' });
     check('saveRawMatch', error);
+  }
+
+  async saveClubSnapshot(row: ClubSnapshotRow): Promise<void> {
+    const { error } = await this.#db.from('club_snapshots').upsert(row, { onConflict: 'club_id,snapshot_date' });
+    check('saveClubSnapshot', error);
   }
 
   async saveMemberSnapshots(rows: MemberSnapshotRow[]): Promise<void> {

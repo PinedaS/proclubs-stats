@@ -6,69 +6,155 @@
   <title>Stats del club · EA FC 27</title>
   <meta name="description" content="Estadísticas de nuestro club de Clubes (Pro Clubs) en EA FC 27">
   <meta name="referrer" content="no-referrer">
-  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Ccircle cx='8' cy='8' r='7' fill='%232f7d5b'/%3E%3C/svg%3E">
+  <meta name="theme-color" content="#0b1410">
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Cpath d='M16 2l12 5v8c0 8-5.5 13-12 15C9.5 28 4 23 4 15V7z' fill='%2322c55e'/%3E%3C/svg%3E">
   <link rel="stylesheet" href="styles.css">
   <script type="module" src="app.js"></script>
 </head>
 <body>
-  <header class="top">
-    <div class="title">
-      <h1 id="club-name">Stats del club</h1>
-      <p class="subtitle" id="club-season">EA FC 27 · Clubes</p>
+  <header class="hero">
+    <div class="hero-inner">
+      <div class="club">
+        <div class="crest" aria-hidden="true">
+          <svg viewBox="0 0 32 32"><path d="M16 2l12 5v8c0 8-5.5 13-12 15C9.5 28 4 23 4 15V7z"/></svg>
+          <span id="crest-initials">FC</span>
+        </div>
+        <div>
+          <p class="eyebrow">EA SPORTS FC 27 · Clubes</p>
+          <h1 id="club-name">Stats del club</h1>
+          <p class="subtitle" id="club-season">Temporada FC27</p>
+        </div>
+      </div>
+      <div id="collector-status" class="status" role="status" aria-live="polite">Cargando estado…</div>
     </div>
-    <div id="collector-status" class="status" role="status" aria-live="polite">Cargando estado…</div>
+    <div class="kpis" id="club-kpis" aria-label="Resumen del club"></div>
   </header>
 
-  <section class="filters" aria-label="Filtros">
-    <fieldset class="chips">
-      <legend>Tipo de partido</legend>
-      <label><input type="checkbox" name="type" value="leagueMatch" checked> Liga</label>
-      <label><input type="checkbox" name="type" value="playoffMatch" checked> Play-off</label>
-      <label><input type="checkbox" name="type" value="friendlyMatch" checked> Amistoso</label>
-    </fieldset>
-    <label class="field">Desde <input type="date" id="from"></label>
-    <label class="field">Hasta <input type="date" id="to"></label>
-    <label class="field" title="Mínimo de partidos para aparecer en el ranking">Mín. partidos
-      <input type="number" id="min-matches" min="1" value="1" inputmode="numeric">
-    </label>
-    <label class="toggle" title="Métricas calculadas con los datos oficiales: por 90 min, conversión, forma, presencia…">
-      <input type="checkbox" id="show-adv" checked> Métricas avanzadas
-    </label>
-    <label class="toggle" title="Datos que EA no documenta; ver nota al pie">
-      <input type="checkbox" id="show-exp" checked> Datos experimentales*
-    </label>
-  </section>
-
   <nav class="tabs" aria-label="Vistas">
-    <button type="button" class="tab" data-view="ranking" aria-pressed="true">Ranking</button>
-    <button type="button" class="tab" data-view="matches" aria-pressed="false">Partidos</button>
-    <button type="button" class="tab" data-view="members" aria-pressed="false">Miembros (EA)</button>
+    <div class="tabs-inner">
+      <button type="button" class="tab" data-view="ranking" aria-pressed="true">Ranking</button>
+      <button type="button" class="tab" data-view="compare" aria-pressed="false">Comparar</button>
+      <button type="button" class="tab" data-view="pairs" aria-pressed="false">Duplas</button>
+      <button type="button" class="tab" data-view="positions" aria-pressed="false">Por posición</button>
+      <button type="button" class="tab" data-view="matches" aria-pressed="false">Partidos</button>
+      <button type="button" class="tab" data-view="members" aria-pressed="false">Miembros (EA)</button>
+      <button type="button" class="tab" data-view="club" aria-pressed="false">Club</button>
+    </div>
   </nav>
 
   <main>
+    <section class="filters card" aria-label="Filtros">
+      <div class="filter-group">
+        <span class="filter-label">Tipo de partido</span>
+        <div class="chips">
+          <label class="chip"><input type="checkbox" name="type" value="leagueMatch" checked><span>Liga</span></label>
+          <label class="chip"><input type="checkbox" name="type" value="playoffMatch" checked><span>Play-off</span></label>
+          <label class="chip"><input type="checkbox" name="type" value="friendlyMatch" checked><span>Amistoso</span></label>
+        </div>
+      </div>
+      <label class="field">Desde <input type="date" id="from"></label>
+      <label class="field">Hasta <input type="date" id="to"></label>
+      <label class="field" title="Mínimo de partidos para aparecer en las tablas">Mín. partidos
+        <input type="number" id="min-matches" min="1" value="1" inputmode="numeric">
+      </label>
+      <div class="switches">
+        <label class="switch" title="Excluye abandonos y partidos donde nadie del club llegó al 90 % del tiempo">
+          <input type="checkbox" id="exclude-incomplete"><span class="track" aria-hidden="true"></span>Excluir incompletos
+        </label>
+        <label class="switch" title="Métricas calculadas con datos oficiales: por 90 min, conversión, forma, presencia…">
+          <input type="checkbox" id="show-adv" checked><span class="track" aria-hidden="true"></span>Métricas avanzadas
+        </label>
+        <label class="switch" title="Datos que EA no documenta; ver nota al pie">
+          <input type="checkbox" id="show-exp" checked><span class="track" aria-hidden="true"></span>Experimentales*
+        </label>
+      </div>
+    </section>
+
     <p id="error" class="error" hidden></p>
+
     <section id="view-ranking" class="view">
-      <p class="hint">La fórmula de <strong>mejor jugador</strong> aún no está definida: ordena por cualquier columna haciendo clic en su título. Toca un jugador para ver su detalle.</p>
-      <div class="table-wrap"><table id="ranking-table"></table></div>
+      <div id="podium" class="podium" aria-label="Los tres primeros según la columna ordenada"></div>
+      <div class="card table-card">
+        <div class="card-head"><h2>Jugadores <span class="tag">partidos capturados</span></h2><p class="muted small">Ordena con un clic en cualquier columna. Toca un jugador para ver su detalle.</p></div>
+        <div class="table-wrap"><table id="ranking-table" class="data"></table></div>
+      </div>
     </section>
+
+    <section id="view-compare" class="view" hidden>
+      <div class="card table-card">
+        <div class="card-head">
+          <h2>Comparar rendimiento</h2>
+          <div class="segmented" role="group" aria-label="Agrupar por" id="split-buttons">
+            <button type="button" data-split="rival" aria-pressed="true">Rival fuerte / débil</button>
+            <button type="button" data-split="type" aria-pressed="false">Liga / Amistoso</button>
+            <button type="button" data-split="team_size" aria-pressed="false">Jugadores en cancha</button>
+          </div>
+          <div class="segmented" role="group" aria-label="Métrica" id="split-metric">
+            <button type="button" data-metric="avg_rating" aria-pressed="true">Calificación</button>
+            <button type="button" data-metric="ga_per90" aria-pressed="false">G+A / 90</button>
+            <button type="button" data-metric="win_pct" aria-pressed="false">% Victorias</button>
+            <button type="button" data-metric="mom_pct" aria-pressed="false">% MVP</button>
+          </div>
+          <p class="muted small" id="split-help"></p>
+        </div>
+        <div class="table-wrap"><table id="compare-table" class="data"></table></div>
+      </div>
+    </section>
+
+    <section id="view-pairs" class="view" hidden>
+      <div class="card table-card">
+        <div class="card-head"><h2>Duplas</h2><p class="muted small">Resultados de cada pareja cuando juegan juntos en el mismo partido.</p></div>
+        <div class="table-wrap"><table id="pairs-table" class="data"></table></div>
+      </div>
+    </section>
+
+    <section id="view-positions" class="view" hidden>
+      <div class="card table-card">
+        <div class="card-head">
+          <h2>Por posición</h2>
+          <div class="segmented" role="group" aria-label="Posición" id="position-buttons">
+            <button type="button" data-pos="forward" aria-pressed="true">Delanteros</button>
+            <button type="button" data-pos="midfielder" aria-pressed="false">Mediocampistas</button>
+            <button type="button" data-pos="defender" aria-pressed="false">Defensas</button>
+            <button type="button" data-pos="goalkeeper" aria-pressed="false">Porteros</button>
+          </div>
+          <p class="muted small">Cada jugador aparece en las posiciones que jugó, con sus números solo en esa posición.</p>
+        </div>
+        <div class="table-wrap"><table id="positions-table" class="data"></table></div>
+      </div>
+    </section>
+
     <section id="view-matches" class="view" hidden>
-      <p class="hint"><strong>Nivel rival:</strong> skillRating del club rival según EA, leído cuando se capturó el partido.</p>
-      <div class="table-wrap"><table id="matches-table"></table></div>
+      <div class="card table-card">
+        <div class="card-head"><h2>Partidos</h2><p class="muted small"><strong>Nivel rival:</strong> skillRating del rival según EA al capturar el partido. Toca un partido para ver a los jugadores.</p></div>
+        <div class="table-wrap"><table id="matches-table" class="data"></table></div>
+      </div>
     </section>
+
     <section id="view-members" class="view" hidden>
-      <p class="hint">Datos oficiales de EA (members/stats), los mismos de la página "Members" del club: totales desde que cada jugador está en el club, no solo los partidos capturados. No dependen de los filtros. <strong>Capturados / EA</strong> compara, desde la primera foto, los partidos que EA le sumó con los que guardó el colector: si no coinciden, puede haberse perdido algún partido.</p>
-      <div class="table-wrap"><table id="members-table"></table></div>
+      <div class="card table-card">
+        <div class="card-head">
+          <h2>Miembros <span class="tag tag-ea">EA · histórico</span></h2>
+          <p class="muted small">Totales oficiales de EA desde que cada jugador está en el club (no solo lo capturado) y su <strong>media del Pro</strong>. No usan los filtros. <strong>Capturados / EA</strong> avisa si se escapó algún partido.</p>
+        </div>
+        <div class="table-wrap"><table id="members-table" class="data"></table></div>
+      </div>
     </section>
-    <section id="person-detail" class="detail" hidden aria-live="polite"></section>
+
+    <section id="view-club" class="view" hidden>
+      <div class="grid-2">
+        <div class="card"><div class="card-head"><h2>Nivel del club</h2><p class="muted small">skillRating según EA, una foto por día.</p></div><div id="club-chart" class="chart"></div></div>
+        <div class="card"><div class="card-head"><h2>Temporada actual</h2></div><div id="club-season-card"></div></div>
+      </div>
+    </section>
+
+    <section id="person-detail" class="detail card" hidden aria-live="polite"></section>
   </main>
 
   <footer class="foot">
-    <p>Datos de la API pública de EA, capturados automáticamente cada 30 min.
-    <a href="https://github.com/PinedaS/proclubs-stats">Código</a></p>
-    <p>* <strong>Experimental:</strong> regates, intercepciones, posesión, duelos aéreos, faltas y amarillas
-    salen de contadores que EA no documenta, interpretados según la
-    <a href="https://github.com/Interactive-63/eafc-pro-clubs-api-research">investigación de la comunidad</a>.
-    Son aproximaciones: al compararlos con datos oficiales coinciden entre el 65 % y el 98 % de las veces.</p>
+    <p>Datos de la API pública de EA, capturados automáticamente cada 30 min. <a href="https://github.com/PinedaS/proclubs-stats">Código</a></p>
+    <p>* <strong>Experimental:</strong> regates, intercepciones, posesión, duelos, faltas, pases filtrados, posicionamiento, decisiones y similares salen de contadores que EA no documenta,
+    interpretados según la <a href="https://github.com/Interactive-63/eafc-pro-clubs-api-research">investigación de la comunidad</a>. Son aproximaciones: frente a datos oficiales coinciden entre el 65 % y el 98 %.</p>
   </footer>
 </body>
 </html>

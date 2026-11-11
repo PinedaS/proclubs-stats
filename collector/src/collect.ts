@@ -3,8 +3,9 @@
 import { ProClubsError } from 'proclubs-sdk';
 import type { Config } from './config.ts';
 import type { RunResult } from './domain.ts';
-import type { MatchSource } from './ea-source.ts';
+import type { FoundClub, MatchSource } from './ea-source.ts';
 import type { StatsRepository } from './repository.ts';
+import { toClubSnapshotRow } from './club.ts';
 import { toMemberSnapshotRows } from './members.ts';
 import { TransformError, normalizeMatch, toRawRow } from './transform.ts';
 
@@ -128,6 +129,7 @@ export async function collect(deps: CollectDeps): Promise<RunResult> {
 
     await fillOpponentSkill(deps, opponents);
     await captureMembers(deps, club.clubId, now(), failures);
+    await captureClub(deps, club, now(), failures);
   } catch (err) {
     log.error(`Ejecución abortada: ${messageOf(err)}`);
     try {
@@ -168,6 +170,23 @@ async function fillOpponentSkill(deps: CollectDeps, opponents: { matchId: string
     }
   }
   if (filled) deps.log.info(`Nivel del rival guardado en ${filled} partidos`);
+}
+
+/** Foto del club (nivel, división, temporada). Si EA falla, se registra como falla. */
+async function captureClub(deps: CollectDeps, club: FoundClub, at: Date, failures: SoftFailure[]): Promise<void> {
+  let overview: { overall: unknown; season: unknown };
+  try {
+    overview = await deps.source.getClubOverview(club.clubId, club.name);
+  } catch (err) {
+    if (!(err instanceof ProClubsError)) throw err;
+    failures.push({ code: errorCodeOf(err), message: `club overview: ${messageOf(err)}` });
+    deps.log.error(`EA falló al leer el resumen del club: ${messageOf(err)}`);
+    return;
+  }
+  const row = toClubSnapshotRow(overview.overall, overview.season, club.clubId, at);
+  if (!row) return;
+  await deps.repo.saveClubSnapshot(row);
+  deps.log.info(`Club: nivel ${row.skill_rating ?? '—'}, división ${row.current_division ?? '—'}, ${row.season_points ?? '—'} pts`);
 }
 
 /** Foto de members/stats. Si EA falla, se registra como falla (dato oficial). */

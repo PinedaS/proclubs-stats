@@ -39,6 +39,7 @@ export interface AccountRow {
   player_id: string;
   last_known_name: string;
   last_seen_at: string;
+  platform: string | null;
 }
 
 export interface PlayerMatchStatsRow {
@@ -71,6 +72,34 @@ export interface PlayerMatchStatsRow {
   good_direction_saves: number | null;
   /** Contadores sin documentar de match_event_aggregate_0..3 ({"174": 11}). */
   event_counts: Record<string, number> | null;
+  /** ps5, pc, xbox-series… (derivedLabels del SDK). */
+  platform: string | null;
+}
+
+/** Foto diaria del club: clubs/overallStats + ranking de la temporada. */
+export interface ClubSnapshotRow {
+  club_id: number;
+  snapshot_date: string;
+  captured_at: string;
+  skill_rating: number | null;
+  current_division: number | null;
+  best_division: number | null;
+  season_points: number | null;
+  season_games: number | null;
+  season_wins: number | null;
+  season_draws: number | null;
+  season_losses: number | null;
+  season_goals: number | null;
+  season_goals_against: number | null;
+  games_played: number | null;
+  wins: number | null;
+  draws: number | null;
+  losses: number | null;
+  promotions: number | null;
+  relegations: number | null;
+  win_streak: number | null;
+  unbeaten_streak: number | null;
+  raw: unknown;
 }
 
 export interface NormalizedMatch {

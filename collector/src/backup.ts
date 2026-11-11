@@ -20,6 +20,7 @@ export const BACKUP_TABLES: { name: string; orderBy: string[] }[] = [
   { name: 'player_match_stats', orderBy: ['match_id', 'player_id'] },
   { name: 'collector_runs', orderBy: ['run_id'] },
   { name: 'member_snapshots', orderBy: ['club_id', 'member_name', 'snapshot_date'] },
+  { name: 'club_snapshots', orderBy: ['club_id', 'snapshot_date'] },
 ];
 
 /** Tablas con identidad: tras restaurar hay que mover su secuencia. */

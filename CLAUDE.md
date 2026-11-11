@@ -184,7 +184,9 @@ No hay API oficial. Se usan los endpoints públicos que lee la web de Clubes de 
 1. ~~Repo público o privado.~~ **Decidido (2026-11-10): público.**
    - Dashboard en GitHub Pages, y minutos de Actions ilimitados.
    - **Riesgo:** GitHub desactiva los workflows programados de un repo público tras **60 días sin actividad** en el repo. Hay que mitigarlo en el paso 4 (p. ej. un *keepalive*).
-2. **Fórmula de "mejor jugador": POSPUESTA por decisión del usuario (2026-11-11).** Por ahora solo se recopilan y muestran los datos; la fórmula se decidirá más adelante. No implementar ningún puntaje ni ranking ponderado sin que el usuario lo pida. Ideas para entonces:
+2. **Fórmula de "mejor jugador": POSPUESTA por decisión del usuario (2026-11-11).** Por ahora solo se recopilan y muestran los datos; la fórmula se decidirá más adelante. No implementar ningún puntaje ni ranking ponderado sin que el usuario lo pida.
+   - **Requisito de justicia (usuario, 2026-11-11):** varios jugadores cambian de **posición y arquetipo**. Ninguna métrica ni la fórmula debe penalizar a quien rota, sobre todo hacia **roles defensivos** (p. ej. un defensa no debe quedar abajo por marcar pocos goles). Las comparaciones deben ser **relativas a la posición o arquetipo** de cada partido.
+   - Ideas para entonces:
    - Métricas por partido (G+A, calificación media, % MVP).
    - Mínimo de partidos para entrar al ranking.
    - Comparación dentro de cada posición.

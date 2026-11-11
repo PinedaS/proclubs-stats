@@ -5,6 +5,7 @@ import { STALE_CRITICAL_MINUTES, STALE_WARNING_MINUTES } from './config.js';
 
 const TYPE_LABEL = { leagueMatch: 'Liga', playoffMatch: 'Play-off', friendlyMatch: 'Amistoso' };
 const POS_LABEL = { forward: 'Delantero', midfielder: 'Mediocampista', defender: 'Defensa', goalkeeper: 'Portero' };
+const PLATFORM_LABEL = { ps5: 'PS5', pc: 'PC', 'xbox-series': 'Xbox Series', ps4: 'PS4', 'xbox-one': 'Xbox One', switch: 'Switch' };
 const OUTCOME = {
   win: { letter: 'V', label: 'Victoria' },
   draw: { letter: 'E', label: 'Empate' },
@@ -17,9 +18,14 @@ const state = {
   minMatches: 1,
   showExp: true,
   showAdv: true,
-  members: null,
   ranking: [],
+  records: new Map(),
+  members: null,
+  clubSnaps: null,
   personId: null,
+  split: 'rival',
+  splitMetric: 'avg_rating',
+  position: 'forward',
   requestId: 0,
 };
 
@@ -35,10 +41,11 @@ function el(tag, props = {}, ...children) {
   for (const [k, v] of Object.entries(props)) {
     if (v == null || v === false) continue;
     if (k === 'class') node.className = v;
+    else if (k === 'style') node.setAttribute('style', v);
     else if (k.startsWith('on')) node.addEventListener(k.slice(2), v);
     else node.setAttribute(k, v === true ? '' : String(v));
   }
-  for (const c of children.flat()) {
+  for (const c of children.flat(Infinity)) {
     if (c == null || c === false) continue;
     node.append(c instanceof Node ? c : String(c));
   }
@@ -54,12 +61,14 @@ function svg(tag, attrs = {}) {
 
 const fmtCache = new Map();
 function fmtNum(value, digits = 0) {
-  if (value == null || Number.isNaN(Number(value))) return '—';
+  if (value == null || value === '' || Number.isNaN(Number(value))) return '—';
   if (!fmtCache.has(digits)) {
     fmtCache.set(digits, new Intl.NumberFormat('es-CO', { minimumFractionDigits: digits, maximumFractionDigits: digits }));
   }
   return fmtCache.get(digits).format(Number(value));
 }
+const fmtPct = (v, d = 1) => (v == null ? '—' : `${fmtNum(v, d)} %`);
+const fmtSigned = (v) => (v == null ? '—' : v > 0 ? `+${fmtNum(v)}` : fmtNum(v));
 
 function fmtDate(iso, withTime = true) {
   const opts = withTime ? { dateStyle: 'medium', timeStyle: 'short' } : { dateStyle: 'medium' };
@@ -74,10 +83,26 @@ function fmtAgo(minutes) {
   return `hace ${Math.round(hours / 24)} días`;
 }
 
+function initials(name) {
+  const clean = String(name ?? '?').replace(/[^\p{L}\p{N} ]/gu, ' ').trim();
+  const parts = clean.split(/\s+/).filter(Boolean);
+  const text = parts.length > 1 ? parts[0][0] + parts[1][0] : clean.slice(0, 2);
+  return (text || '?').toUpperCase();
+}
+
+const avatar = (name, big = false) => el('span', { class: big ? 'avatar lg' : 'avatar', 'aria-hidden': 'true' }, initials(name));
+const posBadge = (pos) => (pos ? el('span', { class: `badge pos-${pos}` }, POS_LABEL[pos] ?? pos) : null);
+const platformLabel = (p) => PLATFORM_LABEL[p] ?? p;
+
+function playerCell(name, sub) {
+  return el('span', { class: 'player-cell' }, avatar(name), el('span', {}, el('span', { class: 'person' }, name),
+    sub ? el('span', { class: 'muted small' }, ` ${sub}`) : null));
+}
+
 function resultBadge(outcome, dnf) {
   const o = OUTCOME[outcome];
   if (!o) return el('span', { class: 'muted' }, '—');
-  return el('span', { class: `result ${outcome}`, title: o.label + (dnf ? ' (por abandono)' : '') }, o.letter + (dnf ? '*' : ''));
+  return el('span', { class: `result ${outcome}`, title: o.label + (dnf ? ' (por abandono)' : '') }, o.letter);
 }
 
 function showError(err) {
@@ -85,6 +110,17 @@ function showError(err) {
   if (!err) { box.hidden = true; return; }
   box.textContent = `No se pudieron cargar los datos. ${err.message ?? err}`;
   box.hidden = false;
+}
+
+const emptyRow = (cols, text = 'Sin datos para estos filtros.') =>
+  el('tr', {}, el('td', { class: 'empty', colspan: cols }, text));
+
+function onActivate(fn) {
+  return {
+    tabindex: '0',
+    onclick: fn,
+    onkeydown: (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); fn(); } },
+  };
 }
 
 // ---------------------------------------------------------------------------
@@ -100,11 +136,11 @@ function readFilters() {
     return d.toISOString();
   };
   // "Hasta" es inclusivo para el usuario; en la API p_to es exclusivo (+1 día).
-  return { types, from: day($('#from').value), to: day($('#to').value, 1) };
+  return { types, from: day($('#from').value), to: day($('#to').value, 1), excludeIncomplete: $('#exclude-incomplete').checked };
 }
 
 // ---------------------------------------------------------------------------
-// Estado del colector
+// Cabecera: estado del colector y tarjetas del club
 // ---------------------------------------------------------------------------
 
 async function renderStatus() {
@@ -113,12 +149,12 @@ async function renderStatus() {
     const s = await api.getCollectorStatus();
     const last = s?.last_success_at ? new Date(s.last_success_at) : null;
     const minutes = last ? (Date.now() - last.getTime()) / 60000 : Infinity;
-    let level = 'good', icon = '✓', text;
+    let level = 'good', icon = '●', text;
     if (!last) { level = 'critical'; icon = '✕'; text = 'Sin capturas exitosas todavía'; }
     else {
       if (minutes > STALE_CRITICAL_MINUTES) { level = 'critical'; icon = '✕'; }
       else if (minutes > STALE_WARNING_MINUTES) { level = 'warning'; icon = '⚠'; }
-      text = `Última captura ${fmtAgo(minutes)}`;
+      text = `Captura automática · ${fmtAgo(minutes)}`;
     }
     const failures = Number(s?.consecutive_failures ?? 0);
     if (failures > 0 && level === 'good') { level = 'warning'; icon = '⚠'; }
@@ -128,10 +164,41 @@ async function renderStatus() {
       el('span', {}, text + (failures > 0 ? ` · ${failures} falla${failures === 1 ? '' : 's'} seguida${failures === 1 ? '' : 's'}` : '')),
     );
     box.title = last ? `Última captura exitosa: ${fmtDate(last.toISOString())}` : '';
-  } catch (err) {
+  } catch {
     box.className = 'status critical';
     box.replaceChildren(el('span', { class: 'icon', 'aria-hidden': 'true' }, '✕'), el('span', {}, 'Estado no disponible'));
   }
+}
+
+function kpi(label, value, hint, deltaClass) {
+  return el('div', { class: 'kpi' }, el('div', { class: 'label' }, label), el('div', { class: 'value' }, value),
+    hint ? el('div', { class: `hint ${deltaClass ? `delta ${deltaClass}` : ''}` }, hint) : null);
+}
+
+async function renderHeader() {
+  const [club, snaps] = await Promise.all([api.getClub(), api.getClubSnapshots().catch(() => [])]);
+  state.clubSnaps = snaps;
+  if (club) {
+    $('#club-name').textContent = club.name;
+    $('#crest-initials').textContent = initials(club.name);
+    $('#club-season').textContent = `Temporada ${club.season}`;
+    document.title = `${club.name} · Stats EA FC 27`;
+  }
+  const last = snaps.at(-1);
+  const first = snaps[0];
+  const delta = last && first && last.skill_rating != null && first.skill_rating != null ? last.skill_rating - first.skill_rating : null;
+  const capturedMatches = state.ranking[0]?.club_matches;
+  $('#club-kpis').replaceChildren(
+    kpi('Nivel del club', fmtNum(last?.skill_rating),
+      delta == null || snaps.length < 2 ? 'skillRating de EA' : `${fmtSigned(delta)} desde ${fmtDate(`${first.snapshot_date}T12:00:00Z`, false)}`,
+      delta > 0 ? 'up' : delta < 0 ? 'down' : null),
+    kpi('División', last?.current_division != null ? `${last.current_division}ª` : '—', last?.best_division != null ? `Mejor: ${last.best_division}ª` : null),
+    kpi('Puntos de liga', fmtNum(last?.season_points), last?.season_games != null ? `${last.season_games} partidos de temporada` : null),
+    kpi('Temporada V-E-D', last?.season_wins != null ? `${last.season_wins}-${last.season_draws}-${last.season_losses}` : '—',
+      last?.season_goals != null ? `Goles ${last.season_goals} : ${last.season_goals_against}` : null),
+    kpi('Racha', last?.unbeaten_streak != null ? `${last.unbeaten_streak} sin perder` : '—', last?.win_streak ? `${last.win_streak} victorias seguidas` : null),
+    kpi('Partidos capturados', fmtNum(capturedMatches), 'con los filtros actuales'),
+  );
 }
 
 // ---------------------------------------------------------------------------
@@ -139,9 +206,9 @@ async function renderStatus() {
 // ---------------------------------------------------------------------------
 
 const RANKING_COLUMNS = [
-  { key: 'person_name', label: 'Jugador', text: true, render: (r) => el('span', { class: 'person' }, r.person_name) },
-  { key: 'main_position', label: 'Pos.', text: true, title: 'Posición más jugada', render: (r) => POS_LABEL[r.main_position] ?? r.main_position ?? '—' },
-  { key: 'matches', label: 'PJ', title: 'Partidos jugados' },
+  { key: 'person_name', label: 'Jugador', text: true, render: (r) => playerCell(r.person_name, r.platforms ? r.platforms.split(', ').map(platformLabel).join(' · ') : null) },
+  { key: 'main_position', label: 'Pos.', text: true, title: 'Posición más jugada', render: (r) => posBadge(r.main_position) ?? '—' },
+  { key: 'matches', label: 'PJ', title: 'Partidos jugados (capturados)' },
   { key: 'wins', label: 'V-E-D', title: 'Victorias, empates y derrotas (ordena por victorias)', render: (r) => `${r.wins}-${r.draws}-${r.losses}` },
   { key: 'goals', label: 'G', title: 'Goles' },
   { key: 'assists', label: 'A', title: 'Asistencias' },
@@ -160,13 +227,15 @@ const RANKING_COLUMNS = [
   { key: 'ga_per90', label: 'G+A/90', title: 'Goles + asistencias por cada 90 minutos', digits: 2, adv: true },
   { key: 'shot_conversion_pct', label: 'Conv. %', title: 'Goles / tiros', digits: 1, adv: true },
   { key: 'goal_participation_pct', label: 'Part. goles %', title: '(Goles + asistencias) / goles del equipo en sus partidos', digits: 1, adv: true },
-  { key: 'goal_diff', label: 'Dif. goles', title: 'Goles a favor menos en contra en los partidos que jugó', adv: true, render: (r) => r.goal_diff > 0 ? `+${r.goal_diff}` : String(r.goal_diff ?? '—') },
+  { key: 'goal_diff', label: 'Dif. goles', title: 'Goles a favor menos en contra en los partidos que jugó', adv: true, render: (r) => fmtSigned(r.goal_diff) },
   { key: 'attendance_pct', label: 'Presencia %', title: 'Partidos jugados / partidos del club en el rango filtrado', digits: 1, adv: true },
   { key: 'form_rating', label: 'Forma', title: 'Calificación media de sus últimos 5 partidos', digits: 2, adv: true },
   { key: 'rating_stddev', label: 'Variación', title: 'Desviación de su calificación: más bajo = más regular', digits: 2, adv: true },
   { key: 'clean_sheets', label: 'Vallas', title: 'Vallas invictas (defensa + portero)', adv: true },
   { key: 'save_pct', label: '% Atajadas', title: 'Porteros: atajadas / (atajadas + goles recibidos)', digits: 1, adv: true },
   { key: 'avg_opponent_skill', label: 'Nivel rival', title: 'Nivel medio (skillRating) de los rivales que enfrentó', adv: true },
+  { key: 'avg_team_size', label: 'Jug. prom.', title: 'Jugadores del club en cancha, en promedio', digits: 1, adv: true },
+  { key: 'incomplete_matches', label: 'Incompl.', title: 'Partidos incompletos (abandono o < 90 % del tiempo)', adv: true },
   // Experimentales: contadores sin documentar de EA (ver nota al pie del dashboard).
   { key: 'shot_accuracy_exp_pct', label: 'A puerta %*', title: 'Experimental: tiros a puerta / tiros (códigos EA 217 y 218)', digits: 1, exp: true },
   { key: 'second_assists_exp', label: '2ª asist.*', title: 'Experimental: segundas asistencias (código EA 115)', exp: true },
@@ -175,12 +244,20 @@ const RANKING_COLUMNS = [
   { key: 'possession_won_exp', label: 'Recup.*', title: 'Experimental: posesiones ganadas (códigos EA 108–110)', exp: true },
   { key: 'possession_lost_exp', label: 'Pérdidas*', title: 'Experimental: posesiones perdidas (códigos EA 105–107)', exp: true },
   { key: 'aerial_duels_won_exp', label: 'Aéreos*', title: 'Experimental: duelos aéreos ganados (códigos EA 265–266)', exp: true },
+  { key: 'forward_pass_pct_exp', label: 'Pase adel. %*', title: 'Experimental: pases hacia adelante completados (códigos EA 30 y 31)', digits: 1, exp: true },
+  { key: 'through_passes_exp', label: 'Filtrados*', title: 'Experimental: pases filtrados (código EA 152)', exp: true },
+  { key: 'cross_pct_exp', label: 'Centros %*', title: 'Experimental: centros completados (códigos EA 36 y 37)', digits: 1, exp: true },
+  { key: 'in_position_pct_exp', label: 'En posición %*', title: 'Experimental: veces en posición / (en + fuera de posición) (códigos EA 111 y 219)', digits: 1, exp: true },
+  { key: 'best_option_pct_exp', label: 'Decisiones %*', title: 'Experimental: "tomó la mejor opción" / (mejor + "debió pasar a otro") (códigos EA 177 y 182)', digits: 1, exp: true },
   { key: 'fouls_exp', label: 'Faltas*', title: 'Experimental: faltas cometidas (códigos EA 2 y 3)', exp: true },
+  { key: 'fouls_won_exp', label: 'F. recibidas*', title: 'Experimental: faltas recibidas (código EA 4)', exp: true },
+  { key: 'offsides_exp', label: 'Fuera lugar*', title: 'Experimental: fueras de juego (código EA 104; tiende a contar de menos)', exp: true },
+  { key: 'penalties_conceded_exp', label: 'Penales*', title: 'Experimental: penales cometidos (código EA 94)', exp: true },
   { key: 'yellow_cards_exp', label: 'Amarillas*', title: 'Experimental: tarjetas amarillas (códigos EA 95 y 213)', exp: true },
 ];
 
 const visibleColumns = () => RANKING_COLUMNS.filter((c) => (state.showExp || !c.exp) && (state.showAdv || !c.adv));
-const cellClass = (c) => [c.text ? 'left' : '', c.exp ? 'exp' : '', c.adv ? 'adv' : ''].join(' ').trim() || null;
+const cellClass = (c, extra = '') => [c.text ? 'left' : '', c.exp ? 'exp' : '', c.adv ? 'adv' : '', extra].join(' ').trim() || null;
 
 function sortRows(rows) {
   const { key, dir } = state.sort;
@@ -195,15 +272,27 @@ function sortRows(rows) {
   });
 }
 
+function renderPodium(rows) {
+  const col = RANKING_COLUMNS.find((c) => c.key === state.sort.key);
+  const box = $('#podium');
+  if (!col || col.text || rows.length < 3) { box.replaceChildren(); return; }
+  const top = rows.filter((r) => r[col.key] != null).slice(0, 3);
+  if (top.length < 3) { box.replaceChildren(); return; }
+  box.replaceChildren(...top.map((r, i) => el('div', { class: `podium-card p${i + 1}`, ...onActivate(() => openPerson(r.person_id)), 'aria-label': `${i + 1}º ${r.person_name}` },
+    el('div', { class: 'medal' }, String(i + 1)),
+    el('div', { class: 'name' }, r.person_name),
+    el('div', { class: 'metric' }, col.render ? col.render(r) : fmtNum(r[col.key], col.digits ?? 0)),
+    el('div', { class: 'metric-label' }, col.title ?? col.label),
+    el('div', { class: 'muted small' }, `${r.matches} PJ`))));
+}
+
 function renderRanking() {
   const table = $('#ranking-table');
   const columns = visibleColumns();
-  const head = el('tr', {}, columns.map((c) => {
+  const head = el('tr', {}, el('th', { scope: 'col', class: 'rank' }, '#'), columns.map((c) => {
     const active = state.sort.key === c.key;
     return el('th', {
-      class: cellClass(c),
-      scope: 'col',
-      title: c.title,
+      class: cellClass(c), scope: 'col', title: c.title,
       'aria-sort': active ? (state.sort.dir === 1 ? 'ascending' : 'descending') : null,
     }, el('button', {
       type: 'button',
@@ -215,17 +304,118 @@ function renderRanking() {
   }));
 
   const rows = sortRows(state.ranking.filter((r) => r.matches >= state.minMatches));
+  renderPodium(rows);
   const body = rows.length
-    ? rows.map((r) => el('tr', {
-        class: 'clickable',
-        tabindex: '0',
-        onclick: () => openPerson(r.person_id),
-        onkeydown: (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); openPerson(r.person_id); } },
-      }, columns.map((c) => el('td', { class: cellClass(c) },
-        c.render ? c.render(r) : fmtNum(r[c.key], c.digits ?? 0)))))
-    : [el('tr', {}, el('td', { class: 'empty', colspan: columns.length }, 'Sin datos para estos filtros.'))];
-
+    ? rows.map((r, i) => el('tr', { class: 'clickable', ...onActivate(() => openPerson(r.person_id)) },
+        el('td', { class: 'rank' }, String(i + 1)),
+        columns.map((c) => el('td', { class: cellClass(c, c.key === state.sort.key && !c.text ? 'sorted' : '') },
+          c.render ? c.render(r) : fmtNum(r[c.key], c.digits ?? 0)))))
+    : [emptyRow(columns.length + 1)];
+  // La columna "#" va primero y es la fija; el nombre queda justo después.
   table.replaceChildren(el('thead', {}, head), el('tbody', {}, body));
+}
+
+// ---------------------------------------------------------------------------
+// Comparar (rival fuerte/débil, tipo de partido, jugadores en cancha)
+// ---------------------------------------------------------------------------
+
+const SPLIT_HELP = {
+  rival: 'Rival fuerte = nivel (skillRating) igual o mayor que la mediana de los rivales del rango filtrado.',
+  type: 'Útil para ver si los amistosos inflan los números frente a la liga.',
+  team_size: 'Cuántos jugadores del club estaban en cancha en ese partido.',
+};
+const METRIC = {
+  avg_rating: { label: 'Calificación', digits: 2 },
+  ga_per90: { label: 'G+A / 90', digits: 2 },
+  win_pct: { label: '% Victorias', digits: 1 },
+  mom_pct: { label: '% MVP', digits: 1 },
+};
+
+async function renderCompare(filters, requestId) {
+  const rows = filters.types.length ? await api.getSplitStats(state.split, filters) : [];
+  if (requestId !== state.requestId) return;
+  $('#split-help').textContent = SPLIT_HELP[state.split];
+  const metric = state.splitMetric;
+  const buckets = [...new Map(rows.map((r) => [r.bucket, r.bucket_order])).entries()].sort((a, b) => a[1] - b[1]).map(([b]) => b);
+  const people = new Map();
+  for (const r of rows) {
+    if (!people.has(r.person_id)) people.set(r.person_id, { name: r.person_name, total: 0, cells: {} });
+    const p = people.get(r.person_id);
+    p.total += Number(r.matches);
+    p.cells[r.bucket] = r;
+  }
+  const list = [...people.entries()].filter(([, p]) => p.total >= state.minMatches)
+    .sort((a, b) => a[1].name.localeCompare(b[1].name, 'es'));
+  const max = Math.max(1, ...rows.map((r) => Number(r[metric] ?? 0)));
+  const table = $('#compare-table');
+  const head = el('thead', {}, el('tr', {}, el('th', { scope: 'col' }, 'Jugador'),
+    buckets.map((b) => el('th', { scope: 'col' }, b))));
+  const body = el('tbody', {}, list.length ? list.map(([id, p]) => {
+    const values = buckets.map((b) => p.cells[b]?.[metric]).filter((v) => v != null).map(Number);
+    const best = values.length > 1 ? Math.max(...values) : null;
+    return el('tr', { class: 'clickable', ...onActivate(() => openPerson(id)) },
+      el('td', {}, playerCell(p.name)),
+      buckets.map((b) => {
+        const c = p.cells[b];
+        if (!c) return el('td', { class: 'muted' }, '—');
+        const v = c[metric];
+        return el('td', {}, el('span', { class: `bar-cell ${best != null && Number(v) === best ? 'best' : ''}` },
+          el('span', { class: 'muted small' }, `${c.matches} PJ`),
+          el('span', { class: 'bar', 'aria-hidden': 'true' }, el('i', { style: `width:${Math.max(0, Math.min(100, (Number(v ?? 0) / max) * 100))}%` })),
+          el('span', { class: 'val' }, metric.endsWith('pct') ? fmtPct(v) : fmtNum(v, METRIC[metric].digits))));
+      }));
+  }) : [emptyRow(buckets.length + 1)]);
+  table.replaceChildren(head, body);
+}
+
+// ---------------------------------------------------------------------------
+// Duplas
+// ---------------------------------------------------------------------------
+
+async function renderPairs(filters, requestId) {
+  const rows = filters.types.length ? await api.getPairStats(filters) : [];
+  if (requestId !== state.requestId) return;
+  const list = rows.filter((r) => r.matches >= state.minMatches)
+    .sort((a, b) => Number(b.win_pct) - Number(a.win_pct) || b.matches - a.matches);
+  const cols = ['Dupla', 'PJ juntos', 'V-E-D', '% Victorias', 'Goles a favor / PJ', 'Goles en contra / PJ', 'Dif. goles', 'G+A de la dupla'];
+  $('#pairs-table').replaceChildren(
+    el('thead', {}, el('tr', {}, cols.map((h, i) => el('th', { scope: 'col', class: i === 0 ? 'left' : null }, h)))),
+    el('tbody', {}, list.length ? list.map((r) => el('tr', {},
+      el('td', {}, el('span', { class: 'player-cell' }, avatar(r.person_a), el('span', { class: 'person' }, r.person_a), el('span', { class: 'muted' }, '+'), avatar(r.person_b), el('span', { class: 'person' }, r.person_b))),
+      el('td', {}, fmtNum(r.matches)),
+      el('td', {}, `${r.wins}-${r.draws}-${r.losses}`),
+      el('td', { class: 'sorted' }, fmtPct(r.win_pct)),
+      el('td', {}, fmtNum(r.goals_for_avg, 2)),
+      el('td', {}, fmtNum(r.goals_against_avg, 2)),
+      el('td', {}, fmtSigned(r.goal_diff)),
+      el('td', {}, fmtNum(r.combined_ga)))) : [emptyRow(cols.length, 'Sin duplas con ese mínimo de partidos.')]));
+}
+
+// ---------------------------------------------------------------------------
+// Por posición
+// ---------------------------------------------------------------------------
+
+async function renderPositions(filters, requestId) {
+  const rows = filters.types.length ? await api.getPositionStats(filters) : [];
+  if (requestId !== state.requestId) return;
+  const list = rows.filter((r) => r.player_position === state.position && r.matches >= state.minMatches)
+    .sort((a, b) => Number(b.avg_rating) - Number(a.avg_rating));
+  const isGk = state.position === 'goalkeeper';
+  const cols = ['#', 'Jugador', 'PJ', 'Calif.', 'G', 'A', 'G+A/90', 'Pases %', 'Entradas %', 'Vallas', 'MVP %', '% Vic.'];
+  $('#positions-table').replaceChildren(
+    el('thead', {}, el('tr', {}, cols.map((h, i) => el('th', { scope: 'col', class: i === 1 ? 'left' : i === 0 ? 'rank' : null }, h)))),
+    el('tbody', {}, list.length ? list.map((r, i) => el('tr', { class: 'clickable', ...onActivate(() => openPerson(r.person_id)) },
+      el('td', { class: 'rank' }, String(i + 1)),
+      el('td', { class: 'left' }, playerCell(r.person_name)),
+      el('td', {}, fmtNum(r.matches)),
+      el('td', { class: 'sorted' }, fmtNum(r.avg_rating, 2)),
+      el('td', {}, fmtNum(r.goals)), el('td', {}, fmtNum(r.assists)),
+      el('td', {}, fmtNum(r.ga_per90, 2)),
+      el('td', {}, fmtPct(r.pass_accuracy_pct)),
+      el('td', {}, fmtPct(r.tackle_success_pct)),
+      el('td', {}, isGk || r.clean_sheets ? fmtNum(r.clean_sheets) : '—'),
+      el('td', {}, fmtPct(r.mom_pct)),
+      el('td', {}, fmtPct(r.win_pct)))) : [emptyRow(cols.length, `Nadie jugó de ${POS_LABEL[state.position].toLowerCase()} con estos filtros.`)]));
 }
 
 // ---------------------------------------------------------------------------
@@ -233,37 +423,32 @@ function renderRanking() {
 // ---------------------------------------------------------------------------
 
 async function renderMatches(filters, requestId) {
-  const table = $('#matches-table');
-  const head = el('thead', {}, el('tr', {},
-    el('th', { scope: 'col' }, 'Fecha'), el('th', { scope: 'col', class: 'left' }, 'Tipo'),
-    el('th', { scope: 'col', class: 'left' }, 'Rival'),
-    el('th', { scope: 'col', title: 'skillRating del rival según EA' }, 'Nivel rival'),
-    el('th', { scope: 'col' }, 'Marcador'),
-    el('th', { scope: 'col' }, 'Resultado')));
-  const matches = filters.types.length ? await api.getMatches(filters) : [];
+  const [matches, flags] = filters.types.length
+    ? await Promise.all([api.getMatches(filters), api.getMatchFlags(filters)])
+    : [[], new Map()];
   if (requestId !== state.requestId) return;
-
+  const shown = filters.excludeIncomplete ? matches.filter((m) => !flags.get(m.match_id)?.incomplete) : matches;
+  const cols = ['Fecha', 'Tipo', 'Rival', 'Nivel rival', 'Jug.', 'Marcador', 'Res.'];
   const body = el('tbody');
-  if (!matches.length) {
-    body.append(el('tr', {}, el('td', { class: 'empty', colspan: 6 }, 'Sin partidos para estos filtros.')));
-  }
-  for (const m of matches) {
-    const row = el('tr', { class: 'clickable', tabindex: '0', 'aria-expanded': 'false' },
+  if (!shown.length) body.append(emptyRow(cols.length, 'Sin partidos para estos filtros.'));
+  for (const m of shown) {
+    const f = flags.get(m.match_id);
+    const row = el('tr', { class: 'clickable', 'aria-expanded': 'false' },
       el('td', { class: 'left' }, fmtDate(m.played_at)),
-      el('td', { class: 'left' }, TYPE_LABEL[m.match_type] ?? m.match_type),
-      el('td', { class: 'left' }, m.opponent_name ?? '—'),
+      el('td', { class: 'left' }, el('span', { class: 'badge' }, TYPE_LABEL[m.match_type] ?? m.match_type)),
+      el('td', { class: 'left' }, m.opponent_name ?? '—', f?.incomplete ? [' ', el('span', { class: 'badge warn', title: 'Abandono o menos del 90 % del tiempo' }, 'incompleto')] : null),
       el('td', {}, fmtNum(m.opponent_skill_rating)),
-      el('td', {}, `${m.goals_for} – ${m.goals_against}`),
+      el('td', { title: 'Jugadores del club en cancha' }, fmtNum(f?.team_size)),
+      el('td', {}, el('strong', {}, `${m.goals_for} – ${m.goals_against}`)),
       el('td', {}, resultBadge(m.outcome, m.winner_by_dnf)));
-    const toggle = () => toggleMatchPlayers(row, m.match_id);
-    row.addEventListener('click', toggle);
-    row.addEventListener('keydown', (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); toggle(); } });
+    const toggle = () => toggleMatchPlayers(row, m.match_id, cols.length);
+    Object.entries(onActivate(toggle)).forEach(([k, v]) => (k.startsWith('on') ? row.addEventListener(k.slice(2), v) : row.setAttribute(k, v)));
     body.append(row);
   }
-  table.replaceChildren(head, body);
+  $('#matches-table').replaceChildren(el('thead', {}, el('tr', {}, cols.map((h, i) => el('th', { scope: 'col', class: i < 3 ? 'left' : null }, h)))), body);
 }
 
-async function toggleMatchPlayers(row, matchId) {
+async function toggleMatchPlayers(row, matchId, colspan) {
   const next = row.nextElementSibling;
   if (next?.classList.contains('match-players')) {
     next.remove();
@@ -271,25 +456,23 @@ async function toggleMatchPlayers(row, matchId) {
     return;
   }
   row.setAttribute('aria-expanded', 'true');
-  const cell = el('td', { colspan: 6 }, el('span', { class: 'muted' }, 'Cargando jugadores…'));
+  const cell = el('td', { colspan }, el('span', { class: 'muted' }, 'Cargando jugadores…'));
   row.after(el('tr', { class: 'match-players' }, cell));
   try {
     const players = await api.getMatchPlayers(matchId);
-    const t = el('table', {},
+    cell.replaceChildren(el('table', { class: 'data' },
       el('thead', {}, el('tr', {},
-        ['Jugador', 'Pos.', 'Calif.', 'G', 'A', 'Tiros', 'Pases', 'Entradas', 'Atajadas', 'MVP']
-          .map((h, i) => el('th', { scope: 'col', class: i < 2 ? 'left' : null }, h)),
-        state.showExp ? ['Regates*', 'Intercep.*'].map((h) => el('th', { scope: 'col', class: 'exp' }, h)) : [])),
-      el('tbody', {}, players.map((p) => el('tr', {},
-        el('td', { class: 'left person' }, p.person_name),
-        el('td', { class: 'left' }, POS_LABEL[p.position] ?? p.position),
-        el('td', {}, fmtNum(p.rating, 1)),
+        ['Jugador', 'Pos.', 'Calif.', 'G', 'A', 'Tiros', 'Pases', 'Entradas', 'Atajadas', 'MVP'].map((h, i) => el('th', { scope: 'col', class: i < 2 ? 'left' : null }, h)),
+        state.showExp ? ['Regates*', 'Intercep.*'].map((h) => el('th', { scope: 'col', class: 'exp' }, h)) : null)),
+      el('tbody', {}, players.map((p) => el('tr', { class: 'clickable', ...onActivate(() => openPerson(p.person_id)) },
+        el('td', {}, playerCell(p.person_name, p.platform ? platformLabel(p.platform) : null)),
+        el('td', { class: 'left' }, posBadge(p.position)),
+        el('td', {}, el('strong', {}, fmtNum(p.rating, 1))),
         el('td', {}, fmtNum(p.goals)), el('td', {}, fmtNum(p.assists)), el('td', {}, fmtNum(p.shots)),
         el('td', {}, `${p.passes_made}/${p.pass_attempts}`),
         el('td', {}, fmtNum(p.tackles_made)), el('td', {}, fmtNum(p.saves)),
         el('td', {}, p.is_mom ? '★' : ''),
-        state.showExp ? [el('td', { class: 'exp' }, fmtNum(p.dribbles_exp)), el('td', { class: 'exp' }, fmtNum(p.interceptions_exp))] : []))));
-    cell.replaceChildren(t);
+        state.showExp ? [el('td', { class: 'exp' }, fmtNum(p.dribbles_exp)), el('td', { class: 'exp' }, fmtNum(p.interceptions_exp))] : null)))));
   } catch (err) {
     cell.replaceChildren(el('span', { class: 'muted' }, `Error: ${err.message}`));
   }
@@ -300,40 +483,61 @@ async function toggleMatchPlayers(row, matchId) {
 // ---------------------------------------------------------------------------
 
 async function renderMembers() {
-  const table = $('#members-table');
   if (!state.members) state.members = await api.getMembers();
-  const members = state.members;
   const cols = [
     ['Miembro', 'left'], ['Personaje', 'left'], ['Pos. favorita', 'left'], ['Media', null, 'Media (overall) del Pro'],
-    ['Δ media', null, 'Cambio de la media desde la primera foto'], ['PJ (EA)', null, 'Partidos según EA'],
-    ['G', null], ['A', null], ['% Vic.', null], ['% Pases', null], ['% Tiros', null, 'Tiros acertados según EA'],
-    ['MVP', null], ['Calif.', null], ['Capturados / EA', null, 'Partidos desde la primera foto: capturados por el colector / sumados por EA'],
+    ['Δ media', null, 'Cambio de la media desde la primera foto'], ['PJ (EA, histórico)', null, 'Partidos según EA, desde que está en el club'],
+    ['Goles (EA)', null], ['Asist. (EA)', null], ['% Vic.', null], ['% Pases', null], ['% Tiros', null, 'Tiros acertados según EA'],
+    ['MVP', null], ['Calif. (EA)', null],
+    ['Capturados / EA', null, 'Desde la primera foto: partidos capturados por el colector / partidos que EA le sumó'],
   ];
-  const head = el('thead', {}, el('tr', {}, cols.map(([h, cls, title]) => el('th', { scope: 'col', class: cls, title }, h))));
-  const body = el('tbody', {}, members.length ? members.map((m) => {
-    const delta = m.pro_overall != null && m.first_overall != null ? m.pro_overall - m.first_overall : null;
-    const ea = m.ea_games_since_first, got = m.captured_since_first;
-    const recon = ea == null ? '—' : `${got} / ${ea}`;
-    const missing = ea != null && got < ea;
-    return el('tr', {
-      class: m.person_id ? 'clickable' : null,
-      tabindex: m.person_id ? '0' : null,
-      onclick: m.person_id ? () => openPerson(m.person_id) : null,
-      onkeydown: m.person_id ? (e) => { if (e.key === 'Enter') openPerson(m.person_id); } : null,
-    },
-      el('td', { class: 'left person' }, m.member_name),
-      el('td', { class: 'left' }, m.pro_name ?? '—'),
-      el('td', { class: 'left' }, POS_LABEL[m.favorite_position] ?? m.favorite_position ?? '—'),
-      el('td', {}, el('strong', {}, fmtNum(m.pro_overall))),
-      el('td', {}, delta == null ? '—' : delta > 0 ? `+${delta}` : String(delta)),
-      el('td', {}, fmtNum(m.games_played)),
-      el('td', {}, fmtNum(m.goals)), el('td', {}, fmtNum(m.assists)),
-      el('td', {}, fmtNum(m.win_rate)), el('td', {}, fmtNum(m.pass_success_rate)), el('td', {}, fmtNum(m.shot_success_rate)),
-      el('td', {}, fmtNum(m.man_of_the_match)), el('td', {}, fmtNum(m.rating_avg, 1)),
-      el('td', { title: missing ? 'EA sumó más partidos de los que capturamos: posible partido perdido' : null },
-        missing ? el('span', {}, el('span', { class: 'warn-icon', 'aria-hidden': 'true' }, '⚠ '), recon) : recon));
-  }) : [el('tr', {}, el('td', { class: 'empty', colspan: cols.length }, 'Todavía no hay fotos de members/stats.'))]);
-  table.replaceChildren(head, body);
+  const rows = state.members;
+  $('#members-table').replaceChildren(
+    el('thead', {}, el('tr', {}, cols.map(([h, cls, title]) => el('th', { scope: 'col', class: cls, title }, h)))),
+    el('tbody', {}, rows.length ? rows.map((m) => {
+      const delta = m.pro_overall != null && m.first_overall != null ? m.pro_overall - m.first_overall : null;
+      const ea = m.ea_games_since_first, got = m.captured_since_first;
+      const missing = ea != null && got < ea;
+      return el('tr', m.person_id ? { class: 'clickable', ...onActivate(() => openPerson(m.person_id)) } : {},
+        el('td', {}, playerCell(m.member_name)),
+        el('td', { class: 'left' }, m.pro_name ?? '—'),
+        el('td', { class: 'left' }, posBadge(m.favorite_position) ?? '—'),
+        el('td', { class: 'sorted' }, fmtNum(m.pro_overall)),
+        el('td', {}, delta == null ? '—' : fmtSigned(delta)),
+        el('td', {}, fmtNum(m.games_played)),
+        el('td', {}, fmtNum(m.goals)), el('td', {}, fmtNum(m.assists)),
+        el('td', {}, fmtPct(m.win_rate, 0)), el('td', {}, fmtPct(m.pass_success_rate, 0)), el('td', {}, fmtPct(m.shot_success_rate, 0)),
+        el('td', {}, fmtNum(m.man_of_the_match)), el('td', {}, fmtNum(m.rating_avg, 1)),
+        el('td', { title: missing ? 'EA sumó más partidos de los que capturamos: posible partido perdido' : null },
+          missing ? [el('span', { class: 'warn-icon', 'aria-hidden': 'true' }, '⚠ '), `${got} / ${ea}`] : ea == null ? '—' : `${got} / ${ea}`));
+    }) : [emptyRow(cols.length, 'Todavía no hay fotos de members/stats.')]));
+}
+
+// ---------------------------------------------------------------------------
+// Club
+// ---------------------------------------------------------------------------
+
+function renderClub() {
+  const snaps = state.clubSnaps ?? [];
+  const chartBox = $('#club-chart');
+  chartBox.replaceChildren();
+  drawLineChart(chartBox, snaps.filter((s) => s.skill_rating != null), {
+    label: 'Nivel del club', value: (s) => s.skill_rating, date: (s) => `${s.snapshot_date}T12:00:00Z`,
+    min: 0, max: 5000, pad: 25, step: 50, emptyText: 'Sin fotos del club todavía.',
+    tooltip: (s) => [el('div', {}, el('strong', {}, `Nivel ${fmtNum(s.skill_rating)}`), s.current_division != null ? ` · ${s.current_division}ª división` : ''),
+      el('div', { class: 'muted' }, fmtDate(`${s.snapshot_date}T12:00:00Z`, false))],
+  });
+  const last = snaps.at(-1);
+  $('#club-season-card').replaceChildren(last
+    ? el('div', { class: 'season-grid' },
+        tile('Puntos', fmtNum(last.season_points)),
+        tile('División', last.current_division != null ? `${last.current_division}ª` : '—'),
+        tile('Partidos', fmtNum(last.season_games)),
+        tile('V-E-D', last.season_wins != null ? `${last.season_wins}-${last.season_draws}-${last.season_losses}` : '—'),
+        tile('Goles', last.season_goals != null ? `${last.season_goals} : ${last.season_goals_against}` : '—'),
+        tile('Ascensos', fmtNum(last.promotions)), tile('Descensos', fmtNum(last.relegations)),
+        tile('Histórico V-E-D', last.wins != null ? `${last.wins}-${last.draws}-${last.losses}` : '—'))
+    : el('p', { class: 'muted', style: 'padding: 0 18px 18px' }, 'Sin fotos del club todavía.'));
 }
 
 // ---------------------------------------------------------------------------
@@ -345,56 +549,76 @@ function openPerson(personId) {
   renderPerson(readFilters(), state.requestId).catch(showError);
 }
 
+function tile(label, value, cls = '') {
+  return el('div', { class: `tile ${cls}`.trim() }, el('div', { class: 'label' }, label), el('div', { class: 'value' }, value));
+}
+
 async function renderPerson(filters, requestId) {
   const box = $('#person-detail');
   if (state.personId == null) { box.hidden = true; return; }
   const summary = state.ranking.find((r) => r.person_id === state.personId);
+  const rec = state.records.get(state.personId);
   const matches = filters.types.length ? await api.getPersonMatches(state.personId, filters) : [];
   if (requestId !== state.requestId) return;
 
-  const close = el('button', { type: 'button', class: 'close', onclick: () => { state.personId = null; box.hidden = true; } }, 'Cerrar');
   const name = summary?.person_name ?? matches.at(-1)?.playername ?? 'Jugador';
+  const platforms = [...new Set(matches.map((m) => m.platform).filter(Boolean))];
+  const close = el('button', { type: 'button', class: 'close', onclick: () => { state.personId = null; box.hidden = true; } }, 'Cerrar');
 
-  const pct = (v) => (v != null ? `${fmtNum(v, 1)} %` : '—');
-  const tiles = el('div', { class: 'tiles' },
+  const basics = el('div', { class: 'tiles' },
     tile('Partidos', fmtNum(summary?.matches ?? matches.length)),
+    tile('V-E-D', summary ? `${summary.wins}-${summary.draws}-${summary.losses}` : '—'),
     tile('Goles + asist.', fmtNum(summary?.goal_contributions)),
     tile('Calif. media', fmtNum(summary?.avg_rating, 2)),
-    tile('MVP', pct(summary?.mom_pct)),
-    tile('Pases', pct(summary?.pass_accuracy_pct)),
-    state.showAdv ? [
-      tile('G+A por 90 min', fmtNum(summary?.ga_per90, 2)),
-      tile('Forma (últ. 5)', fmtNum(summary?.form_rating, 2)),
-      tile('Presencia', pct(summary?.attendance_pct)),
-      tile('Part. en goles', pct(summary?.goal_participation_pct)),
-      tile('Nivel rival medio', fmtNum(summary?.avg_opponent_skill)),
-    ] : []);
+    tile('MVP', fmtPct(summary?.mom_pct)),
+    tile('Pases', fmtPct(summary?.pass_accuracy_pct)));
+  const advanced = state.showAdv ? el('div', { class: 'tiles' },
+    tile('G+A por 90 min', fmtNum(summary?.ga_per90, 2)),
+    tile('Forma (últ. 5)', fmtNum(summary?.form_rating, 2)),
+    tile('Presencia', fmtPct(summary?.attendance_pct)),
+    tile('Part. en goles', fmtPct(summary?.goal_participation_pct)),
+    tile('Dif. de goles', fmtSigned(summary?.goal_diff)),
+    tile('Nivel rival medio', fmtNum(summary?.avg_opponent_skill))) : null;
+  const records = rec ? el('div', { class: 'tiles' },
+    tile('Más goles en un partido', fmtNum(rec.max_goals_match), 'record'),
+    tile('Hat-tricks', fmtNum(rec.hat_tricks), 'record'),
+    tile('Mejor calificación', fmtNum(rec.best_rating, 1), 'record'),
+    tile('Racha goleadora', `${fmtNum(rec.longest_scoring_streak)} PJ`, 'record'),
+    tile('Racha de MVP', `${fmtNum(rec.longest_mom_streak)} PJ`, 'record'),
+    tile('Mayor invicto', `${fmtNum(rec.longest_unbeaten_streak)} PJ`, 'record'),
+    tile('Invicto actual', `${fmtNum(rec.current_unbeaten_streak)} PJ`, 'record')) : null;
 
   const chartBox = el('div', { class: 'chart' }, el('h3', {}, 'Calificación por partido'));
   const overallBox = el('div', { class: 'chart' }, el('h3', {}, 'Media del Pro (EA), día a día'));
-  const table = el('div', { class: 'table-wrap' }, el('table', {},
+  const table = el('div', { class: 'table-wrap' }, el('table', { class: 'data' },
     el('thead', {}, el('tr', {}, ['Fecha', 'Tipo', 'Rival', 'Res.', 'Pos.', 'Calif.', 'G', 'A', 'MVP'].map((h, i) =>
       el('th', { scope: 'col', class: i < 3 || i === 4 ? 'left' : null }, h)),
-      state.showExp ? ['Regates*', 'Intercep.*', 'Recup.*', 'Pérdidas*'].map((h) => el('th', { scope: 'col', class: 'exp' }, h)) : [])),
+      state.showExp ? ['Regates*', 'Intercep.*', 'Recup.*', 'Pérdidas*'].map((h) => el('th', { scope: 'col', class: 'exp' }, h)) : null)),
     el('tbody', {}, matches.length
       ? [...matches].reverse().map((m) => el('tr', {},
           el('td', { class: 'left' }, fmtDate(m.played_at, false)),
-          el('td', { class: 'left' }, TYPE_LABEL[m.match_type] ?? m.match_type),
-          el('td', { class: 'left' }, m.opponent_name ?? '—'),
+          el('td', { class: 'left' }, el('span', { class: 'badge' }, TYPE_LABEL[m.match_type] ?? m.match_type)),
+          el('td', { class: 'left' }, m.opponent_name ?? '—', m.incomplete ? [' ', el('span', { class: 'badge warn' }, 'incompleto')] : null),
           el('td', {}, resultBadge(m.outcome), ` ${m.goals_for}–${m.goals_against}`),
-          el('td', { class: 'left' }, POS_LABEL[m.position] ?? m.position),
-          el('td', {}, fmtNum(m.rating, 1)),
+          el('td', { class: 'left' }, posBadge(m.position)),
+          el('td', {}, el('strong', {}, fmtNum(m.rating, 1))),
           el('td', {}, fmtNum(m.goals)), el('td', {}, fmtNum(m.assists)),
           el('td', {}, m.is_mom ? '★' : ''),
-          state.showExp
-            ? [m.dribbles_exp, m.interceptions_exp, m.possession_won_exp, m.possession_lost_exp].map((v) => el('td', { class: 'exp' }, fmtNum(v)))
-            : []))
-      : [el('tr', {}, el('td', { class: 'empty', colspan: state.showExp ? 13 : 9 }, 'Sin partidos para estos filtros.'))])));
+          state.showExp ? [m.dribbles_exp, m.interceptions_exp, m.possession_won_exp, m.possession_lost_exp].map((v) => el('td', { class: 'exp' }, fmtNum(v))) : null))
+      : [emptyRow(state.showExp ? 13 : 9, 'Sin partidos para estos filtros.')])));
 
-  box.replaceChildren(
-    el('div', { class: 'detail-head' }, el('div', {}, el('h2', {}, name),
-      el('p', { class: 'subtitle' }, POS_LABEL[summary?.main_position] ?? '')), close),
-    tiles, chartBox, overallBox, table);
+  // replaceChildren no aplana listas: se aplanan y se quitan los null aquí.
+  box.replaceChildren(...[
+    el('div', { class: 'detail-head' },
+      el('div', { class: 'detail-id' }, avatar(name, true), el('div', {}, el('h2', {}, name),
+        el('div', { class: 'badges' }, posBadge(summary?.main_position), platforms.map((p) => el('span', { class: 'badge' }, platformLabel(p)))))),
+      close),
+    el('p', { class: 'section-title' }, 'Resumen'), basics,
+    advanced ? [el('p', { class: 'section-title' }, 'Avanzadas'), advanced] : null,
+    records ? [el('p', { class: 'section-title' }, 'Récords y rachas'), records] : null,
+    el('div', { class: 'grid-2' }, chartBox, overallBox),
+    el('p', { class: 'section-title' }, 'Partidos'), table,
+  ].flat().filter(Boolean));
   box.hidden = false;
   drawLineChart(chartBox, matches.filter((m) => m.rating != null), {
     label: 'Calificación por partido', value: (p) => p.rating, date: (p) => p.played_at,
@@ -426,14 +650,15 @@ async function renderPerson(filters, requestId) {
   }
 }
 
-function tile(label, value) {
-  return el('div', { class: 'tile' }, el('div', { class: 'label' }, label), el('div', { class: 'value' }, value));
-}
+// ---------------------------------------------------------------------------
+// Gráfico de línea (una sola serie: sin leyenda, el título la nombra)
+// ---------------------------------------------------------------------------
+
+let chartSeq = 0;
 
 /**
- * Línea de una sola serie (sin leyenda: el título la nombra), con hover.
  * opts: value(p), date(p) ISO, tooltip(p) -> nodos, min/max (límites del eje),
- *       pad (margen del eje), step (cada cuánto una línea guía), label (accesible).
+ *       pad (margen), step (cada cuánto una línea guía), label (accesible).
  */
 function drawLineChart(container, points, opts) {
   if (points.length === 0) {
@@ -441,20 +666,29 @@ function drawLineChart(container, points, opts) {
     return;
   }
   const W = Math.max(280, container.clientWidth || 600), H = 200;
-  const pad = { l: 30, r: 12, t: 10, b: 24 };
+  const pad = { l: 38, r: 12, t: 10, b: 24 };
   const vals = points.map((p) => Number(opts.value(p)));
   const step = opts.step ?? 1;
-  const yMin = Math.max(opts.min, Math.floor((Math.min(...vals) - opts.pad) / step) * step);
-  const yMax = Math.min(opts.max, Math.ceil((Math.max(...vals) + opts.pad) / step) * step);
+  let yMin = Math.max(opts.min, Math.floor((Math.min(...vals) - opts.pad) / step) * step);
+  let yMax = Math.min(opts.max, Math.ceil((Math.max(...vals) + opts.pad) / step) * step);
+  if (yMax === yMin) { yMin -= step; yMax += step; }
+  const gridEvery = Math.max(step, Math.ceil((yMax - yMin) / 5 / step) * step);
   const x = (i) => points.length === 1 ? (pad.l + W - pad.r) / 2 : pad.l + (i * (W - pad.l - pad.r)) / (points.length - 1);
   const y = (v) => pad.t + ((yMax - v) * (H - pad.t - pad.b)) / (yMax - yMin || 1);
   const valueAt = (i) => Number(opts.value(points[i]));
+  const gid = `area-${++chartSeq}`;
 
   const chart = svg('svg', { viewBox: `0 0 ${W} ${H}`, role: 'img', 'aria-label': `${opts.label}: ${points.length} puntos, entre ${yMin} y ${yMax}` });
-  for (let v = yMin; v <= yMax; v += step) {
+  const defs = svg('defs');
+  const grad = svg('linearGradient', { id: gid, x1: 0, y1: 0, x2: 0, y2: 1 });
+  grad.append(svg('stop', { offset: '0%', 'stop-color': 'var(--series)', 'stop-opacity': 0.28 }),
+    svg('stop', { offset: '100%', 'stop-color': 'var(--series)', 'stop-opacity': 0 }));
+  defs.append(grad);
+  chart.append(defs);
+  for (let v = yMin; v <= yMax; v += gridEvery) {
     chart.append(svg('line', { class: 'gridline', x1: pad.l, x2: W - pad.r, y1: y(v), y2: y(v) }));
     const label = svg('text', { class: 'axis-label', x: pad.l - 6, y: y(v) + 4, 'text-anchor': 'end' });
-    label.textContent = String(v);
+    label.textContent = fmtNum(v);
     chart.append(label);
   }
   const first = svg('text', { class: 'axis-label', x: x(0), y: H - 6, 'text-anchor': points.length === 1 ? 'middle' : 'start' });
@@ -464,8 +698,10 @@ function drawLineChart(container, points, opts) {
     const last = svg('text', { class: 'axis-label', x: x(points.length - 1), y: H - 6, 'text-anchor': 'end' });
     last.textContent = fmtDate(opts.date(points.at(-1)), false);
     chart.append(last);
+    const line = points.map((_, i) => `${i ? 'L' : 'M'}${x(i)},${y(valueAt(i))}`).join('');
+    chart.append(svg('path', { d: `${line}L${x(points.length - 1)},${H - pad.b}L${x(0)},${H - pad.b}Z`, fill: `url(#${gid})` }));
+    chart.append(svg('path', { class: 'line', d: line }));
   }
-  chart.append(svg('path', { class: 'line', d: points.map((_, i) => `${i ? 'L' : 'M'}${x(i)},${y(valueAt(i))}`).join('') }));
   if (points.length <= 40) {
     points.forEach((_, i) => chart.append(svg('circle', { class: 'dot', cx: x(i), cy: y(valueAt(i)), r: 4 })));
   }
@@ -477,29 +713,25 @@ function drawLineChart(container, points, opts) {
   chart.append(cross, focus, hit);
   const tip = el('div', { class: 'tooltip', hidden: true });
 
-  const onMove = (ev) => {
+  hit.addEventListener('pointermove', (ev) => {
     const rect = chart.getBoundingClientRect();
     const px = ((ev.clientX - rect.left) / rect.width) * W;
     let i = 0;
     for (let k = 1; k < points.length; k++) if (Math.abs(x(k) - px) < Math.abs(x(i) - px)) i = k;
-    const p = points[i];
     for (const [node, attrs] of [[cross, { x1: x(i), x2: x(i) }], [focus, { cx: x(i), cy: y(valueAt(i)) }]]) {
       for (const [k, v] of Object.entries(attrs)) node.setAttribute(k, v);
       node.setAttribute('visibility', 'visible');
     }
-    tip.replaceChildren(...opts.tooltip(p));
+    tip.replaceChildren(...opts.tooltip(points[i]));
     tip.hidden = false;
     // Coordenadas relativas al contenedor (que también incluye el título).
     const box = container.getBoundingClientRect();
     const left = rect.left - box.left + (x(i) / W) * rect.width;
     const top = rect.top - box.top + (y(valueAt(i)) / H) * rect.height;
-    tip.style.left = `${Math.min(Math.max(left - 70, 0), box.width - 170)}px`;
+    tip.style.left = `${Math.min(Math.max(left - 70, 0), box.width - 180)}px`;
     tip.style.top = `${top + 14}px`;
-  };
-  const onLeave = () => { cross.setAttribute('visibility', 'hidden'); focus.setAttribute('visibility', 'hidden'); tip.hidden = true; };
-  hit.addEventListener('pointermove', onMove);
-  hit.addEventListener('pointerleave', onLeave);
-
+  });
+  hit.addEventListener('pointerleave', () => { cross.setAttribute('visibility', 'hidden'); focus.setAttribute('visibility', 'hidden'); tip.hidden = true; });
   container.append(chart, tip);
 }
 
@@ -512,11 +744,21 @@ async function refresh() {
   const filters = readFilters();
   showError(null);
   try {
-    state.ranking = filters.types.length ? await api.getPersonStats(filters) : [];
+    const [ranking, records] = filters.types.length
+      ? await Promise.all([api.getPersonStats(filters), api.getPersonRecords(filters)])
+      : [[], []];
     if (requestId !== state.requestId) return;
+    state.ranking = ranking;
+    state.records = new Map(records.map((r) => [r.person_id, r]));
     renderRanking();
+    renderHeader().catch(() => {});
     const tasks = [];
+    if (state.view === 'compare') tasks.push(renderCompare(filters, requestId));
+    if (state.view === 'pairs') tasks.push(renderPairs(filters, requestId));
+    if (state.view === 'positions') tasks.push(renderPositions(filters, requestId));
     if (state.view === 'matches') tasks.push(renderMatches(filters, requestId));
+    if (state.view === 'members') tasks.push(renderMembers());
+    if (state.view === 'club') renderClub();
     if (state.personId != null) tasks.push(renderPerson(filters, requestId));
     await Promise.all(tasks);
   } catch (err) {
@@ -527,43 +769,37 @@ async function refresh() {
 function setView(view) {
   state.view = view;
   for (const b of document.querySelectorAll('.tab')) b.setAttribute('aria-pressed', String(b.dataset.view === view));
-  $('#view-ranking').hidden = view !== 'ranking';
-  $('#view-matches').hidden = view !== 'matches';
-  $('#view-members').hidden = view !== 'members';
-  if (view === 'matches') refresh();
-  if (view === 'members') renderMembers().catch(showError);
+  for (const v of ['ranking', 'compare', 'pairs', 'positions', 'matches', 'members', 'club']) $(`#view-${v}`).hidden = v !== view;
+  refresh();
+}
+
+function bindSegmented(containerSel, attr, onPick) {
+  const buttons = document.querySelectorAll(`${containerSel} button`);
+  for (const b of buttons) {
+    b.addEventListener('click', () => {
+      for (const x of buttons) x.setAttribute('aria-pressed', String(x === b));
+      onPick(b.dataset[attr]);
+    });
+  }
 }
 
 async function init() {
-  for (const input of document.querySelectorAll('input[name="type"], #from, #to')) {
+  for (const input of document.querySelectorAll('input[name="type"], #from, #to, #exclude-incomplete')) {
     input.addEventListener('change', refresh);
   }
   $('#min-matches').addEventListener('input', (e) => {
     state.minMatches = Math.max(1, Number(e.target.value) || 1);
-    renderRanking();
-  });
-  for (const b of document.querySelectorAll('.tab')) b.addEventListener('click', () => setView(b.dataset.view));
-  $('#show-exp').addEventListener('change', (e) => {
-    state.showExp = e.target.checked;
-    if (!state.showExp && RANKING_COLUMNS.find((c) => c.key === state.sort.key)?.exp) {
-      state.sort = { key: 'avg_rating', dir: -1 };
-    }
-    refresh(); // vuelve a dibujar ranking, partidos abiertos y detalle
-  });
-  $('#show-adv').addEventListener('change', (e) => {
-    state.showAdv = e.target.checked;
-    if (!state.showAdv && RANKING_COLUMNS.find((c) => c.key === state.sort.key)?.adv) {
-      state.sort = { key: 'avg_rating', dir: -1 };
-    }
     refresh();
   });
-
-  api.getClub().then((club) => {
-    if (!club) return;
-    $('#club-name').textContent = club.name;
-    $('#club-season').textContent = `EA FC 27 · Clubes · temporada ${club.season}`;
-    document.title = `${club.name} · Stats EA FC 27`;
-  }).catch(() => {});
+  for (const b of document.querySelectorAll('.tab')) b.addEventListener('click', () => setView(b.dataset.view));
+  const resetSortIf = (flag) => {
+    if (RANKING_COLUMNS.find((c) => c.key === state.sort.key)?.[flag]) state.sort = { key: 'avg_rating', dir: -1 };
+  };
+  $('#show-exp').addEventListener('change', (e) => { state.showExp = e.target.checked; if (!state.showExp) resetSortIf('exp'); refresh(); });
+  $('#show-adv').addEventListener('change', (e) => { state.showAdv = e.target.checked; if (!state.showAdv) resetSortIf('adv'); refresh(); });
+  bindSegmented('#split-buttons', 'split', (v) => { state.split = v; refresh(); });
+  bindSegmented('#split-metric', 'metric', (v) => { state.splitMetric = v; refresh(); });
+  bindSegmented('#position-buttons', 'pos', (v) => { state.position = v; refresh(); });
 
   renderStatus();
   setInterval(renderStatus, 60_000);
