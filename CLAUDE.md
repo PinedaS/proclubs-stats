@@ -218,6 +218,8 @@ No hay API oficial. Se usan los endpoints públicos que lee la web de Clubes de 
 
    - **Conclusión:** los códigos dan aproximaciones útiles, no valores exactos. Si se muestran, marcarlos como **experimentales**. El JSON crudo ya se guarda, así que se pueden calcular después, también para partidos ya capturados.
 5. **Conciliación:** comparar la suma de los partidos guardados contra `members/stats` para detectar partidos perdidos.
+6. **Respaldos.** Verificado el 2026-11-11: el plan Free de Supabase **no incluye respaldos automáticos accesibles**, según su página de precios y su documentación. Los partidos no se pueden recuperar de EA, así que conviene una exportación periódica gratuita, por ejemplo con un workflow de GitHub Actions.
+7. **Catálogo de datos de EA:** ver `docs/datos-ea.md`. Recoge los endpoints y campos verificados, los no usados y los que EA no expone.
 
 ## 8. Orden sugerido de trabajo
 
