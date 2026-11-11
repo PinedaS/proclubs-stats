@@ -30,6 +30,7 @@ const state = {
   position: 'forward',
   roleGroup: 'position',
   roleMode: 'relative', // 'relative' (índices vs. el rol) | 'real' (valores por posición)
+  h2h: { a: null, b: null }, // Cara a cara: person_id de cada lado
   roleSort: { key: 'rating_idx', dir: -1 },
   relative: new Map(),
   clubs: [],
@@ -371,7 +372,42 @@ function renderRanking() {
 // Por rol: rendimiento relativo al promedio del club en cada posición/arquetipo
 // ---------------------------------------------------------------------------
 
-const roleLabel = (group, key) => (group === 'archetype' ? (key === '?' ? 'Arquetipo ?' : `Arquetipo #${key}`) : POS_LABEL[key] ?? key);
+/**
+ * archetypeid -> nombre (FC 27). EA solo manda el número; este mapeo es de la
+ * comunidad (Interactive-63/eafc-pro-clubs-api-research, issue #5, nov. 2026),
+ * no oficial. sure=false: deducido por estadísticas o por un solo testimonio.
+ * Contrastado con nuestros datos el 2026-11-11: 4, 5 y 8 cuadran con las
+ * posiciones jugadas; 13 aparece sobre todo en el medio (la comunidad: 95 % DEL).
+ */
+const ARCHETYPES = {
+  1: { name: 'Shot Stopper', sure: false },
+  2: { name: 'Sweeper Keeper', sure: false },
+  3: { name: 'Progressor', sure: true },
+  4: { name: 'Boss', sure: false },
+  5: { name: 'Disruptor', sure: true },
+  6: { name: 'Marauder', sure: true },
+  7: { name: 'Recycler', sure: false },
+  8: { name: 'Maestro', sure: true },
+  9: { name: 'Creator', sure: false },
+  10: { name: 'Spark', sure: true },
+  11: { name: 'Magician', sure: true },
+  12: { name: 'Finisher', sure: true },
+  13: { name: 'Target Man', sure: true },
+};
+const ARCHETYPE_SOURCE = 'Nombre según la comunidad (EA solo da el número)';
+
+/** Nombre del arquetipo; con "?" si la comunidad lo dedujo sin confirmarlo. */
+function archetypeName(id) {
+  const a = ARCHETYPES[id];
+  if (!a) return id === '?' || id == null ? 'Arquetipo ?' : `Arquetipo #${id}`;
+  return a.sure ? a.name : `${a.name}?`;
+}
+const archetypeTitle = (id) => {
+  const a = ARCHETYPES[id];
+  return a ? `${ARCHETYPE_SOURCE}: n.º ${id}${a.sure ? ', confirmado por jugadores' : ', sin confirmar'}` : `Número ${id}: sin nombre conocido`;
+};
+
+const roleLabel = (group, key) => (group === 'archetype' ? archetypeName(key) : POS_LABEL[key] ?? key);
 
 /** Índice relativo: valor + flecha y color. 100 = promedio del rol. */
 function idxCell(v, extraClass = '') {
@@ -426,7 +462,7 @@ async function renderRoles(filters, requestId) {
       el('td', { class: 'left' }, playerCell(r.person_name)),
       el('td', { class: 'left' }, group === 'position'
         ? roles.map((p) => [posBadge(p), ' '])
-        : roles.map((a) => [el('span', { class: 'badge' }, roleLabel(group, a)), ' '])),
+        : roles.map((a) => [el('span', { class: 'badge', title: archetypeTitle(a) }, roleLabel(group, a)), ' '])),
       el('td', {}, fmtNum(r.matches)), el('td', {}, fmtNum(r.minutes)),
       cols.map((c) => idxCell(r[c.key], [c.exp ? 'exp' : '', c.key === key ? 'sorted' : ''].join(' ').trim())));
     const toggle = () => {
@@ -451,6 +487,183 @@ async function renderRoles(filters, requestId) {
     body.append(row);
   });
   $('#roles-table').replaceChildren(el('thead', {}, head), body);
+}
+
+// ---------------------------------------------------------------------------
+// Cara a cara: dos jugadores, dato por dato, con quién es mejor en cada uno.
+// Solo se juzgan tasas (por partido, por 90 min, %), nunca totales: así no gana
+// quien jugó más. Los índices relativos al rol van primero (justos si rotan).
+// ---------------------------------------------------------------------------
+
+const TIE_THRESHOLD = 0.03; // diferencia relativa menor al 3 % = empate
+const per90 = (r, key) => (r[key] == null || !Number(r.minutes_played) ? null : (Number(r[key]) * 90) / Number(r.minutes_played));
+const perMatch = (r, key) => (r[key] == null || !r.matches ? null : Number(r[key]) / r.matches);
+
+/** better: 'high' (más es mejor), 'low' (menos es mejor) o null (solo contexto). */
+const H2H_GROUPS = [
+  {
+    title: 'Relativo a su rol (100 = promedio de su posición)',
+    source: 'relative',
+    rows: [
+      { label: 'Calificación vs. su rol', key: 'rating_idx', better: 'high' },
+      { label: 'G+A/90 vs. su rol', key: 'ga90_idx', better: 'high' },
+      { label: 'Pases % vs. su rol', key: 'pass_idx', better: 'high' },
+      { label: 'Entradas/90 vs. su rol', key: 'tackles90_idx', better: 'high' },
+      { label: '% Atajadas vs. porteros', key: 'save_idx', better: 'high' },
+      { label: 'Intercepciones/90 vs. su rol*', key: 'interceptions90_idx_exp', better: 'high', exp: true },
+    ],
+  },
+  {
+    title: 'Rendimiento',
+    rows: [
+      { label: 'Calificación media', key: 'avg_rating', better: 'high', digits: 2 },
+      { label: '% MVP', key: 'mom_pct', better: 'high', digits: 1, pct: true },
+      { label: '% Victorias', value: (r) => (r.matches ? (100 * r.wins) / r.matches : null), better: 'high', digits: 0, pct: true },
+      { label: 'Goles por 90 min', key: 'goals_per90', better: 'high', digits: 2 },
+      { label: 'Asistencias por 90 min', key: 'assists_per90', better: 'high', digits: 2 },
+      { label: 'G+A por 90 min', key: 'ga_per90', better: 'high', digits: 2 },
+      { label: 'Conversión de tiros', key: 'shot_conversion_pct', better: 'high', digits: 1, pct: true },
+      { label: 'Participación en goles', key: 'goal_participation_pct', better: 'high', digits: 1, pct: true },
+      { label: 'Precisión de pase', key: 'pass_accuracy_pct', better: 'high', digits: 1, pct: true },
+      { label: 'Entradas ganadas %', key: 'tackle_success_pct', better: 'high', digits: 1, pct: true },
+      { label: 'Entradas ganadas por 90', value: (r) => per90(r, 'tackles_made'), better: 'high', digits: 2 },
+      { label: 'Atajadas %', key: 'save_pct', better: 'high', digits: 1, pct: true },
+      { label: 'Dif. de goles por partido', value: (r) => perMatch(r, 'goal_diff'), better: 'high', digits: 2, signed: true },
+      { label: 'Forma (últimos 5)', key: 'form_rating', better: 'high', digits: 2 },
+      { label: 'Regularidad (variación)', key: 'rating_stddev', better: 'low', digits: 2, hint: 'Más bajo = más regular', winLabel: 'Más regular' },
+      { label: 'Rojas por partido', value: (r) => perMatch(r, 'red_cards'), better: 'low', digits: 2, winLabel: 'Menos rojas' },
+    ],
+  },
+  {
+    title: 'Experimentales* (por 90 min)',
+    exp: true,
+    rows: [
+      { label: 'Regates', value: (r) => per90(r, 'dribbles_exp'), better: 'high', digits: 2 },
+      { label: 'Intercepciones', value: (r) => per90(r, 'interceptions_exp'), better: 'high', digits: 2 },
+      { label: 'Posesiones ganadas', value: (r) => per90(r, 'possession_won_exp'), better: 'high', digits: 2 },
+      { label: 'Posesiones perdidas', value: (r) => per90(r, 'possession_lost_exp'), better: 'low', digits: 2 },
+      { label: 'Duelos aéreos ganados', value: (r) => per90(r, 'aerial_duels_won_exp'), better: 'high', digits: 2 },
+      { label: 'Pases filtrados', value: (r) => per90(r, 'through_passes_exp'), better: 'high', digits: 2 },
+      { label: 'Pases hacia adelante %', key: 'forward_pass_pct_exp', better: 'high', digits: 1, pct: true },
+      { label: 'Centros completados %', key: 'cross_pct_exp', better: 'high', digits: 1, pct: true },
+      { label: 'Tiros a puerta %', key: 'shot_accuracy_exp_pct', better: 'high', digits: 1, pct: true },
+      { label: 'Mejores decisiones %', key: 'best_option_pct_exp', better: 'high', digits: 1, pct: true },
+      { label: 'En posición %', key: 'in_position_pct_exp', better: 'high', digits: 1, pct: true },
+      { label: 'Faltas cometidas', value: (r) => per90(r, 'fouls_exp'), better: 'low', digits: 2 },
+    ],
+  },
+  {
+    title: 'Contexto (no se juzga)',
+    rows: [
+      { label: 'Partidos', key: 'matches', better: null },
+      { label: 'Minutos', key: 'minutes_played', better: null },
+      { label: 'Presencia', key: 'attendance_pct', better: null, digits: 1, pct: true },
+      { label: 'Nivel medio del rival', key: 'avg_opponent_skill', better: null },
+      { label: 'Media del Pro (EA)', key: 'pro_overall', better: null },
+    ],
+  },
+];
+
+/** 'a', 'b', 'tie' o null (sin dato o no se juzga). */
+function h2hWinner(va, vb, better) {
+  if (!better || va == null || vb == null || Number.isNaN(va) || Number.isNaN(vb)) return null;
+  const scale = Math.max(Math.abs(va), Math.abs(vb));
+  if (scale === 0 || Math.abs(va - vb) / scale < TIE_THRESHOLD) return 'tie';
+  return (va > vb) === (better === 'high') ? 'a' : 'b';
+}
+
+function fillH2hPickers() {
+  const people = state.ranking.filter((r) => r.matches >= state.minMatches)
+    .sort((x, y) => x.person_name.localeCompare(y.person_name, 'es'));
+  const ids = people.map((p) => p.person_id);
+  const byMatches = [...people].sort((x, y) => y.matches - x.matches);
+  if (!ids.includes(state.h2h.a)) state.h2h.a = byMatches[0]?.person_id ?? null;
+  if (!ids.includes(state.h2h.b) || state.h2h.b === state.h2h.a) state.h2h.b = byMatches.find((p) => p.person_id !== state.h2h.a)?.person_id ?? null;
+  for (const [sel, key] of [['#h2h-a', 'a'], ['#h2h-b', 'b']]) {
+    $(sel).replaceChildren(...people.map((p) => el('option', { value: p.person_id }, `${p.person_name} (${p.matches} PJ)`)));
+    $(sel).value = String(state.h2h[key] ?? '');
+  }
+}
+
+function renderH2h() {
+  fillH2hPickers();
+  const box = $('#h2h-body');
+  const A = state.ranking.find((r) => r.person_id === state.h2h.a);
+  const B = state.ranking.find((r) => r.person_id === state.h2h.b);
+  if (!A || !B || A === B) {
+    box.replaceChildren(el('p', { class: 'muted', style: 'padding: 0 18px 18px' }, 'Hacen falta al menos dos jugadores con el mínimo de partidos de los filtros.'));
+    return;
+  }
+  const relA = state.relative.get(A.person_id) ?? {}, relB = state.relative.get(B.person_id) ?? {};
+  const score = { a: 0, b: 0, tie: 0 };
+  const groups = H2H_GROUPS.filter((g) => state.showExp || !g.exp).map((g) => {
+    const rows = g.rows.filter((m) => state.showExp || !m.exp).map((m) => {
+      const get = (r, rel) => {
+        const v = m.value ? m.value(r) : (g.source === 'relative' ? rel : r)[m.key];
+        return v == null ? null : Number(v);
+      };
+      const va = get(A, relA), vb = get(B, relB);
+      if (va == null && vb == null) return null;
+      const w = h2hWinner(va, vb, m.better);
+      if (w) score[w]++;
+      const fmt = (v) => (v == null ? '—' : m.signed ? (v > 0 ? '+' : '') + fmtNum(v, m.digits ?? 0) : m.pct ? fmtPct(v, m.digits ?? 0) : fmtNum(v, g.source === 'relative' ? 0 : m.digits ?? 0));
+      // Largo de cada barra: |valor| / el mayor de los dos (la fila tiene su propia escala).
+      const max = Math.max(Math.abs(va ?? 0), Math.abs(vb ?? 0));
+      const len = (v) => (v == null || max === 0 ? 0 : (100 * Math.abs(v)) / max);
+      const who = w === 'a' ? A.person_name : w === 'b' ? B.person_name : null;
+      const tip = `${m.label}: ${A.person_name} ${fmt(va)} · ${B.person_name} ${fmt(vb)}`
+        + (m.better === 'low' ? ' (menos es mejor)' : '')
+        + (!m.better ? '' : w === 'tie' ? ' · empate' : who ? ` · mejor: ${who}` : '');
+      return el('div', { class: `h2h-row ${w ? `w-${w}` : 'neutral'}`, title: tip },
+        el('div', { class: 'h2h-label' }, m.label, m.better === 'low' ? ' ↓' : ''),
+        el('div', { class: 'h2h-bars' },
+          el('span', { class: 'h2h-val a' }, fmt(va)),
+          el('div', { class: 'h2h-track a', 'aria-hidden': 'true' }, el('i', { style: `width:${len(va)}%` })),
+          el('div', { class: 'h2h-track b', 'aria-hidden': 'true' }, el('i', { style: `width:${len(vb)}%` })),
+          el('span', { class: 'h2h-val b' }, fmt(vb))));
+    }).filter(Boolean);
+    return rows.length ? [el('p', { class: 'section-title' }, g.title), el('div', { class: 'h2h-group' }, rows)] : null;
+  }).flat().filter(Boolean);
+
+  const roles = (rel) => (rel.roles ?? '').split(', ').filter(Boolean);
+  const differentRoles = A.main_position !== B.main_position;
+  const lowSample = A.matches < MIN_FIT_MATCHES || B.matches < MIN_FIT_MATCHES;
+  const card = (r, rel, cls) => el('div', { class: `h2h-player ${cls}` }, avatar(r.person_name, true),
+    el('div', {}, el('div', { class: 'name' }, el('span', { class: 'swatch', 'aria-hidden': 'true' }), ' ', r.person_name),
+      el('div', { class: 'badges' }, roles(rel).length ? roles(rel).map(posBadge) : posBadge(r.main_position)),
+      el('div', { class: 'muted small' }, `${r.matches} PJ · ${fmtNum(r.minutes_played)} min`)));
+  // Marcador visual: proporción de datos que gana cada uno (empates en gris al centro).
+  const judged = score.a + score.b + score.tie;
+  const seg = (n, cls, label) => (n ? el('span', { class: cls, style: `flex:${n}`, title: label }) : null);
+  const scoreboard = judged ? el('div', { class: 'h2h-score', role: 'img',
+    'aria-label': `${A.person_name} es mejor en ${score.a} datos, ${B.person_name} en ${score.b}, ${score.tie} empates` },
+    el('div', { class: 'num a' }, String(score.a), el('small', {}, 'datos')),
+    el('div', { class: 'h2h-score-bar' },
+      seg(score.a, 'sa', `${A.person_name}: mejor en ${score.a}`),
+      seg(score.tie, 'st', `Empates: ${score.tie}`),
+      seg(score.b, 'sb', `${B.person_name}: mejor en ${score.b}`)),
+    el('div', { class: 'num b' }, String(score.b), el('small', {}, 'datos'))) : null;
+
+  box.replaceChildren(...[
+    el('div', { class: 'h2h-heads' }, card(A, relA, 'a'), el('div', { class: 'vs' }, 'vs'), card(B, relB, 'b')),
+    scoreboard,
+    differentRoles ? el('p', { class: 'h2h-note' }, `Juegan en posiciones distintas (${POS_LABEL[A.main_position] ?? '—'} y ${POS_LABEL[B.main_position] ?? '—'}): lo más justo es mirar primero "Relativo a su rol".`) : null,
+    lowSample ? el('p', { class: 'h2h-note' }, `Alguno tiene menos de ${MIN_FIT_MATCHES} partidos: las diferencias pueden ser casualidad.`) : null,
+    ...groups,
+  ].filter(Boolean));
+  // Enlace para compartir la comparación (?a=…&b=…).
+  const url = new URL(location.href);
+  url.searchParams.set('a', String(A.person_id));
+  url.searchParams.set('b', String(B.person_id));
+  history.replaceState(null, '', url);
+}
+
+/** Abre Cara a cara con este jugador como A (botón del detalle). */
+function compareWith(personId) {
+  state.h2h.a = personId;
+  if (state.h2h.b === personId) state.h2h.b = null;
+  setView('h2h');
+  window.scrollTo({ top: 0, behavior: 'smooth' });
 }
 
 // ---------------------------------------------------------------------------
@@ -885,7 +1098,9 @@ async function renderPerson(filters, requestId) {
         el('div', { class: 'badges' }, posBadge(summary?.main_position), platforms.map((p) => el('span', { class: 'badge' }, platformLabel(p))),
           summary?.pro_overall != null ? el('span', { class: 'badge', title: 'Media (overall) del Pro según EA' }, `Media ${summary.pro_overall}`) : null,
           summary?.pro_name ? el('span', { class: 'badge', title: 'Nombre del personaje' }, summary.pro_name) : null))),
-      close),
+      el('div', { class: 'detail-actions' },
+        el('button', { type: 'button', class: 'close', onclick: () => compareWith(state.personId) }, 'Comparar con…'),
+        close)),
     el('p', { class: 'section-title' }, 'Resumen'), basics,
     relTiles ? [el('p', { class: 'section-title' }, 'Relativo a su rol (100 = promedio de su posición)'), relTiles] : null,
     fit ? [el('p', { class: 'section-title' }, 'Posición recomendada'), fit] : null,
@@ -1044,6 +1259,7 @@ async function refresh() {
       $('#positions-card').hidden = !real;
       tasks.push(real ? renderPositions(filters, requestId) : renderRoles(filters, requestId));
     }
+    if (state.view === 'h2h') renderH2h();
     if (state.view === 'compare') tasks.push(renderCompare(filters, requestId));
     if (state.view === 'pairs') tasks.push(renderPairs(filters, requestId));
     if (state.view === 'matches') tasks.push(renderMatches(filters, requestId));
@@ -1059,7 +1275,15 @@ async function refresh() {
 function setView(view) {
   state.view = view;
   for (const b of document.querySelectorAll('.tab')) b.setAttribute('aria-pressed', String(b.dataset.view === view));
-  for (const v of ['ranking', 'roles', 'compare', 'pairs', 'matches', 'members', 'club']) $(`#view-${v}`).hidden = v !== view;
+  if (view !== 'h2h') {
+    // Los parámetros a/b solo tienen sentido en Cara a cara.
+    const url = new URL(location.href);
+    if (url.searchParams.has('a') || url.searchParams.has('b')) {
+      url.searchParams.delete('a'); url.searchParams.delete('b');
+      history.replaceState(null, '', url);
+    }
+  }
+  for (const v of ['ranking', 'roles', 'h2h', 'compare', 'pairs', 'matches', 'members', 'club']) $(`#view-${v}`).hidden = v !== view;
   refresh();
 }
 
@@ -1179,6 +1403,13 @@ async function init() {
   $('#show-adv').addEventListener('change', (e) => { state.showAdv = e.target.checked; prefs.save({ showAdv: state.showAdv }); if (!state.showAdv) resetSortIf('adv'); refresh(); });
   bindSegmented('#role-group-buttons', 'group', (v) => { state.roleGroup = v; refresh(); });
   bindSegmented('#role-mode-buttons', 'mode', (v) => { state.roleMode = v; refresh(); });
+  $('#h2h-a').addEventListener('change', (e) => { state.h2h.a = Number(e.target.value); renderH2h(); });
+  $('#h2h-b').addEventListener('change', (e) => { state.h2h.b = Number(e.target.value); renderH2h(); });
+  $('#h2h-swap').addEventListener('click', () => { state.h2h = { a: state.h2h.b, b: state.h2h.a }; renderH2h(); });
+  // Enlace compartido de Cara a cara: …/?a=ID&b=ID
+  const qs = new URLSearchParams(location.search);
+  const startH2h = qs.has('a') && qs.has('b');
+  if (startH2h) state.h2h = { a: Number(qs.get('a')), b: Number(qs.get('b')) };
   bindSegmented('#split-buttons', 'split', (v) => { state.split = v; refresh(); });
   bindSegmented('#split-metric', 'metric', (v) => { state.splitMetric = v; refresh(); });
   bindSegmented('#position-buttons', 'pos', (v) => { state.position = v; refresh(); });
@@ -1186,6 +1417,7 @@ async function init() {
   renderStatus();
   setInterval(renderStatus, 60_000);
   if (location.hash === '#verificacion') route();
+  else if (startH2h) setView('h2h');
   else await refresh();
 }
 

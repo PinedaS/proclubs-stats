@@ -72,6 +72,15 @@ API no oficial de EA ──► Colector (GitHub Actions, cada 30 min) ──► 
        - Del PR #2 solo se aplicó `zod` 4.6.7.
        - `@types/node` queda en 22.x mientras el colector use Node 22: `dependabot.yml` ignora sus saltos mayores.
      - **Cambio de club y de temporada:** paso a paso en `docs/cambio-de-temporada.md`.
+     - **Cara a cara** (pestaña nueva): compara dos jugadores dato por dato, de forma **visual**, sin texto de "es mejor en…" (pedido del usuario).
+       - **Filas:** barras enfrentadas desde el centro, azul (A) y naranja (B). La paleta pasó `validate_palette.js` en los dos modos. Quien gana el dato lleva su barra en color fuerte y la del otro va atenuada.
+       - **Marcador arriba:** datos ganados, empates y datos perdidos.
+       - **Qué se juzga:** solo tasas (por partido, por 90 min, %), nunca totales. Primero van los índices relativos al rol. Las diferencias menores al 3 % son empate.
+       - El enlace `?a=ID&b=ID` sirve para compartir, y el detalle de cada jugador tiene un botón "Comparar con…".
+     - **Nombres de arquetipos:** mapeo de la comunidad (Interactive-63, issue #5, nov. 2026), no oficial.
+       - Los deducidos sin confirmar llevan "?": 1 y 2 (porteros), 4 (Boss), 7 y 9.
+       - Contrastado con nuestros datos: 4, 5 y 8 cuadran con las posiciones jugadas. El 13 (Target Man) aparece sobre todo en el medio, aunque la comunidad lo ve un 95 % de las veces como delantero.
+       - El número 30 aparece en porteros y no tiene nombre conocido.
    - **Cambios del 2026-11-11 (tarde):**
      - La pestaña "Por posición" se unió a "Por rol", con un selector "Relativo al rol / Valores reales por posición", porque era redundante.
      - Se eliminó `ea-probe.yml`.

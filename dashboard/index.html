@@ -46,6 +46,7 @@
     <div class="tabs-inner">
       <button type="button" class="tab" data-view="ranking" aria-pressed="true">Ranking</button>
       <button type="button" class="tab" data-view="roles" aria-pressed="false">Por rol</button>
+      <button type="button" class="tab" data-view="h2h" aria-pressed="false">Cara a cara</button>
       <button type="button" class="tab" data-view="compare" aria-pressed="false">Comparar</button>
       <button type="button" class="tab" data-view="pairs" aria-pressed="false">Duplas</button>
       <button type="button" class="tab" data-view="matches" aria-pressed="false">Partidos</button>
@@ -125,6 +126,21 @@
           <p class="muted small">Cada jugador aparece en las posiciones que jugó, con sus números solo en esa posición (sin comparar con el promedio).</p>
         </div>
         <div class="table-wrap"><table id="positions-table" class="data"></table></div>
+      </div>
+    </section>
+
+    <section id="view-h2h" class="view" hidden>
+      <div class="card">
+        <div class="card-head">
+          <h2>Cara a cara</h2>
+          <div class="h2h-pickers">
+            <label class="field">Jugador A <select id="h2h-a"></select></label>
+            <button type="button" class="swap" id="h2h-swap" title="Intercambiar" aria-label="Intercambiar jugadores">⇄</button>
+            <label class="field">Jugador B <select id="h2h-b"></select></label>
+          </div>
+          <p class="muted small">La barra de color fuerte es la de quien gana ese dato. <strong>↓</strong> = menos es mejor. Las diferencias menores al 3 % son empate. Toca o pasa el cursor sobre un dato para ver el detalle.</p>
+        </div>
+        <div id="h2h-body" class="h2h-body"></div>
       </div>
     </section>
 
@@ -213,6 +229,12 @@
 
       <h3>Índice 100 (Por rol)</h3>
       <p>Compara a cada uno con el <strong>promedio del club en su misma posición</strong> o arquetipo. <strong>100 = promedio</strong>; 120 = 20 % mejor; 80 = 20 % peor. Así un defensa no queda abajo por marcar pocos goles. Si alguien jugó varias posiciones, cuenta cada una según los minutos. Con el selector <em>Valores reales por posición</em> ves los números sin comparar.</p>
+
+      <h3>Arquetipos</h3>
+      <p>EA solo da un número por arquetipo; los nombres (Maestro, Boss, Target Man…) vienen de una investigación de la comunidad. Los que llevan <strong>?</strong> fueron deducidos por estadísticas y no están confirmados.</p>
+
+      <h3>Cara a cara</h3>
+      <p>Elige dos jugadores (azul y naranja) y ves, dato por dato, quién es mejor: su barra sale en color fuerte y la del otro, atenuada. Arriba, un marcador muestra cuántos datos gana cada uno. Primero van los índices relativos a su rol, que son justos aunque jueguen en posiciones distintas; después, el rendimiento por partido o por 90 minutos, para no favorecer a quien jugó más. Diferencias menores al 3 % cuentan como empate. El enlace de la página sirve para compartir esa comparación.</p>
 
       <h3>Posición recomendada (detalle del jugador)</h3>
       <p><strong>Índice:</strong> su calificación en cada posición que jugó frente al promedio del club ahí (solo con 3 o más partidos). <strong>Perfil:</strong> cuánto de su forma de jugar (goles, asistencias, tiros, pases, entradas…) se parece a cada posición, comparado con los demás jugadores; suma 100 %. Es una pista, no una orden.</p>
