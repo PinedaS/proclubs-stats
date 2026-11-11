@@ -136,6 +136,24 @@ select pg_temp.assert_eq('filtro por fecha (p_to exclusivo)',
   (select count(*) from public.person_stats(p_to => '2026-11-02T00:00:00Z')), 2::bigint);
 select pg_temp.assert_eq('filtro por fecha excluye todo',
   (select count(*) from public.person_stats(p_to => '2026-11-01T00:00:00Z')), 0::bigint);
+-- Métricas calculadas (migración 006). Hecodes98: m1 1 gol en 5400 s (2-1), m2 0 goles en 5400 s (0-1).
+select pg_temp.assert_eq('G por 90 min',
+  (select goals_per90 from public.v_person_totals where person_name = 'Hecodes98'), 0.50::numeric);
+select pg_temp.assert_eq('goles del equipo en sus partidos',
+  (select team_goals from public.v_person_totals where person_name = 'Hecodes98'), 2::bigint);
+select pg_temp.assert_eq('participación en goles (G+A / goles del equipo)',
+  (select goal_participation_pct from public.v_person_totals where person_name = 'Hecodes98'), 100.0::numeric);
+select pg_temp.assert_eq('diferencia de goles con él en cancha',
+  (select goal_diff from public.v_person_totals where person_name = 'Hecodes98'), 0::bigint);
+select pg_temp.assert_eq('presencia (partidos del club jugados)',
+  (select attendance_pct from public.v_person_totals where person_name = 'Hecodes98'), 100.0::numeric);
+select pg_temp.assert_eq('forma (calificación de los últimos 5)',
+  (select form_rating from public.v_person_totals where person_name = 'Hecodes98'), 6.75::numeric);
+select pg_temp.assert_eq('conversión de tiros (1 gol / 4 tiros)',
+  (select shot_conversion_pct from public.v_person_totals where person_name = 'Hecodes98'), 25.0::numeric);
+select pg_temp.assert_eq('filtro: presencia relativa a los partidos filtrados',
+  (select club_matches from public.person_stats(p_match_types => array['leagueMatch']) where person_name = 'Hecodes98'), 1::bigint);
+
 select pg_temp.assert_eq('estado del colector: fallas seguidas',
   (select consecutive_failures from public.v_collector_status), 2::bigint);
 select pg_temp.assert_eq('estado del colector: hay última captura exitosa',
@@ -175,6 +193,43 @@ end $$;
 reset role;
 
 -- =============================================================================
+-- 4c. Fotos de miembros y fuerza del rival (migración 006)
+-- =============================================================================
+set role service_role;
+insert into public.member_snapshots (club_id, member_name, snapshot_date, captured_at, pro_overall, games_played, raw)
+values (1330384, 'PinedaDS', '2026-11-01', '2026-11-01T00:00:00Z', 76, 40, '{"secreto":"x"}'),
+       (1330384, 'PinedaDS', '2026-11-02', '2026-11-02T00:00:00Z', 77, 42, '{}');
+update public.matches set opponent_skill_rating = 1600 where match_id = 'm1';
+update public.matches set opponent_skill_rating = 1400 where match_id = 'm2';
+reset role;
+
+set role anon;
+select pg_temp.assert_eq('miembro: última media del Pro',
+  (select pro_overall from public.v_member_latest where member_name = 'PinedaDS'), 77::smallint);
+select pg_temp.assert_eq('miembro: partidos que EA sumó desde la primera foto',
+  (select ea_games_since_first from public.v_member_latest where member_name = 'PinedaDS'), 2);
+select pg_temp.assert_eq('miembro: partidos capturados desde la primera foto (m1 y m2 son del 1-nov)',
+  (select captured_since_first from public.v_member_latest where member_name = 'PinedaDS'), 2::bigint);
+select pg_temp.assert_eq('miembro: enlazado con su persona por gamertag',
+  (select person_id is not null from public.v_member_latest where member_name = 'PinedaDS'), true);
+select pg_temp.assert_eq('fuerza media de los rivales',
+  (select avg_opponent_skill from public.person_stats() t
+     join public.accounts a on a.person_id = t.person_id where a.player_id = '333'), 1500::numeric);
+do $$ begin
+  begin
+    perform raw from public.member_snapshots;
+    raise exception 'FAIL: anon pudo leer member_snapshots.raw';
+  exception when insufficient_privilege then raise notice 'PASS anon no lee member_snapshots.raw';
+  end;
+  begin
+    insert into public.member_snapshots (club_id, member_name, snapshot_date, raw) values (1330384, 'x', current_date, '{}');
+    raise exception 'FAIL: anon pudo insertar fotos de miembros';
+  exception when insufficient_privilege then raise notice 'PASS anon no inserta fotos de miembros';
+  end;
+end $$;
+reset role;
+
+-- =============================================================================
 -- 5. Borrar el club de prueba
 -- =============================================================================
 select public.purge_club(1330384);
@@ -184,3 +239,4 @@ select pg_temp.assert_eq('purge: sin raw',       (select count(*) from public.ma
 select pg_temp.assert_eq('purge: sin cuentas',   (select count(*) from public.accounts), 0::bigint);
 select pg_temp.assert_eq('purge: sin personas',  (select count(*) from public.persons), 0::bigint);
 select pg_temp.assert_eq('purge: runs conservados', (select count(*) from public.collector_runs), 3::bigint);
+select pg_temp.assert_eq('purge: sin fotos de miembros', (select count(*) from public.member_snapshots), 0::bigint);
