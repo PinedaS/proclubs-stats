@@ -416,6 +416,31 @@ select pg_temp.assert_eq('con y sin: Pineda nunca jugó sin Hecodes',
 rollback;
 
 -- =============================================================================
+-- 4f. Mejoras (migración 014).
+-- =============================================================================
+-- La división anotada al capturar tiene prioridad sobre la foto diaria (4ª).
+set role service_role;
+update public.matches set club_division = 2 where match_id = 'm1';
+reset role;
+set role anon;
+select pg_temp.assert_eq('división: la anotada al capturar gana a la foto diaria',
+  (select string_agg(distinct match_id || '=' || club_division, ',' order by match_id || '=' || club_division) from public.v_player_match_stats), 'm1=2,m2=4'::text);
+select pg_temp.assert_eq('división: anon lee la columna en matches',
+  (select club_division from public.matches where match_id = 'm1'), 2::smallint);
+-- Sin pg_net ni vault (Docker) la función responde "no disponible" en vez de fallar.
+select pg_temp.assert_eq('estado del disparo: anon lo consulta sin error',
+  (select available::text || '/' || token_configured::text from public.dispatch_status()), 'false/false'::text);
+reset role;
+do $$ begin
+  begin
+    update public.matches set club_division = 0 where match_id = 'm1';
+    raise exception 'FAIL: división 0 aceptada';
+  exception when check_violation then raise notice 'PASS división fuera de rango rechazada';
+  end;
+end $$;
+update public.matches set club_division = null;
+
+-- =============================================================================
 -- 5. Borrar el club de prueba
 -- =============================================================================
 select public.purge_club(1330384);
