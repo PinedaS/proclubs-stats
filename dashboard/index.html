@@ -26,7 +26,10 @@
           <p class="subtitle" id="club-season">Temporada FC27</p>
         </div>
       </div>
-      <div id="collector-status" class="status" role="status" aria-live="polite">Cargando estado…</div>
+      <div class="hero-side">
+        <div id="collector-status" class="status" role="status" aria-live="polite">Cargando estado…</div>
+        <a id="recon-alert" class="status warning" href="#verificacion" hidden></a>
+      </div>
     </div>
     <div class="kpis" id="club-kpis" aria-label="Resumen del club"></div>
   </header>
@@ -39,7 +42,6 @@
       <button type="button" class="tab" data-view="pairs" aria-pressed="false">Duplas</button>
       <button type="button" class="tab" data-view="positions" aria-pressed="false">Por posición</button>
       <button type="button" class="tab" data-view="matches" aria-pressed="false">Partidos</button>
-      <button type="button" class="tab" data-view="members" aria-pressed="false">Miembros (EA)</button>
       <button type="button" class="tab" data-view="club" aria-pressed="false">Club</button>
     </div>
   </nav>
@@ -147,11 +149,19 @@
       </div>
     </section>
 
+    <!-- Vista oculta: solo se abre con el enlace …/#verificacion (no está en las pestañas). -->
     <section id="view-members" class="view" hidden>
       <div class="card table-card">
         <div class="card-head">
+          <h2>Verificación <span class="tag tag-ea">EA vs. capturado</span></h2>
+          <p class="muted small">Compara lo que EA sumó a cada miembro desde la <strong>primera foto</strong> de members/stats con lo que guardó el colector en ese período. <strong>⚠ faltan</strong> = posible partido perdido. Aún no se confirma qué tipos de partido cuenta EA, así que <strong>extra</strong> no es necesariamente un error. <a href="#" id="close-verification">Volver al ranking</a></p>
+        </div>
+        <div class="table-wrap"><table id="recon-table" class="data"></table></div>
+      </div>
+      <div class="card table-card">
+        <div class="card-head">
           <h2>Miembros <span class="tag tag-ea">EA · histórico</span></h2>
-          <p class="muted small">Totales oficiales de EA desde que cada jugador está en el club (no solo lo capturado) y su <strong>media del Pro</strong>. No usan los filtros. <strong>Capturados / EA</strong> avisa si se escapó algún partido.</p>
+          <p class="muted small">Totales oficiales de EA desde que cada jugador está en el club (no solo lo capturado). No usan los filtros.</p>
         </div>
         <div class="table-wrap"><table id="members-table" class="data"></table></div>
       </div>

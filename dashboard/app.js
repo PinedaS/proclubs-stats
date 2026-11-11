@@ -211,6 +211,7 @@ async function renderHeader() {
 const RANKING_COLUMNS = [
   { key: 'person_name', label: 'Jugador', text: true, render: (r) => playerCell(r.person_name, r.platforms ? r.platforms.split(', ').map(platformLabel).join(' · ') : null) },
   { key: 'main_position', label: 'Pos.', text: true, title: 'Posición más jugada', render: (r) => posBadge(r.main_position) ?? '—' },
+  { key: 'pro_overall', label: 'Media (EA)', title: 'Media (overall) actual del Pro según EA (members/stats)' },
   { key: 'matches', label: 'PJ', title: 'Partidos jugados (capturados)' },
   { key: 'wins', label: 'V-E-D', title: 'Victorias, empates y derrotas (ordena por victorias)', render: (r) => `${r.wins}-${r.draws}-${r.losses}` },
   { key: 'goals', label: 'G', title: 'Goles' },
@@ -571,7 +572,48 @@ async function toggleMatchPlayers(row, matchId, colspan) {
 // Miembros (members/stats de EA)
 // ---------------------------------------------------------------------------
 
+const RECON_STATUS = {
+  ok: { icon: '✓', label: 'Cuadra' },
+  faltan: { icon: '⚠', label: 'Faltan' },
+  extra: { icon: '•', label: 'Extra' },
+  sin_datos: { icon: '–', label: 'Sin datos' },
+};
+
+/** Aviso discreto en la cabecera: solo aparece si algún miembro tiene partidos sin capturar. */
+async function renderReconAlert() {
+  const rows = await api.getReconciliation();
+  state.recon = rows;
+  const missing = rows.filter((r) => r.status === 'faltan');
+  const link = $('#recon-alert');
+  if (!missing.length) { link.hidden = true; return; }
+  link.hidden = false;
+  link.replaceChildren(el('span', { class: 'icon', 'aria-hidden': 'true' }, '⚠'),
+    el('span', {}, `Posible partido perdido · ${missing.length} miembro${missing.length === 1 ? '' : 's'}`));
+  link.title = 'EA sumó más partidos, goles o asistencias de los que capturamos. Ver verificación.';
+}
+
+function renderRecon() {
+  const rows = state.recon ?? [];
+  const diff = (v) => (v == null ? '—' : v === 0 ? '0' : fmtSigned(v));
+  const cols = ['Estado', 'Miembro', 'Desde', 'PJ (cap. / EA)', 'Dif.', 'Goles (cap. / EA)', 'Dif.', 'Asist. (cap. / EA)', 'Dif.', 'MVP (cap. / EA)', 'Dif.'];
+  $('#recon-table').replaceChildren(
+    el('thead', {}, el('tr', {}, cols.map((h, i) => el('th', { scope: 'col', class: i < 2 ? 'left' : null }, h)))),
+    el('tbody', {}, rows.length ? rows.map((r) => {
+      const s = RECON_STATUS[r.status] ?? RECON_STATUS.sin_datos;
+      return el('tr', r.person_id ? { class: 'clickable', ...onActivate(() => { location.hash = ''; setView('ranking'); openPerson(r.person_id); }) } : {},
+        el('td', { class: 'left' }, el('span', { class: r.status === 'faltan' ? 'badge warn' : 'badge' }, `${s.icon} ${s.label}`)),
+        el('td', { class: 'left' }, playerCell(r.member_name)),
+        el('td', {}, fmtDate(`${r.first_date}T12:00:00Z`, false)),
+        el('td', {}, `${fmtNum(r.cap_games)} / ${fmtNum(r.ea_games)}`), el('td', { class: r.diff_games < 0 ? 'sorted' : null }, diff(r.diff_games)),
+        el('td', {}, `${fmtNum(r.cap_goals)} / ${fmtNum(r.ea_goals)}`), el('td', {}, diff(r.diff_goals)),
+        el('td', {}, `${fmtNum(r.cap_assists)} / ${fmtNum(r.ea_assists)}`), el('td', {}, diff(r.diff_assists)),
+        el('td', {}, `${fmtNum(r.cap_mom)} / ${fmtNum(r.ea_mom)}`), el('td', {}, diff(r.diff_mom)));
+    }) : [emptyRow(cols.length, 'Todavía no hay fotos de members/stats.')]));
+}
+
 async function renderMembers() {
+  if (!state.recon) state.recon = await api.getReconciliation();
+  renderRecon();
   if (!state.members) state.members = await api.getMembers();
   const cols = [
     ['Miembro', 'left'], ['Personaje', 'left'], ['Pos. favorita', 'left'], ['Media', null, 'Media (overall) del Pro'],
@@ -707,7 +749,9 @@ async function renderPerson(filters, requestId) {
   box.replaceChildren(...[
     el('div', { class: 'detail-head' },
       el('div', { class: 'detail-id' }, avatar(name, true), el('div', {}, el('h2', {}, name),
-        el('div', { class: 'badges' }, posBadge(summary?.main_position), platforms.map((p) => el('span', { class: 'badge' }, platformLabel(p)))))),
+        el('div', { class: 'badges' }, posBadge(summary?.main_position), platforms.map((p) => el('span', { class: 'badge' }, platformLabel(p))),
+          summary?.pro_overall != null ? el('span', { class: 'badge', title: 'Media (overall) del Pro según EA' }, `Media ${summary.pro_overall}`) : null,
+          summary?.pro_name ? el('span', { class: 'badge', title: 'Nombre del personaje' }, summary.pro_name) : null))),
       close),
     el('p', { class: 'section-title' }, 'Resumen'), basics,
     relTiles ? [el('p', { class: 'section-title' }, 'Relativo a su rol (100 = promedio de su posición)'), relTiles] : null,
@@ -844,9 +888,18 @@ async function refresh() {
     const [ranking, records, relative] = filters.types.length
       ? await Promise.all([api.getPersonStats(filters), api.getPersonRecords(filters), api.getRelativeStats('position', filters)])
       : [[], [], []];
+    if (!state.members) state.members = await api.getMembers().catch(() => []);
     if (requestId !== state.requestId) return;
-    state.ranking = ranking;
+    // Media del Pro (EA) por persona: la más alta entre sus cuentas.
+    const ea = new Map();
+    for (const m of state.members) {
+      if (m.person_id == null || m.pro_overall == null) continue;
+      const prev = ea.get(m.person_id);
+      if (!prev || m.pro_overall > prev.pro_overall) ea.set(m.person_id, m);
+    }
+    state.ranking = ranking.map((r) => ({ ...r, pro_overall: ea.get(r.person_id)?.pro_overall ?? null, pro_name: ea.get(r.person_id)?.pro_name ?? null }));
     state.records = new Map(records.map((r) => [r.person_id, r]));
+    renderReconAlert().catch(() => {});
     state.relative = new Map(relative.map((r) => [r.person_id, r]));
     renderRanking();
     renderHeader().catch(() => {});
@@ -890,7 +943,20 @@ async function init() {
     state.minMatches = Math.max(1, Number(e.target.value) || 1);
     refresh();
   });
-  for (const b of document.querySelectorAll('.tab')) b.addEventListener('click', () => setView(b.dataset.view));
+  for (const b of document.querySelectorAll('.tab')) {
+    b.addEventListener('click', () => {
+      if (location.hash) history.replaceState(null, '', location.pathname + location.search);
+      setView(b.dataset.view);
+    });
+  }
+  // Vista oculta de verificación: solo por enlace (…/#verificacion).
+  const route = () => { if (location.hash === '#verificacion') setView('members'); };
+  window.addEventListener('hashchange', route);
+  $('#close-verification').addEventListener('click', (e) => {
+    e.preventDefault();
+    history.replaceState(null, '', location.pathname + location.search);
+    setView('ranking');
+  });
   const resetSortIf = (flag) => {
     if (RANKING_COLUMNS.find((c) => c.key === state.sort.key)?.[flag]) state.sort = { key: 'avg_rating', dir: -1 };
   };
@@ -903,7 +969,8 @@ async function init() {
 
   renderStatus();
   setInterval(renderStatus, 60_000);
-  await refresh();
+  if (location.hash === '#verificacion') route();
+  else await refresh();
 }
 
 init();

@@ -91,6 +91,11 @@ export function getMatchPlayers(matchId) {
   return request(`v_player_match_stats?${p}`);
 }
 
+/** Conciliación EA vs. capturado desde la primera foto (vista v_reconciliation). */
+export function getReconciliation() {
+  return request('v_reconciliation?select=*&order=status.asc,member_name.asc');
+}
+
 /** Último estado de cada miembro según members/stats (página "Members" de EA). */
 export function getMembers() {
   return request('v_member_latest?select=*&order=pro_overall.desc.nullslast,member_name.asc');
