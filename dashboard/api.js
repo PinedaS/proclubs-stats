@@ -42,6 +42,8 @@ export const getSplitStats = (split, f) => rpc('person_split_stats', { p_split: 
 export const getPairStats = (f) => rpc('pair_stats', rpcFilters(f));
 export const getPositionStats = (f) => rpc('position_stats', rpcFilters(f));
 export const getPersonRecords = (f) => rpc('person_records', rpcFilters(f));
+export const getRelativeStats = (group, f) => rpc('relative_stats', { p_group: group, ...rpcFilters(f) });
+export const getRelativeDetail = (group, f) => rpc('relative_stats_detail', { p_group: group, ...rpcFilters(f) });
 
 export function getClub() {
   return request('clubs?select=club_id,name,season&order=first_seen_at.desc&limit=1').then((r) => r[0] ?? null);

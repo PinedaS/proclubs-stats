@@ -26,6 +26,9 @@ const state = {
   split: 'rival',
   splitMetric: 'avg_rating',
   position: 'forward',
+  roleGroup: 'position',
+  roleSort: { key: 'rating_idx', dir: -1 },
+  relative: new Map(),
   requestId: 0,
 };
 
@@ -316,6 +319,92 @@ function renderRanking() {
 }
 
 // ---------------------------------------------------------------------------
+// Por rol: rendimiento relativo al promedio del club en cada posición/arquetipo
+// ---------------------------------------------------------------------------
+
+const roleLabel = (group, key) => (group === 'archetype' ? (key === '?' ? 'Arquetipo ?' : `Arquetipo #${key}`) : POS_LABEL[key] ?? key);
+
+/** Índice relativo: valor + flecha y color. 100 = promedio del rol. */
+function idxCell(v, extraClass = '') {
+  if (v == null) return el('td', { class: `muted ${extraClass}`.trim() }, '—');
+  const n = Number(v);
+  const dir = n >= 105 ? 'up' : n <= 95 ? 'down' : '';
+  return el('td', { class: extraClass || null, title: `${fmtNum(n, 1)} (100 = promedio del rol)` },
+    el('span', { class: `idx ${dir}` }, fmtNum(n, 0), dir ? el('span', { class: 'arrow', 'aria-hidden': 'true' }, dir === 'up' ? '▲' : '▼') : null));
+}
+
+const ROLE_COLUMNS = [
+  { key: 'rating_idx', label: 'Calificación', title: 'Calificación media vs. la media del rol' },
+  { key: 'ga90_idx', label: 'G+A / 90', title: 'Goles + asistencias por 90 min vs. el rol' },
+  { key: 'pass_idx', label: 'Pases %', title: 'Precisión de pase vs. el rol' },
+  { key: 'tackles90_idx', label: 'Entradas / 90', title: 'Entradas ganadas por 90 min vs. el rol (clave para roles defensivos)' },
+  { key: 'save_idx', label: '% Atajadas', title: 'Solo porteros: % de atajadas vs. otros porteros' },
+  { key: 'interceptions90_idx_exp', label: 'Intercep. / 90*', title: 'Experimental: intercepciones por 90 min vs. el rol', exp: true },
+];
+
+async function renderRoles(filters, requestId) {
+  const group = state.roleGroup;
+  const [rows, detail] = filters.types.length
+    ? await Promise.all([api.getRelativeStats(group, filters), api.getRelativeDetail(group, filters)])
+    : [[], []];
+  if (requestId !== state.requestId) return;
+  const cols = ROLE_COLUMNS.filter((c) => state.showExp || !c.exp);
+  const { key, dir } = state.roleSort;
+  const list = rows.filter((r) => r.matches >= state.minMatches)
+    .sort((a, b) => (a[key] == null) - (b[key] == null) || (Number(a[key]) - Number(b[key])) * dir);
+  const byPerson = new Map();
+  for (const d of detail) {
+    if (!byPerson.has(d.person_id)) byPerson.set(d.person_id, []);
+    byPerson.get(d.person_id).push(d);
+  }
+
+  const head = el('tr', {}, el('th', { scope: 'col', class: 'rank' }, '#'), el('th', { scope: 'col', class: 'left' }, 'Jugador'),
+    el('th', { scope: 'col', class: 'left' }, group === 'archetype' ? 'Arquetipos jugados' : 'Roles jugados'),
+    el('th', { scope: 'col' }, 'PJ'), el('th', { scope: 'col' }, 'Min.'),
+    cols.map((c) => {
+      const active = key === c.key;
+      return el('th', { scope: 'col', title: c.title, class: c.exp ? 'exp' : null, 'aria-sort': active ? (dir === 1 ? 'ascending' : 'descending') : null },
+        el('button', { type: 'button', onclick: () => { state.roleSort = active ? { key: c.key, dir: -dir } : { key: c.key, dir: -1 }; renderRoles(readFilters(), state.requestId); } },
+          c.label + (active ? (dir === 1 ? ' ▲' : ' ▼') : '')));
+    }));
+  const colspan = cols.length + 5;
+  const body = el('tbody');
+  if (!list.length) body.append(emptyRow(colspan));
+  list.forEach((r, i) => {
+    const roles = (r.roles ?? '').split(', ').filter(Boolean);
+    const row = el('tr', { class: 'clickable', 'aria-expanded': 'false' },
+      el('td', { class: 'rank' }, String(i + 1)),
+      el('td', { class: 'left' }, playerCell(r.person_name)),
+      el('td', { class: 'left' }, group === 'position'
+        ? roles.map((p) => [posBadge(p), ' '])
+        : roles.map((a) => [el('span', { class: 'badge' }, roleLabel(group, a)), ' '])),
+      el('td', {}, fmtNum(r.matches)), el('td', {}, fmtNum(r.minutes)),
+      cols.map((c) => idxCell(r[c.key], [c.exp ? 'exp' : '', c.key === key ? 'sorted' : ''].join(' ').trim())));
+    const toggle = () => {
+      const next = row.nextElementSibling;
+      if (next?.classList.contains('role-detail')) { next.remove(); row.setAttribute('aria-expanded', 'false'); return; }
+      row.setAttribute('aria-expanded', 'true');
+      const parts = (byPerson.get(r.person_id) ?? []).sort((a, b) => b.seconds - a.seconds);
+      row.after(el('tr', { class: 'role-detail' }, el('td', { colspan },
+        el('table', { class: 'data' },
+          el('thead', {}, el('tr', {}, ['Rol', 'PJ', 'Calif. (él / rol)', 'G+A/90 (él / rol)', 'Pases % (él / rol)', 'Entradas/90 (él / rol)', 'Partidos del rol']
+            .map((h, k) => el('th', { scope: 'col', class: k === 0 ? 'left' : null }, h)))),
+          el('tbody', {}, parts.map((d) => el('tr', {},
+            el('td', { class: 'left' }, group === 'position' ? posBadge(d.group_key) : roleLabel(group, d.group_key)),
+            el('td', {}, fmtNum(d.matches)),
+            el('td', {}, `${fmtNum(d.rating, 2)} / ${fmtNum(d.group_rating, 2)}`),
+            el('td', {}, `${fmtNum(d.ga90, 2)} / ${fmtNum(d.group_ga90, 2)}`),
+            el('td', {}, `${fmtNum(d.pass_pct, 1)} / ${fmtNum(d.group_pass_pct, 1)}`),
+            el('td', {}, `${fmtNum(d.tackles90, 2)} / ${fmtNum(d.group_tackles90, 2)}`),
+            el('td', { title: 'Registros del club en ese rol: con pocos, el promedio es menos confiable' }, fmtNum(d.group_rows)))))))));
+    };
+    Object.entries(onActivate(toggle)).forEach(([k, v]) => (k.startsWith('on') ? row.addEventListener(k.slice(2), v) : row.setAttribute(k, v)));
+    body.append(row);
+  });
+  $('#roles-table').replaceChildren(el('thead', {}, head), body);
+}
+
+// ---------------------------------------------------------------------------
 // Comparar (rival fuerte/débil, tipo de partido, jugadores en cancha)
 // ---------------------------------------------------------------------------
 
@@ -572,6 +661,13 @@ async function renderPerson(filters, requestId) {
     tile('Calif. media', fmtNum(summary?.avg_rating, 2)),
     tile('MVP', fmtPct(summary?.mom_pct)),
     tile('Pases', fmtPct(summary?.pass_accuracy_pct)));
+  const rel = state.relative.get(state.personId);
+  const relTiles = rel ? el('div', { class: 'tiles' },
+    tile('Calificación vs. su rol', fmtNum(rel.rating_idx, 0)),
+    tile('G+A/90 vs. su rol', fmtNum(rel.ga90_idx, 0)),
+    tile('Pases vs. su rol', fmtNum(rel.pass_idx, 0)),
+    tile('Entradas/90 vs. su rol', fmtNum(rel.tackles90_idx, 0)),
+    tile('Roles jugados', (rel.roles ?? '').split(', ').filter(Boolean).map((p) => POS_LABEL[p] ?? p).join(', ') || '—')) : null;
   const advanced = state.showAdv ? el('div', { class: 'tiles' },
     tile('G+A por 90 min', fmtNum(summary?.ga_per90, 2)),
     tile('Forma (últ. 5)', fmtNum(summary?.form_rating, 2)),
@@ -614,6 +710,7 @@ async function renderPerson(filters, requestId) {
         el('div', { class: 'badges' }, posBadge(summary?.main_position), platforms.map((p) => el('span', { class: 'badge' }, platformLabel(p)))))),
       close),
     el('p', { class: 'section-title' }, 'Resumen'), basics,
+    relTiles ? [el('p', { class: 'section-title' }, 'Relativo a su rol (100 = promedio de su posición)'), relTiles] : null,
     advanced ? [el('p', { class: 'section-title' }, 'Avanzadas'), advanced] : null,
     records ? [el('p', { class: 'section-title' }, 'Récords y rachas'), records] : null,
     el('div', { class: 'grid-2' }, chartBox, overallBox),
@@ -744,15 +841,17 @@ async function refresh() {
   const filters = readFilters();
   showError(null);
   try {
-    const [ranking, records] = filters.types.length
-      ? await Promise.all([api.getPersonStats(filters), api.getPersonRecords(filters)])
-      : [[], []];
+    const [ranking, records, relative] = filters.types.length
+      ? await Promise.all([api.getPersonStats(filters), api.getPersonRecords(filters), api.getRelativeStats('position', filters)])
+      : [[], [], []];
     if (requestId !== state.requestId) return;
     state.ranking = ranking;
     state.records = new Map(records.map((r) => [r.person_id, r]));
+    state.relative = new Map(relative.map((r) => [r.person_id, r]));
     renderRanking();
     renderHeader().catch(() => {});
     const tasks = [];
+    if (state.view === 'roles') tasks.push(renderRoles(filters, requestId));
     if (state.view === 'compare') tasks.push(renderCompare(filters, requestId));
     if (state.view === 'pairs') tasks.push(renderPairs(filters, requestId));
     if (state.view === 'positions') tasks.push(renderPositions(filters, requestId));
@@ -769,7 +868,7 @@ async function refresh() {
 function setView(view) {
   state.view = view;
   for (const b of document.querySelectorAll('.tab')) b.setAttribute('aria-pressed', String(b.dataset.view === view));
-  for (const v of ['ranking', 'compare', 'pairs', 'positions', 'matches', 'members', 'club']) $(`#view-${v}`).hidden = v !== view;
+  for (const v of ['ranking', 'roles', 'compare', 'pairs', 'positions', 'matches', 'members', 'club']) $(`#view-${v}`).hidden = v !== view;
   refresh();
 }
 
@@ -797,6 +896,7 @@ async function init() {
   };
   $('#show-exp').addEventListener('change', (e) => { state.showExp = e.target.checked; if (!state.showExp) resetSortIf('exp'); refresh(); });
   $('#show-adv').addEventListener('change', (e) => { state.showAdv = e.target.checked; if (!state.showAdv) resetSortIf('adv'); refresh(); });
+  bindSegmented('#role-group-buttons', 'group', (v) => { state.roleGroup = v; refresh(); });
   bindSegmented('#split-buttons', 'split', (v) => { state.split = v; refresh(); });
   bindSegmented('#split-metric', 'metric', (v) => { state.splitMetric = v; refresh(); });
   bindSegmented('#position-buttons', 'pos', (v) => { state.position = v; refresh(); });

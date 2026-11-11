@@ -34,6 +34,7 @@
   <nav class="tabs" aria-label="Vistas">
     <div class="tabs-inner">
       <button type="button" class="tab" data-view="ranking" aria-pressed="true">Ranking</button>
+      <button type="button" class="tab" data-view="roles" aria-pressed="false">Por rol</button>
       <button type="button" class="tab" data-view="compare" aria-pressed="false">Comparar</button>
       <button type="button" class="tab" data-view="pairs" aria-pressed="false">Duplas</button>
       <button type="button" class="tab" data-view="positions" aria-pressed="false">Por posición</button>
@@ -78,6 +79,20 @@
       <div class="card table-card">
         <div class="card-head"><h2>Jugadores <span class="tag">partidos capturados</span></h2><p class="muted small">Ordena con un clic en cualquier columna. Toca un jugador para ver su detalle.</p></div>
         <div class="table-wrap"><table id="ranking-table" class="data"></table></div>
+      </div>
+    </section>
+
+    <section id="view-roles" class="view" hidden>
+      <div class="card table-card">
+        <div class="card-head">
+          <h2>Rendimiento relativo al rol <span class="tag">justo para quien rota</span></h2>
+          <div class="segmented" role="group" aria-label="Comparar contra" id="role-group-buttons">
+            <button type="button" data-group="position" aria-pressed="true">Por posición</button>
+            <button type="button" data-group="archetype" aria-pressed="false">Por arquetipo</button>
+          </div>
+          <p class="muted small">Cada jugador se compara con el <strong>promedio del club en el mismo rol</strong> que jugó en cada partido: un defensa contra defensas, un delantero contra delanteros. <strong>100 = promedio del rol</strong>; 120 = 20 % mejor. Si jugó varios roles, se pondera por los minutos en cada uno. Toca una fila para ver el desglose por rol.</p>
+        </div>
+        <div class="table-wrap"><table id="roles-table" class="data"></table></div>
       </div>
     </section>
 

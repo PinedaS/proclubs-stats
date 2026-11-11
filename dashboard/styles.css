@@ -295,6 +295,14 @@ table.data { border-collapse: separate; border-spacing: 0; width: 100%; font-var
 .result.win { background: var(--win); } .result.draw { background: var(--draw); } .result.loss { background: var(--loss); }
 .warn-icon { color: var(--warning); font-weight: 800; }
 
+/* Índices relativos (100 = promedio del rol). Color + signo: nunca solo color. */
+.idx { font-weight: 700; font-variant-numeric: tabular-nums; }
+.idx.up { color: var(--good); }
+.idx.down { color: var(--critical); }
+.idx .arrow { font-size: .75em; margin-left: 3px; }
+.role-detail td { background: var(--surface-2); }
+.role-detail table { width: 100%; }
+
 /* Barra dentro de una celda (comparativas) */
 .bar-cell { display: inline-flex; align-items: center; gap: 8px; justify-content: flex-end; }
 .bar { width: 70px; height: 6px; border-radius: 4px; background: var(--surface-3); overflow: hidden; }
