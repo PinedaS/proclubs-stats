@@ -712,7 +712,7 @@ async function renderPerson(filters, requestId) {
     tile('G+A/90 vs. su rol', fmtNum(rel.ga90_idx, 0)),
     tile('Pases vs. su rol', fmtNum(rel.pass_idx, 0)),
     tile('Entradas/90 vs. su rol', fmtNum(rel.tackles90_idx, 0)),
-    tile('Roles jugados', (rel.roles ?? '').split(', ').filter(Boolean).map((p) => POS_LABEL[p] ?? p).join(', ') || '—')) : null;
+    tile('Roles jugados', el('span', { class: 'badges' }, (rel.roles ?? '').split(', ').filter(Boolean).map(posBadge)))) : null;
   const advanced = state.showAdv ? el('div', { class: 'tiles' },
     tile('G+A por 90 min', fmtNum(summary?.ga_per90, 2)),
     tile('Forma (últ. 5)', fmtNum(summary?.form_rating, 2)),
