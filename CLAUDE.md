@@ -97,6 +97,22 @@ No hay API oficial. Se usan los endpoints públicos que lee la web de Clubes de 
   - `secondsPlayed` está en segundos de juego.
   - Detalle completo en `collector/README.md`.
 
+### Proyecto de Supabase real (creado el 2026-11-11)
+
+- **Organización:** "FC Aston Huila", plan **Free**.
+- **Proyecto:** `proclubs-stats`, ref `lubikomzgxzuxdaosqxb`, URL `https://lubikomzgxzuxdaosqxb.supabase.co`, región `us-east-1`, cómputo Nano (gratis).
+- **Opciones de creación:**
+  - *Data API*: activada.
+  - *Automatically expose new tables*: **desactivada**, la recomendación de Supabase. Por eso existe la migración 004 de permisos explícitos.
+  - *Automatic RLS*: desactivada.
+- **Migraciones 001–004:** aplicadas en el SQL Editor el 2026-11-11, en una sola ejecución (una transacción).
+- **Verificado con consultas al catálogo:**
+  - Las 7 tablas tienen RLS. Hay 1 política de lectura por tabla, salvo `match_raw`, que no tiene ninguna.
+  - `anon` no escribe en ninguna tabla. No lee `match_raw`, y de `collector_runs` solo lee algunas columnas.
+  - `service_role` escribe en todas las tablas.
+  - `anon` no ejecuta `merge_persons`, `purge_club` ni `accounts_assign_person`.
+- **Clave del colector:** en proyectos nuevos, la clave *secret* (`sb_secret_...`) reemplaza a la `service_role` antigua y actúa con ese rol. Va **solo** en los secretos de GitHub y en el `.env` local, nunca en el repo.
+
 ### Supabase plan gratis (fuentes de 2026)
 
 - 500 MB de base de datos y 2 proyectos activos.
