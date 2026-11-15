@@ -1612,15 +1612,18 @@ function watchPlayerColumns() {
 function renderChangelog() {
   const current = CHANGELOG[0];
   $('#version-label').textContent = `v${current.version}`;
+  // pages.yml cambia el marcador de versión por el commit en todo este archivo, así que
+  // aquí se reconoce el commit por su forma (hexadecimal), no comparando con el marcador.
   const commit = new URL(import.meta.url).searchParams.get('v');
-  $('#changelog-body').replaceChildren(
+  $('#changelog-body').replaceChildren(...[
     ...CHANGELOG.map((v, i) => el('details', { class: 'release', open: i === 0 },
       el('summary', {},
         el('span', { class: 'release-version' }, `v${v.version}`),
         el('span', { class: 'release-title' }, v.title),
         el('span', { class: 'muted small' }, fmtDate(`${v.date}T12:00:00`, false))),
       el('ul', {}, v.changes.map((c) => el('li', {}, c))))),
-    commit && commit !== '__V__' ? el('p', { class: 'muted small' }, `Publicación ${commit}`) : null);
+    commit && /^[0-9a-f]{7,40}$/.test(commit) ? el('p', { class: 'muted small' }, `Publicación ${commit}`) : null,
+  ].filter(Boolean));
 }
 
 /** Lo elegido en los menús "Fechas" y "Vista", a la vista sin abrirlos. */
