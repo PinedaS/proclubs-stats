@@ -2,6 +2,16 @@
 // para el equipo, agregar una entrada arriba: versión, fecha y cambios en lenguaje simple.
 export const CHANGELOG = [
   {
+    version: '2.1',
+    date: '2026-11-15',
+    title: 'Fotos de los jugadores',
+    changes: [
+      'Cada jugador puede tener foto: en su detalle, "Poner foto" o "Cambiar foto". Cualquiera puede cambiarla o quitarla.',
+      'La foto se achica sola antes de subirla; si se quita, vuelven las iniciales.',
+      'Secciones ordenadas por importancia: en Cara a cara y en el detalle del jugador, primero el rendimiento.',
+    ],
+  },
+  {
     version: '2.0',
     date: '2026-11-15',
     title: 'Rediseño',

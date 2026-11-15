@@ -34,6 +34,8 @@ const state = {
   h2h: { a: null, b: null }, // Cara a cara: person_id de cada lado
   trend: new Map(), // person_id -> calificaciones por partido (de más vieja a más nueva)
   personTab: 'resumen', // pestaña abierta en el detalle del jugador
+  photos: new Map(), // person_id -> URL de su foto
+  photoByName: new Map(), // nombre mostrado -> URL (los avatares se dibujan por nombre)
   timeline: [], // filas {match_id, played_at, person_id, rating} con los filtros actuales
   roleSort: { key: 'rating_idx', dir: -1 },
   relative: new Map(),
@@ -117,7 +119,12 @@ function initials(name) {
   return (text || '?').toUpperCase();
 }
 
-const avatar = (name, big = false) => el('span', { class: big ? 'avatar lg' : 'avatar', 'aria-hidden': 'true' }, initials(name));
+/** Avatar: la foto del jugador si tiene (state.photoByName), si no sus iniciales. */
+const avatar = (name, big = false) => {
+  const url = state.photoByName.get(name);
+  return el('span', { class: `${big ? 'avatar lg' : 'avatar'}${url ? ' has-photo' : ''}`, 'aria-hidden': 'true' },
+    url ? el('img', { src: url, alt: '', loading: 'lazy', decoding: 'async' }) : initials(name));
+};
 const POS_SHORT = { forward: 'DEL', midfielder: 'MED', defender: 'DEF', goalkeeper: 'POR' };
 /** Insignia de posición: texto completo en escritorio, abreviado en el celular (CSS). */
 const posBadge = (pos) => (pos ? el('span', { class: `badge pos-${pos}`, title: POS_LABEL[pos] ?? pos },
@@ -644,20 +651,24 @@ const TIE_THRESHOLD = 0.03; // diferencia relativa menor al 3 % = empate
 const per90 = (r, key) => (r[key] == null || !Number(r.minutes_played) ? null : (Number(r[key]) * 90) / Number(r.minutes_played));
 const perMatch = (r, key) => (r[key] == null || !r.matches ? null : Number(r[key]) / r.matches);
 
-/** better: 'high' (más es mejor), 'low' (menos es mejor) o null (solo contexto). */
+/**
+ * better: 'high' (más es mejor), 'low' (menos es mejor) o null (solo contexto).
+ * Orden por importancia (decisión del usuario, 2026-11-15): rendimiento primero,
+ * luego relativo a su rol, experimentales y contexto.
+ */
+const H2H_RELATIVE = {
+  title: 'Relativo a su rol (100 = promedio de su posición)',
+  source: 'relative',
+  rows: [
+    { label: 'Calificación vs. su rol', key: 'rating_idx', better: 'high' },
+    { label: 'G+A/90 vs. su rol', key: 'ga90_idx', better: 'high' },
+    { label: 'Pases % vs. su rol', key: 'pass_idx', better: 'high' },
+    { label: 'Entradas/90 vs. su rol', key: 'tackles90_idx', better: 'high' },
+    { label: '% Atajadas vs. porteros', key: 'save_idx', better: 'high' },
+    { label: 'Intercepciones/90 vs. su rol*', key: 'interceptions90_idx_exp', better: 'high', exp: true },
+  ],
+};
 const H2H_GROUPS = [
-  {
-    title: 'Relativo a su rol (100 = promedio de su posición)',
-    source: 'relative',
-    rows: [
-      { label: 'Calificación vs. su rol', key: 'rating_idx', better: 'high' },
-      { label: 'G+A/90 vs. su rol', key: 'ga90_idx', better: 'high' },
-      { label: 'Pases % vs. su rol', key: 'pass_idx', better: 'high' },
-      { label: 'Entradas/90 vs. su rol', key: 'tackles90_idx', better: 'high' },
-      { label: '% Atajadas vs. porteros', key: 'save_idx', better: 'high' },
-      { label: 'Intercepciones/90 vs. su rol*', key: 'interceptions90_idx_exp', better: 'high', exp: true },
-    ],
-  },
   {
     title: 'Rendimiento',
     rows: [
@@ -679,6 +690,7 @@ const H2H_GROUPS = [
       { label: 'Rojas por partido', value: (r) => perMatch(r, 'red_cards'), better: 'low', digits: 2, winLabel: 'Menos rojas' },
     ],
   },
+  H2H_RELATIVE,
   {
     title: 'Experimentales* (por 90 min)',
     exp: true,
@@ -792,7 +804,7 @@ function renderH2h() {
   box.replaceChildren(...[
     el('div', { class: 'h2h-heads' }, card(A, relA, 'a'), el('div', { class: 'vs' }, 'vs'), card(B, relB, 'b')),
     scoreboard,
-    differentRoles ? el('p', { class: 'h2h-note' }, `Juegan en posiciones distintas (${POS_LABEL[A.main_position] ?? '—'} y ${POS_LABEL[B.main_position] ?? '—'}): lo más justo es mirar primero "Relativo a su rol".`) : null,
+    differentRoles ? el('p', { class: 'h2h-note' }, `Juegan en posiciones distintas (${POS_LABEL[A.main_position] ?? '—'} y ${POS_LABEL[B.main_position] ?? '—'}): para compararlos de forma justa, fíjate también en "Relativo a su rol".`) : null,
     lowSample ? el('p', { class: 'h2h-note' }, `Alguno tiene menos de ${MIN_FIT_MATCHES} partidos: las diferencias pueden ser casualidad.`) : null,
     ...groups,
   ].filter(Boolean));
@@ -1265,6 +1277,59 @@ function fillLevelTiles(box, history, matches) {
   if (before > 1) box.children[0].querySelector('.label').textContent = 'Media al iniciar registro';
 }
 
+/** Los avatares se dibujan por nombre: traduce person_id -> foto a nombre -> foto. */
+function syncPhotoNames() {
+  state.photoByName = new Map(state.ranking.filter((r) => state.photos.has(r.person_id)).map((r) => [r.person_name, state.photos.get(r.person_id)]));
+}
+
+/**
+ * Achica la imagen elegida a 256×256 (recorte cuadrado al centro) en webp, para que
+ * pese poco (el bucket acepta hasta 200 KB). Baja la calidad si hace falta.
+ */
+async function toAvatarWebp(file) {
+  if (!file.type.startsWith('image/')) throw new Error('Elige un archivo de imagen.');
+  const img = await createImageBitmap(file);
+  const side = Math.min(img.width, img.height);
+  const canvas = document.createElement('canvas');
+  canvas.width = canvas.height = 256;
+  canvas.getContext('2d').drawImage(img, (img.width - side) / 2, (img.height - side) / 2, side, side, 0, 0, 256, 256);
+  for (const q of [0.85, 0.7, 0.5]) {
+    const blob = await new Promise((r) => canvas.toBlob(r, 'image/webp', q));
+    if (blob && blob.type === 'image/webp' && blob.size <= 190 * 1024) return blob;
+  }
+  throw new Error('No se pudo achicar la imagen lo suficiente. Prueba con otra.');
+}
+
+/** Botones de foto en el detalle: cambiar (elige archivo) y quitar. */
+function photoControls(personId, name) {
+  const input = el('input', { type: 'file', accept: 'image/*', hidden: true });
+  const status = el('span', { class: 'muted small photo-status', role: 'status' });
+  const busy = (text) => { status.textContent = text; };
+  const reload = async () => {
+    state.photos = await api.getPlayerPhotos().catch(() => state.photos);
+    syncPhotoNames();
+    renderRanking();
+    renderPerson(readFilters(), state.requestId).catch(showError);
+  };
+  input.addEventListener('change', async () => {
+    const file = input.files?.[0];
+    if (!file) return;
+    try {
+      busy('Subiendo…');
+      await api.uploadPlayerPhoto(personId, await toAvatarWebp(file));
+      await reload();
+    } catch (err) { busy(err.message); }
+  });
+  const has = state.photos.has(personId);
+  return el('div', { class: 'photo-actions' },
+    el('button', { type: 'button', class: 'link-btn', onclick: () => input.click(), title: 'Cualquiera puede cambiar la foto de cualquier jugador' }, has ? 'Cambiar foto' : 'Poner foto'),
+    has ? el('button', { type: 'button', class: 'link-btn danger', onclick: async () => {
+      if (!confirm(`¿Quitar la foto de ${name}? Vuelven sus iniciales.`)) return;
+      try { busy('Quitando…'); await api.deletePlayerPhoto(personId); await reload(); } catch (err) { busy(err.message); }
+    } }, 'Quitar') : null,
+    input, status);
+}
+
 async function renderPerson(filters, requestId) {
   const box = $('#person-detail');
   if (state.personId == null) { box.hidden = true; return; }
@@ -1351,11 +1416,13 @@ async function renderPerson(filters, requestId) {
   const sec = (title, content) => (content ? [el('p', { class: 'section-title' }, title), content] : null);
   const panels = {
     resumen: [basics, el('div', { class: 'grid-2' }, chartBox, overallBox)],
+    // Orden por importancia (decisión del usuario): rendimiento, relativo al rol,
+    // evolución y, al final, la posición recomendada (orientativa).
     rendimiento: [
-      sec('Relativo a su rol (100 = promedio de su posición)', relTiles),
-      sec('Posición recomendada', fit),
       sec('Avanzadas', advanced),
+      sec('Relativo a su rol (100 = promedio de su posición)', relTiles),
       weeklyBox,
+      sec('Posición recomendada', fit),
     ],
     contexto: [sec('Nivel y división', divisionSection), sec('Récords y rachas', records)],
     partidos: [table],
@@ -1378,7 +1445,7 @@ async function renderPerson(filters, requestId) {
 
   box.replaceChildren(...[
     el('div', { class: 'detail-head' },
-      el('div', { class: 'detail-id' }, avatar(name, true), el('div', {}, el('h2', {}, name),
+      el('div', { class: 'detail-id' }, el('div', { class: 'detail-avatar' }, avatar(name, true), photoControls(state.personId, name)), el('div', {}, el('h2', {}, name),
         el('div', { class: 'badges' }, posBadge(summary?.main_position), platforms.map((p) => el('span', { class: 'badge' }, platformLabel(p))),
           summary?.pro_overall != null ? el('span', { class: 'badge', title: 'Media (overall) del Pro según EA' }, `Media ${summary.pro_overall}`) : null,
           summary?.pro_name ? el('span', { class: 'badge', title: 'Nombre del personaje' }, summary.pro_name) : null))),
@@ -1516,9 +1583,10 @@ async function refresh() {
   const filters = readFilters();
   showError(null);
   try {
-    const [ranking, records, relative, timeline] = filters.types.length
-      ? await Promise.all([api.getPersonStats(filters), api.getPersonRecords(filters), api.getRelativeStats('position', filters), api.getRatingsTimeline(filters).catch(() => [])])
-      : [[], [], [], []];
+    const [ranking, records, relative, timeline, photos] = filters.types.length
+      ? await Promise.all([api.getPersonStats(filters), api.getPersonRecords(filters), api.getRelativeStats('position', filters), api.getRatingsTimeline(filters).catch(() => []), api.getPlayerPhotos().catch(() => new Map())])
+      : [[], [], [], [], state.photos];
+    state.photos = photos;
     state.timeline = timeline;
     state.trend = trendByPerson(timeline);
     if (!state.members) state.members = await api.getMembers(state.clubId).catch(() => []);
@@ -1531,6 +1599,7 @@ async function refresh() {
       if (!prev || m.pro_overall > prev.pro_overall) ea.set(m.person_id, m);
     }
     state.ranking = ranking.map((r) => ({ ...r, pro_overall: ea.get(r.person_id)?.pro_overall ?? null, pro_name: ea.get(r.person_id)?.pro_name ?? null }));
+    syncPhotoNames();
     state.records = new Map(records.map((r) => [r.person_id, r]));
     renderReconAlert().catch(() => {});
     state.relative = new Map(relative.map((r) => [r.person_id, r]));

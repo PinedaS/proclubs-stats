@@ -110,6 +110,16 @@ API no oficial de EA ──► Colector (GitHub Actions, cada 30 min) ──► 
      - **Versiones:** `dashboard/changelog.js` guarda la lista de versiones. La cabecera muestra la versión ("v2.0 · Novedades") y abre una ventana con los cambios de cada una.
        - **Al publicar un cambio visible, agregar una entrada arriba.**
        - **No atribuir funciones a personas** en lo que ve el equipo (pedido del usuario, 2026-11-15). Nada de "sugerencias de X": se describe lo que cambia.
+     - **Fotos de jugadores (v2.1, migración 016, 2026-11-15):** bucket público `player-photos` de Supabase Storage, con un archivo `<person_id>.webp` por persona.
+       - **Decisión del usuario, con el riesgo explicado:** cualquiera con el enlace puede subir, cambiar o quitar cualquier foto, **sin iniciar sesión**.
+       - **Límites:** webp/jpeg/png de hasta 200 KB. Solo se aceptan nombres de personas que existen (`is_valid_player_photo_name`). El dashboard achica la imagen a 256 px webp antes de subirla.
+       - **Verificado con la clave pública el 2026-11-15:**
+         - Subir, listar, descargar y borrar funciona.
+         - Una persona inexistente se rechaza (403), un archivo de otro nombre se rechaza y uno de 300 KB también (413).
+         - La foto de prueba se borró.
+       - **Costo:** el plan Free incluye 1 GB de Storage y 5 GB de transferencia; si se superan, no cobra.
+       - Las fotos de personas borradas con `purge_club` quedan huérfanas; se pueden borrar desde Storage.
+     - **Orden por importancia (pedido del usuario):** en Cara a cara y en la pestaña Rendimiento del detalle va primero el rendimiento y después "Relativo a su rol". La posición recomendada va al final.
      - **Escudo real:** EA manda `details.customKit.crestAssetId` (99020510 para 100 D CILANTRO) y `crestColor`. No se usó: no se pudo verificar desde qué dirección carga EA la imagen, y no se quiere enlazar a imágenes de EA sin confirmarlo.
      - **Nombres de arquetipos:** mapeo de la comunidad (Interactive-63, issue #5, nov. 2026), no oficial.
        - Los deducidos sin confirmar llevan "?": 1 y 2 (porteros), 4 (Boss), 7 y 9.

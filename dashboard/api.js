@@ -51,6 +51,43 @@ export const getRelativeDetail = (group, f) => rpc('relative_stats_detail', { p_
 export const getPositionFit = (f) => rpc('position_fit', rpcFilters(f));
 export const getWithWithout = (f) => rpc('with_without_stats', rpcFilters(f));
 
+// ---------------------------------------------------------------------------
+// Fotos de los jugadores (Supabase Storage, bucket público "player-photos").
+// Una foto por persona: "<person_id>.webp". Abierto: cualquiera puede cambiarla
+// (decisión del usuario; migración 016 limita tipo, tamaño y nombres).
+// ---------------------------------------------------------------------------
+const STORAGE = `${SUPABASE_URL}/storage/v1`;
+const PHOTO_BUCKET = 'player-photos';
+const storageHeaders = { apikey: SUPABASE_PUBLISHABLE_KEY };
+
+/** Map person_id -> URL pública de su foto (con la fecha de cambio para no usar la vieja de la caché). */
+export async function getPlayerPhotos() {
+  const res = await fetch(`${STORAGE}/object/list/${PHOTO_BUCKET}`, {
+    method: 'POST',
+    headers: { ...storageHeaders, 'Content-Type': 'application/json' },
+    body: JSON.stringify({ prefix: '', limit: 1000, offset: 0 }),
+  });
+  if (!res.ok) return new Map();
+  const files = await res.json();
+  return new Map(files
+    .filter((f) => /^\d+\.webp$/.test(f.name))
+    .map((f) => [Number(f.name.split('.')[0]), `${STORAGE}/object/public/${PHOTO_BUCKET}/${f.name}?t=${encodeURIComponent(f.updated_at ?? f.created_at ?? '')}`]));
+}
+
+async function storageCall(method, personId, body) {
+  const res = await fetch(`${STORAGE}/object/${PHOTO_BUCKET}/${Number(personId)}.webp`, {
+    method,
+    headers: { ...storageHeaders, ...(body ? { 'Content-Type': 'image/webp', 'x-upsert': 'true', 'cache-control': '3600' } : {}) },
+    body,
+  });
+  if (!res.ok) throw new Error(`No se pudo ${method === 'DELETE' ? 'quitar' : 'guardar'} la foto (${res.status}): ${(await res.text()).slice(0, 160)}`);
+}
+
+/** Sube o reemplaza la foto de una persona (blob webp ya achicado). */
+export const uploadPlayerPhoto = (personId, blob) => storageCall('POST', personId, blob);
+/** Quita la foto: vuelven las iniciales. */
+export const deletePlayerPhoto = (personId) => storageCall('DELETE', personId);
+
 /** Todos los clubes seguidos, el más reciente primero. */
 export function getClubs() {
   return request('clubs?select=club_id,name,season&order=first_seen_at.desc');
