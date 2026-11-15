@@ -300,50 +300,55 @@ const RANKING_COLUMNS = [
   { key: 'pro_overall', label: 'Media (EA)', title: 'Media (overall) actual del Pro según EA (members/stats)' },
   { key: 'matches', label: 'PJ', title: 'Partidos jugados (capturados)' },
   { key: 'wins', label: 'V-E-D', title: 'Victorias, empates y derrotas (ordena por victorias)', render: (r) => `${r.wins}-${r.draws}-${r.losses}` },
+  { key: 'avg_rating', label: 'Calif.', title: 'Calificación media de EA', digits: 2 },
+  { key: 'mom_pct', label: 'MVP %', title: 'Porcentaje de partidos como mejor jugador', digits: 1 },
+  // Columnas agrupadas por tema. Las avanzadas (adv) y las experimentales (exp, con *
+  // y fondo teñido) van junto a los datos oficiales de su mismo tema (pedido del usuario).
+  // --- Ataque
   { key: 'goals', label: 'G', title: 'Goles' },
   { key: 'assists', label: 'A', title: 'Asistencias' },
   { key: 'goal_contributions', label: 'G+A', title: 'Goles + asistencias' },
   { key: 'ga_per_match', label: 'G+A/PJ', title: 'Goles + asistencias por partido', digits: 2 },
-  { key: 'avg_rating', label: 'Calif.', title: 'Calificación media de EA', digits: 2 },
-  { key: 'mom_pct', label: 'MVP %', title: 'Porcentaje de partidos como mejor jugador', digits: 1 },
-  { key: 'pass_accuracy_pct', label: 'Pases %', title: 'Pases completados / intentados', digits: 1 },
-  { key: 'tackle_success_pct', label: 'Entradas %', title: 'Entradas ganadas / intentadas', digits: 1 },
-  { key: 'saves', label: 'Atajadas' },
-  { key: 'red_cards', label: 'Rojas', title: 'Tarjetas rojas', better: 'low' },
-  // Avanzadas: calculadas con datos oficiales.
-  { key: 'minutes_played', label: 'Min.', title: 'Minutos jugados (tiempo de juego)', adv: true },
   { key: 'goals_per90', label: 'G/90', title: 'Goles por cada 90 minutos', digits: 2, adv: true },
   { key: 'assists_per90', label: 'A/90', title: 'Asistencias por cada 90 minutos', digits: 2, adv: true },
   { key: 'ga_per90', label: 'G+A/90', title: 'Goles + asistencias por cada 90 minutos', digits: 2, adv: true },
   { key: 'shot_conversion_pct', label: 'Conv. %', title: 'Goles / tiros', digits: 1, adv: true },
+  { key: 'shot_accuracy_exp_pct', label: 'A puerta %*', title: 'Experimental: tiros a puerta / tiros (códigos EA 217 y 218)', digits: 1, exp: true },
+  { key: 'second_assists_exp', label: '2ª asist.*', title: 'Experimental: segundas asistencias (código EA 115)', exp: true },
+  { key: 'dribbles_exp', label: 'Regates*', title: 'Experimental: regates completados (código EA 174)', exp: true },
   { key: 'goal_participation_pct', label: 'Part. goles %', title: '(Goles + asistencias) / goles del equipo en sus partidos', digits: 1, adv: true },
+  // --- Pase
+  { key: 'pass_accuracy_pct', label: 'Pases %', title: 'Pases completados / intentados', digits: 1 },
+  { key: 'forward_pass_pct_exp', label: 'Pase adel. %*', title: 'Experimental: pases hacia adelante completados (códigos EA 30 y 31)', digits: 1, exp: true },
+  { key: 'through_passes_exp', label: 'Filtrados*', title: 'Experimental: pases filtrados (código EA 152)', exp: true },
+  { key: 'cross_pct_exp', label: 'Centros %*', title: 'Experimental: centros completados (códigos EA 36 y 37)', digits: 1, exp: true },
+  { key: 'best_option_pct_exp', label: 'Decisiones %*', title: 'Experimental: "tomó la mejor opción" / (mejor + "debió pasar a otro") (códigos EA 177 y 182)', digits: 1, exp: true },
+  { key: 'possession_lost_exp', label: 'Pérdidas*', title: 'Experimental: posesiones perdidas (códigos EA 105–107)', exp: true, better: 'low' },
+  // --- Defensa
+  { key: 'tackle_success_pct', label: 'Entradas %', title: 'Entradas ganadas / intentadas', digits: 1 },
+  { key: 'interceptions_exp', label: 'Intercep.*', title: 'Experimental: intercepciones (código EA 6)', exp: true },
+  { key: 'possession_won_exp', label: 'Recup.*', title: 'Experimental: posesiones ganadas (códigos EA 108–110)', exp: true },
+  { key: 'aerial_duels_won_exp', label: 'Aéreos*', title: 'Experimental: duelos aéreos ganados (códigos EA 265–266)', exp: true },
+  { key: 'in_position_pct_exp', label: 'En posición %*', title: 'Experimental: veces en posición / (en + fuera de posición) (códigos EA 111 y 219)', digits: 1, exp: true },
+  { key: 'clean_sheets', label: 'Vallas', title: 'Vallas invictas (defensa + portero)', adv: true },
+  { key: 'saves', label: 'Atajadas' },
+  { key: 'save_pct', label: '% Atajadas', title: 'Porteros: atajadas / (atajadas + goles recibidos)', digits: 1, adv: true },
+  // --- Disciplina
+  { key: 'red_cards', label: 'Rojas', title: 'Tarjetas rojas', better: 'low' },
+  { key: 'yellow_cards_exp', label: 'Amarillas*', title: 'Experimental: tarjetas amarillas (códigos EA 95 y 213)', exp: true, better: 'low' },
+  { key: 'fouls_exp', label: 'Faltas*', title: 'Experimental: faltas cometidas (códigos EA 2 y 3)', exp: true, better: 'low' },
+  { key: 'penalties_conceded_exp', label: 'Penales*', title: 'Experimental: penales cometidos (código EA 94)', exp: true, better: 'low' },
+  { key: 'fouls_won_exp', label: 'F. recibidas*', title: 'Experimental: faltas recibidas (código EA 4)', exp: true },
+  { key: 'offsides_exp', label: 'Fuera lugar*', title: 'Experimental: fueras de juego (código EA 104; tiende a contar de menos)', exp: true, better: 'low' },
+  // --- Equipo y contexto
+  { key: 'minutes_played', label: 'Min.', title: 'Minutos jugados (tiempo de juego)', adv: true },
   { key: 'goal_diff', label: 'Dif. goles', title: 'Goles a favor menos en contra en los partidos que jugó', adv: true, render: (r) => fmtSigned(r.goal_diff) },
   { key: 'attendance_pct', label: 'Presencia %', title: 'Partidos jugados / partidos del club en el rango filtrado', digits: 1, adv: true },
   { key: 'form_rating', label: 'Forma', title: 'Calificación media de sus últimos 5 partidos', digits: 2, adv: true },
   { key: 'rating_stddev', label: 'Variación', title: 'Desviación de su calificación: más bajo = más regular', digits: 2, adv: true, better: 'low' },
-  { key: 'clean_sheets', label: 'Vallas', title: 'Vallas invictas (defensa + portero)', adv: true },
-  { key: 'save_pct', label: '% Atajadas', title: 'Porteros: atajadas / (atajadas + goles recibidos)', digits: 1, adv: true },
   { key: 'avg_opponent_skill', label: 'Nivel rival', title: 'Nivel medio (skillRating) de los rivales que enfrentó', adv: true, better: null },
   { key: 'avg_team_size', label: 'Jug. prom.', title: 'Jugadores del club en cancha, en promedio', digits: 1, adv: true, better: null },
   { key: 'incomplete_matches', label: 'Incompl.', title: 'Partidos incompletos (abandono o < 90 % del tiempo)', adv: true, better: null },
-  // Experimentales: contadores sin documentar de EA (ver nota al pie del dashboard).
-  { key: 'shot_accuracy_exp_pct', label: 'A puerta %*', title: 'Experimental: tiros a puerta / tiros (códigos EA 217 y 218)', digits: 1, exp: true },
-  { key: 'second_assists_exp', label: '2ª asist.*', title: 'Experimental: segundas asistencias (código EA 115)', exp: true },
-  { key: 'dribbles_exp', label: 'Regates*', title: 'Experimental: regates completados (código EA 174)', exp: true },
-  { key: 'interceptions_exp', label: 'Intercep.*', title: 'Experimental: intercepciones (código EA 6)', exp: true },
-  { key: 'possession_won_exp', label: 'Recup.*', title: 'Experimental: posesiones ganadas (códigos EA 108–110)', exp: true },
-  { key: 'possession_lost_exp', label: 'Pérdidas*', title: 'Experimental: posesiones perdidas (códigos EA 105–107)', exp: true, better: 'low' },
-  { key: 'aerial_duels_won_exp', label: 'Aéreos*', title: 'Experimental: duelos aéreos ganados (códigos EA 265–266)', exp: true },
-  { key: 'forward_pass_pct_exp', label: 'Pase adel. %*', title: 'Experimental: pases hacia adelante completados (códigos EA 30 y 31)', digits: 1, exp: true },
-  { key: 'through_passes_exp', label: 'Filtrados*', title: 'Experimental: pases filtrados (código EA 152)', exp: true },
-  { key: 'cross_pct_exp', label: 'Centros %*', title: 'Experimental: centros completados (códigos EA 36 y 37)', digits: 1, exp: true },
-  { key: 'in_position_pct_exp', label: 'En posición %*', title: 'Experimental: veces en posición / (en + fuera de posición) (códigos EA 111 y 219)', digits: 1, exp: true },
-  { key: 'best_option_pct_exp', label: 'Decisiones %*', title: 'Experimental: "tomó la mejor opción" / (mejor + "debió pasar a otro") (códigos EA 177 y 182)', digits: 1, exp: true },
-  { key: 'fouls_exp', label: 'Faltas*', title: 'Experimental: faltas cometidas (códigos EA 2 y 3)', exp: true, better: 'low' },
-  { key: 'fouls_won_exp', label: 'F. recibidas*', title: 'Experimental: faltas recibidas (código EA 4)', exp: true },
-  { key: 'offsides_exp', label: 'Fuera lugar*', title: 'Experimental: fueras de juego (código EA 104; tiende a contar de menos)', exp: true, better: 'low' },
-  { key: 'penalties_conceded_exp', label: 'Penales*', title: 'Experimental: penales cometidos (código EA 94)', exp: true, better: 'low' },
-  { key: 'yellow_cards_exp', label: 'Amarillas*', title: 'Experimental: tarjetas amarillas (códigos EA 95 y 213)', exp: true, better: 'low' },
 ];
 
 const visibleColumns = () => RANKING_COLUMNS.filter((c) => (state.showExp || !c.exp) && (state.showAdv || !c.adv));
@@ -647,7 +652,6 @@ async function renderRoles(filters, requestId) {
 // quien jugó más. Los índices relativos al rol van primero (justos si rotan).
 // ---------------------------------------------------------------------------
 
-const TIE_THRESHOLD = 0.03; // diferencia relativa menor al 3 % = empate
 const per90 = (r, key) => (r[key] == null || !Number(r.minutes_played) ? null : (Number(r[key]) * 90) / Number(r.minutes_played));
 const perMatch = (r, key) => (r[key] == null || !r.matches ? null : Number(r[key]) / r.matches);
 
@@ -675,40 +679,39 @@ const H2H_GROUPS = [
       { label: 'Calificación media', key: 'avg_rating', better: 'high', digits: 2 },
       { label: '% MVP', key: 'mom_pct', better: 'high', digits: 1, pct: true },
       { label: '% Victorias', value: (r) => (r.matches ? (100 * r.wins) / r.matches : null), better: 'high', digits: 0, pct: true },
+      // Experimentales (*) junto a los datos seguros de su mismo tema (pedido del usuario).
+      // Ataque
       { label: 'Goles por 90 min', key: 'goals_per90', better: 'high', digits: 2 },
       { label: 'Asistencias por 90 min', key: 'assists_per90', better: 'high', digits: 2 },
       { label: 'G+A por 90 min', key: 'ga_per90', better: 'high', digits: 2 },
       { label: 'Conversión de tiros', key: 'shot_conversion_pct', better: 'high', digits: 1, pct: true },
+      { label: 'Tiros a puerta %*', key: 'shot_accuracy_exp_pct', better: 'high', digits: 1, pct: true, exp: true },
+      { label: 'Regates por 90*', value: (r) => per90(r, 'dribbles_exp'), better: 'high', digits: 2, exp: true },
       { label: 'Participación en goles', key: 'goal_participation_pct', better: 'high', digits: 1, pct: true },
+      // Pase
       { label: 'Precisión de pase', key: 'pass_accuracy_pct', better: 'high', digits: 1, pct: true },
+      { label: 'Pases hacia adelante %*', key: 'forward_pass_pct_exp', better: 'high', digits: 1, pct: true, exp: true },
+      { label: 'Pases filtrados por 90*', value: (r) => per90(r, 'through_passes_exp'), better: 'high', digits: 2, exp: true },
+      { label: 'Centros completados %*', key: 'cross_pct_exp', better: 'high', digits: 1, pct: true, exp: true },
+      { label: 'Mejores decisiones %*', key: 'best_option_pct_exp', better: 'high', digits: 1, pct: true, exp: true },
+      { label: 'Posesiones perdidas por 90*', value: (r) => per90(r, 'possession_lost_exp'), better: 'low', digits: 2, exp: true },
+      // Defensa
       { label: 'Entradas ganadas %', key: 'tackle_success_pct', better: 'high', digits: 1, pct: true },
       { label: 'Entradas ganadas por 90', value: (r) => per90(r, 'tackles_made'), better: 'high', digits: 2 },
+      { label: 'Intercepciones por 90*', value: (r) => per90(r, 'interceptions_exp'), better: 'high', digits: 2, exp: true },
+      { label: 'Posesiones ganadas por 90*', value: (r) => per90(r, 'possession_won_exp'), better: 'high', digits: 2, exp: true },
+      { label: 'Duelos aéreos ganados por 90*', value: (r) => per90(r, 'aerial_duels_won_exp'), better: 'high', digits: 2, exp: true },
+      { label: 'En posición %*', key: 'in_position_pct_exp', better: 'high', digits: 1, pct: true, exp: true },
       { label: 'Atajadas %', key: 'save_pct', better: 'high', digits: 1, pct: true },
+      // Equipo y disciplina
       { label: 'Dif. de goles por partido', value: (r) => perMatch(r, 'goal_diff'), better: 'high', digits: 2, signed: true },
       { label: 'Forma (últimos 5)', key: 'form_rating', better: 'high', digits: 2 },
       { label: 'Regularidad (variación)', key: 'rating_stddev', better: 'low', digits: 2, hint: 'Más bajo = más regular', winLabel: 'Más regular' },
       { label: 'Rojas por partido', value: (r) => perMatch(r, 'red_cards'), better: 'low', digits: 2, winLabel: 'Menos rojas' },
+      { label: 'Faltas cometidas por 90*', value: (r) => per90(r, 'fouls_exp'), better: 'low', digits: 2, exp: true },
     ],
   },
   H2H_RELATIVE,
-  {
-    title: 'Experimentales* (por 90 min)',
-    exp: true,
-    rows: [
-      { label: 'Regates', value: (r) => per90(r, 'dribbles_exp'), better: 'high', digits: 2 },
-      { label: 'Intercepciones', value: (r) => per90(r, 'interceptions_exp'), better: 'high', digits: 2 },
-      { label: 'Posesiones ganadas', value: (r) => per90(r, 'possession_won_exp'), better: 'high', digits: 2 },
-      { label: 'Posesiones perdidas', value: (r) => per90(r, 'possession_lost_exp'), better: 'low', digits: 2 },
-      { label: 'Duelos aéreos ganados', value: (r) => per90(r, 'aerial_duels_won_exp'), better: 'high', digits: 2 },
-      { label: 'Pases filtrados', value: (r) => per90(r, 'through_passes_exp'), better: 'high', digits: 2 },
-      { label: 'Pases hacia adelante %', key: 'forward_pass_pct_exp', better: 'high', digits: 1, pct: true },
-      { label: 'Centros completados %', key: 'cross_pct_exp', better: 'high', digits: 1, pct: true },
-      { label: 'Tiros a puerta %', key: 'shot_accuracy_exp_pct', better: 'high', digits: 1, pct: true },
-      { label: 'Mejores decisiones %', key: 'best_option_pct_exp', better: 'high', digits: 1, pct: true },
-      { label: 'En posición %', key: 'in_position_pct_exp', better: 'high', digits: 1, pct: true },
-      { label: 'Faltas cometidas', value: (r) => per90(r, 'fouls_exp'), better: 'low', digits: 2 },
-    ],
-  },
   {
     title: 'Contexto (no se juzga)',
     rows: [
@@ -721,12 +724,17 @@ const H2H_GROUPS = [
   },
 ];
 
-/** 'a', 'b', 'tie' o null (sin dato o no se juzga). */
-function h2hWinner(va, vb, better) {
+/**
+ * 'a', 'b', 'tie' o null (sin dato o no se juzga). Empate solo si los dos valores
+ * son iguales tal como se muestran (redondeados a `digits` decimales): 6,90 vs 6,70
+ * tiene ganador (decisión del usuario, 2026-11-15; antes había un margen del 3 %).
+ */
+function h2hWinner(va, vb, better, digits = 0) {
   if (!better || va == null || vb == null || Number.isNaN(va) || Number.isNaN(vb)) return null;
-  const scale = Math.max(Math.abs(va), Math.abs(vb));
-  if (scale === 0 || Math.abs(va - vb) / scale < TIE_THRESHOLD) return 'tie';
-  return (va > vb) === (better === 'high') ? 'a' : 'b';
+  const f = 10 ** digits;
+  const ra = Math.round(va * f), rb = Math.round(vb * f);
+  if (ra === rb) return 'tie';
+  return (ra > rb) === (better === 'high') ? 'a' : 'b';
 }
 
 function fillH2hPickers() {
@@ -761,7 +769,7 @@ function renderH2h() {
       };
       const va = get(A, relA), vb = get(B, relB);
       if (va == null && vb == null) return null;
-      const w = h2hWinner(va, vb, m.better);
+      const w = h2hWinner(va, vb, m.better, g.source === 'relative' ? 0 : m.digits ?? 0);
       if (w) score[w]++;
       const fmt = (v) => (v == null ? '—' : m.signed ? (v > 0 ? '+' : '') + fmtNum(v, m.digits ?? 0) : m.pct ? fmtPct(v, m.digits ?? 0) : fmtNum(v, g.source === 'relative' ? 0 : m.digits ?? 0));
       // Largo de cada barra: |valor| / el mayor de los dos (la fila tiene su propia escala).
@@ -771,7 +779,7 @@ function renderH2h() {
       const tip = `${m.label}: ${A.person_name} ${fmt(va)} · ${B.person_name} ${fmt(vb)}`
         + (m.better === 'low' ? ' (menos es mejor)' : '')
         + (!m.better ? '' : w === 'tie' ? ' · empate' : who ? ` · mejor: ${who}` : '');
-      return el('div', { class: `h2h-row ${w ? `w-${w}` : 'neutral'}`, title: tip },
+      return el('div', { class: `h2h-row ${w ? `w-${w}` : 'neutral'}${m.exp ? ' exp' : ''}`, title: m.exp ? `${tip} · Experimental: dato que EA no documenta` : tip },
         el('div', { class: 'h2h-label' }, m.label, m.better === 'low' ? ' ↓' : ''),
         el('div', { class: 'h2h-bars' },
           el('span', { class: 'h2h-val a' }, fmt(va)),

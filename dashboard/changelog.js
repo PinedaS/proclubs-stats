@@ -2,6 +2,15 @@
 // para el equipo, agregar una entrada arriba: versión, fecha y cambios en lenguaje simple.
 export const CHANGELOG = [
   {
+    version: '2.3',
+    date: '2026-11-15',
+    title: 'Comparaciones más finas',
+    changes: [
+      'Cara a cara: solo hay empate si los dos valores son iguales; una diferencia como 6,90 contra 6,70 ya marca ganador.',
+      'Los datos experimentales (*) aparecen junto a los demás de su tema (ataque, pase, defensa, disciplina), con fondo teñido, en Cara a cara y en el ranking.',
+    ],
+  },
+  {
     version: '2.2',
     date: '2026-11-15',
     title: 'Más gráficas del jugador',

@@ -75,7 +75,9 @@ API no oficial de EA ──► Colector (GitHub Actions, cada 30 min) ──► 
      - **Cara a cara** (pestaña nueva): compara dos jugadores dato por dato, de forma **visual**, sin texto de "es mejor en…" (pedido del usuario).
        - **Filas:** barras enfrentadas desde el centro, azul (A) y naranja (B). La paleta pasó `validate_palette.js` en los dos modos. Quien gana el dato lleva su barra en color fuerte y la del otro va atenuada.
        - **Marcador arriba:** datos ganados, empates y datos perdidos.
-       - **Qué se juzga:** solo tasas (por partido, por 90 min, %), nunca totales. Primero van los índices relativos al rol. Las diferencias menores al 3 % son empate.
+       - **Qué se juzga:** solo tasas (por partido, por 90 min, %), nunca totales. Primero va el rendimiento y después los índices relativos al rol.
+       - **Empate (2026-11-15, pedido del usuario):** solo si los dos valores son iguales redondeados a los decimales que se muestran. Antes había un margen del 3 %, que el usuario cerró: 6,90 contra 6,70 debe tener ganador.
+       - **Experimentales (*) dentro de cada tema** (ataque, pase, defensa, disciplina), no en una sección aparte. Llevan fondo teñido y aviso al pasar el cursor. El ranking ordena sus columnas igual.
        - El enlace `?a=ID&b=ID` sirve para compartir, y el detalle de cada jugador tiene un botón "Comparar con…".
      - **Podio y puesto (#):** siguen siempre al **mejor** de cada dato, no al orden de la tabla. Así el peor no sale "1º" al ordenar de menor a mayor.
        - Las columnas llevan `better`: `'low'` en rojas, variación, pérdidas, faltas, fueras de juego, penales y amarillas; `null` (sin podio) en nivel del rival, jugadores en cancha e incompletos.
