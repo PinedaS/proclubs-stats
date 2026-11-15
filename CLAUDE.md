@@ -172,7 +172,8 @@ No hay API oficial. Se usan los endpoints públicos que lee la web de Clubes de 
   - `collector_runs` la registró como `success`, con 10 partidos vistos y 10 nuevos.
   - Desde entonces corre sola cada 30 min (minutos 7 y 37).
 - **Secretos del repo:** `SUPABASE_URL` y `SUPABASE_SERVICE_ROLE_KEY`, cargados el 2026-11-11.
-- **Variables opcionales del repo:** `EA_CLUB_NAMES` y `SEASON`. Sin ellas, el colector usa el club de prueba.
+- **Variables del repo:** `EA_CLUB_NAMES` (obligatoria desde el 2026-11-15: sin ella el colector falla con un error claro) y `SEASON` (opcional, `FC27` por defecto).
+  - **Valor actual (2026-11-15):** `EA_CLUB_NAMES` = `100 D CILANTRO`.
   - **Varios clubes (2026-11-11):** el usuario seguirá un **segundo equipo propio**, con otras personas; el nombre aún no está definido.
     - `EA_CLUB_NAMES` acepta varios nombres exactos separados por **`;`** (un nombre puede tener comas), p. ej. `FC Aston Huila;Otro Club`. `EA_CLUB_NAME` se sigue aceptando.
     - El colector registra una ejecución en `collector_runs` por club. La falla de uno no impide capturar los demás, pero sale con código 1.
@@ -187,7 +188,21 @@ No hay API oficial. Se usan los endpoints públicos que lee la web de Clubes de 
   - **Inferencia:** el colector escribiendo cada 30 min lo mantiene activo.
   - **Riesgo residual:** si EA se cae más de una semana, no hay escrituras y el proyecto se pausa. Considerar un *heartbeat* (registro de cada ejecución en una tabla `collector_runs`, incluso cuando no haya partidos nuevos).
 
-## 5. Datos de prueba
+## 5. Clubes seguidos y datos de prueba
+
+**Estado (2026-11-15):**
+
+- **Se sigue "100 D CILANTRO"**, el equipo secundario del usuario con otros amigos, `clubId` 2240695, `common-gen5`.
+  - EA lo encontró por nombre exacto.
+  - La primera captura (ejecución manual del 2026-11-15, 17:34 UTC) guardó su único partido: liga, 0-5. Jugaron PinedaDS, Andresjimene y ayala14pv.
+- **El club de prueba "Aston Huila" (1330384) fue borrado** con `purge_club(1330384)` el 2026-11-15, a pedido del usuario.
+  - Verificado después: 0 partidos, 0 JSON crudo y 0 fotos de ese club.
+  - Quedaron 3 cuentas y 3 personas, todas de 100 D CILANTRO. El registro `collector_runs` se conservó.
+  - Lo de abajo sobre el club de prueba queda como historia.
+- **FC Aston Huila todavía no aparece en EA** (búsqueda del 2026-11-15: 0 resultados; sigue sin partidos).
+  - **No** se agregó a `EA_CLUB_NAMES`: cada captura fallaría y llegaría un correo cada 15 min.
+  - **Agregarlo apenas jueguen el primer partido:** `FC Aston Huila;100 D CILANTRO`. Ver `docs/cambio-de-temporada.md`, parte A.
+
 
 **Club del equipo: "FC Aston Huila"** (creado el 2026-11-10; todavía sin partidos jugados).
 - **Verificado (2026-11-10):** `clubs.search("FC Aston Huila")` devuelve `[]`.
