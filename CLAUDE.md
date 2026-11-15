@@ -109,6 +109,7 @@ API no oficial de EA ──► Colector (GitHub Actions, cada 30 min) ──► 
        - **Duplicados quitados:** el nivel del rival en Avanzadas, y en Club la división, el V-E-D y los puntos.
      - **Versiones:** `dashboard/changelog.js` guarda la lista de versiones. La cabecera muestra la versión ("v2.0 · Novedades") y abre una ventana con los cambios de cada una.
        - **Al publicar un cambio visible, agregar una entrada arriba.**
+       - **No atribuir funciones a personas** en lo que ve el equipo (pedido del usuario, 2026-11-15). Nada de "sugerencias de X": se describe lo que cambia.
      - **Escudo real:** EA manda `details.customKit.crestAssetId` (99020510 para 100 D CILANTRO) y `crestColor`. No se usó: no se pudo verificar desde qué dirección carga EA la imagen, y no se quiere enlazar a imágenes de EA sin confirmarlo.
      - **Nombres de arquetipos:** mapeo de la comunidad (Interactive-63, issue #5, nov. 2026), no oficial.
        - Los deducidos sin confirmar llevan "?": 1 y 2 (porteros), 4 (Boss), 7 y 9.

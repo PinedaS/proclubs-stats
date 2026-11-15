@@ -40,7 +40,7 @@ export const CHANGELOG = [
   {
     version: '1.2',
     date: '2026-11-11',
-    title: 'Sugerencias de Campuzano',
+    title: 'Posición, división y química',
     changes: [
       'Posición recomendada en el detalle de cada jugador.',
       'Comparar por división y división de cada partido.',
