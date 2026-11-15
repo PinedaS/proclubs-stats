@@ -1060,6 +1060,74 @@ function tile(label, value, cls = '') {
   return el('div', { class: `tile ${cls}`.trim() }, el('div', { class: 'label' }, label), el('div', { class: 'value' }, value));
 }
 
+/**
+ * "Nivel y división" del detalle: dónde entró, el nivel de sus rivales y su
+ * rendimiento en cada división. Las fichas de la media del Pro se llenan después
+ * (fillLevelTiles), cuando llegan las fotos diarias de members/stats.
+ */
+function divisionContext(matches, summary, levelTiles) {
+  const first = matches.find((m) => m.club_division != null); // vienen de más viejo a más nuevo
+  levelTiles.replaceChildren(
+    tile('Media al entrar', '…'),
+    tile('Media actual', summary?.pro_overall != null ? fmtNum(summary.pro_overall) : '…'),
+    tile('Entró en', first ? `${first.club_division}ª división` : '—'),
+    tile('Nivel medio de sus rivales', fmtNum(summary?.avg_opponent_skill)));
+  levelTiles.lastElementChild.title = 'skillRating medio de los rivales que enfrentó: más alto = rivales más difíciles';
+  levelTiles.children[2].title = first ? `Su primer partido con división registrada: ${fmtDate(first.played_at, false)}` : 'Sus partidos son anteriores al registro de la división';
+
+  // Rendimiento por división (1ª arriba; los partidos sin dato, al final).
+  const groups = new Map();
+  for (const m of matches) {
+    const key = m.club_division ?? 'sin';
+    if (!groups.has(key)) groups.set(key, []);
+    groups.get(key).push(m);
+  }
+  const keys = [...groups.keys()].sort((a, b) => (a === 'sin') - (b === 'sin') || a - b);
+  const avg = (list, f) => { const v = list.map(f).filter((x) => x != null).map(Number); return v.length ? v.reduce((s, x) => s + x, 0) / v.length : null; };
+  const table = el('div', { class: 'table-wrap' }, el('table', { class: 'data' },
+    el('thead', {}, el('tr', {}, [['Div.', 'División del club'], ['PJ', 'Partidos jugados'], ['Calif.', 'Calificación media'], ['V-E-D', 'Victorias, empates y derrotas'], ['Rival', 'Nivel medio (skillRating) de los rivales']]
+      .map(([h, t], i) => el('th', { scope: 'col', title: t, class: i === 0 ? 'left' : null }, h)))),
+    el('tbody', {}, keys.length ? keys.map((k) => {
+      const list = groups.get(k);
+      const count = (o) => list.filter((m) => m.outcome === o).length;
+      return el('tr', {},
+        el('td', { class: 'left' }, k === 'sin' ? el('span', { class: 'muted', title: 'Partidos anteriores al registro de la división' }, 'Sin dato') : `${k}ª`),
+        el('td', {}, String(list.length)),
+        el('td', {}, el('strong', {}, fmtNum(avg(list, (m) => m.rating), 2))),
+        el('td', {}, `${count('win')}-${count('draw')}-${count('loss')}`),
+        el('td', {}, fmtNum(avg(list, (m) => m.opponent_skill_rating))));
+    }) : [emptyRow(5, 'Sin partidos para estos filtros.')])));
+  return [levelTiles, table,
+    el('p', { class: 'muted small' }, 'Contexto para valorar su rendimiento: no es lo mismo jugar en 6ª que en 2ª, ni contra rivales débiles que fuertes. La 1ª es la división más alta. Con pocos partidos en una división, su promedio ahí no es confiable.')];
+}
+
+/** Media del Pro al entrar (primera foto diaria) y actual (última). */
+function fillLevelTiles(box, history, matches) {
+  if (!history.length) {
+    for (const t of [...box.children].slice(0, 2)) {
+      const v = t.querySelector('.value');
+      if (v.textContent === '…') v.textContent = '—';
+    }
+    return;
+  }
+  const byDate = [...history].sort((a, b) => a.snapshot_date.localeCompare(b.snapshot_date));
+  const firstDate = byDate[0].snapshot_date, lastDate = byDate.at(-1).snapshot_date;
+  // Con varias cuentas se toma la media más alta de cada día.
+  const best = (d) => byDate.filter((h) => h.snapshot_date === d).sort((a, b) => b.pro_overall - a.pro_overall)[0];
+  const start = best(firstDate), now = best(lastDate);
+  const delta = now.pro_overall - start.pro_overall;
+  box.children[0].querySelector('.value').textContent = fmtNum(start.pro_overall);
+  box.children[1].querySelector('.value').textContent = `${fmtNum(now.pro_overall)}${delta ? ` (${delta > 0 ? '+' : ''}${delta})` : ''}`;
+  // Si en la primera foto ya llevaba partidos que no capturamos, "al entrar" es en
+  // realidad "al empezar a registrar". La foto del día se pisa en cada captura, así
+  // que incluye los partidos de ese mismo día (<=).
+  const before = Number(start.games_played ?? 0) - matches.filter((m) => m.played_at.slice(0, 10) <= firstDate).length;
+  box.children[0].title = before > 1
+    ? `Primera foto: ${fmtDate(`${firstDate}T12:00:00Z`, false)}. Ya llevaba ${start.games_played} partidos en el club según EA, así que es su media al empezar el registro, no al entrar.`
+    : `Primera foto: ${fmtDate(`${firstDate}T12:00:00Z`, false)}`;
+  if (before > 1) box.children[0].querySelector('.label').textContent = 'Media al iniciar registro';
+}
+
 async function renderPerson(filters, requestId) {
   const box = $('#person-detail');
   if (state.personId == null) { box.hidden = true; return; }
@@ -1105,6 +1173,10 @@ async function renderPerson(filters, requestId) {
     tile('Mayor invicto', `${fmtNum(rec.longest_unbeaten_streak)} PJ`, 'record'),
     tile('Invicto actual', `${fmtNum(rec.current_unbeaten_streak)} PJ`, 'record')) : null;
 
+  // Nivel y división: contexto para valorar su rendimiento (no es la fórmula de "mejor jugador").
+  const levelTiles = el('div', { class: 'tiles' });
+  const divisionSection = divisionContext(matches, summary, levelTiles);
+
   const chartBox = el('div', { class: 'chart' }, el('h3', {}, 'Calificación por partido'));
   const overallBox = el('div', { class: 'chart' }, el('h3', {}, 'Media del Pro (EA), día a día'));
   const table = el('div', { class: 'table-wrap' }, el('table', { class: 'data' },
@@ -1137,6 +1209,7 @@ async function renderPerson(filters, requestId) {
     el('p', { class: 'section-title' }, 'Resumen'), basics,
     relTiles ? [el('p', { class: 'section-title' }, 'Relativo a su rol (100 = promedio de su posición)'), relTiles] : null,
     fit ? [el('p', { class: 'section-title' }, 'Posición recomendada'), fit] : null,
+    el('p', { class: 'section-title' }, 'Nivel y división'), divisionSection,
     advanced ? [el('p', { class: 'section-title' }, 'Avanzadas'), advanced] : null,
     records ? [el('p', { class: 'section-title' }, 'Récords y rachas'), records] : null,
     el('div', { class: 'grid-2' }, chartBox, overallBox),
@@ -1160,6 +1233,7 @@ async function renderPerson(filters, requestId) {
     const names = state.members.filter((m) => m.person_id === state.personId).map((m) => m.member_name);
     const history = (await api.getMemberHistory(names, state.clubId)).filter((h) => h.pro_overall != null);
     if (requestId !== state.requestId) return;
+    fillLevelTiles(levelTiles, history, matches);
     drawLineChart(overallBox, history, {
       label: 'Media del Pro', value: (h) => h.pro_overall, date: (h) => `${h.snapshot_date}T12:00:00Z`,
       min: 40, max: 99, pad: 1, emptyText: 'Sin fotos de members/stats para este jugador.',
@@ -1170,6 +1244,7 @@ async function renderPerson(filters, requestId) {
     });
   } catch (err) {
     overallBox.append(el('p', { class: 'muted' }, `No se pudo cargar la media: ${err.message}`));
+    fillLevelTiles(levelTiles, [], matches);
   }
 }
 

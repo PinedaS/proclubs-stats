@@ -84,6 +84,19 @@ API no oficial de EA ──► Colector (GitHub Actions, cada 30 min) ──► 
      - **Mejor división (verificado el 2026-11-11):** EA manda dos `bestDivision` contradictorios: `overallStats` = 4 y ranking de la temporada = 3, con la actual también en 3. La 1 es la más alta.
        - Hipótesis sin confirmar: la de `overallStats` cuenta otra cosa o está desactualizada.
        - `club.ts` ahora guarda la más alta entre las dos y la actual. Las fotos de días anteriores conservan el 4.
+     - **"Nivel y división" en el detalle del jugador (2026-11-15, pedido del usuario):** contexto para valorar su rendimiento. **No** entra en ninguna fórmula; eso sigue pendiente.
+       - **Fichas:**
+         - Media al entrar y media actual, de la primera y la última foto de `member_snapshots`, tomando la más alta si tiene varias cuentas.
+         - Si en la primera foto EA ya contaba partidos que no capturamos, la ficha dice "al iniciar registro".
+         - División del primer partido con división registrada.
+         - Nivel medio de los rivales.
+       - **Tabla por división:** PJ, calificación media, V-E-D y nivel del rival.
+     - **Divisiones (verificado en la respuesta de EA):** hay **6**. `overallStats` trae `finishesInDivision1..6`, y la 1 es la más alta.
+       - 100 D CILANTRO, con su primer partido, quedó en 6ª.
+       - No hay documentación oficial que lo confirme.
+     - **Idea del usuario para la fórmula futura:** pesar el rendimiento según el nivel con que cada uno entra y la división.
+       - Recomendación dada: usar el **nivel del rival por partido**, que es más fino que la división.
+       - No usar la media del Pro para ponderar sin pensarlo, porque mide progreso del personaje, no rendimiento.
      - **Nombres de arquetipos:** mapeo de la comunidad (Interactive-63, issue #5, nov. 2026), no oficial.
        - Los deducidos sin confirmar llevan "?": 1 y 2 (porteros), 4 (Boss), 7 y 9.
        - Contrastado con nuestros datos: 4, 5 y 8 cuadran con las posiciones jugadas. El 13 (Target Man) aparece sobre todo en el medio, aunque la comunidad lo ve un 95 % de las veces como delantero.

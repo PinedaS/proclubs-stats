@@ -87,7 +87,7 @@ export async function getMatchFlags(f) {
 
 export function getPersonMatches(personId, f) {
   const p = filterParams(f);
-  p.set('select', 'match_id,played_at,match_type,opponent_name,opponent_skill_rating,goals_for,goals_against,outcome,playername,position,platform,rating,goals,assists,is_mom,shots,passes_made,pass_attempts,tackles_made,saves,team_size,incomplete,dribbles_exp,interceptions_exp,possession_won_exp,possession_lost_exp');
+  p.set('select', 'match_id,played_at,match_type,opponent_name,opponent_skill_rating,goals_for,goals_against,outcome,playername,position,platform,rating,goals,assists,is_mom,shots,passes_made,pass_attempts,tackles_made,saves,team_size,incomplete,club_division,dribbles_exp,interceptions_exp,possession_won_exp,possession_lost_exp');
   p.set('person_id', `eq.${Number(personId)}`);
   p.set('order', 'played_at.asc');
   if (f.excludeIncomplete) p.set('incomplete', 'is.false');
