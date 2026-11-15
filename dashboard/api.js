@@ -69,6 +69,29 @@ export function getCollectorStatus() {
   return request('v_collector_status?select=*').then((r) => r[0] ?? null);
 }
 
+/** Últimos partidos del club (todos los tipos, sin filtros): forma y racha de la cabecera. */
+export function getRecentMatches(clubId, limit = 30) {
+  const p = new URLSearchParams({ select: 'match_id,played_at,outcome,goals_for,goals_against,opponent_name,match_type', order: 'played_at.desc', limit: String(limit) });
+  if (clubId) p.set('club_id', `eq.${Number(clubId)}`);
+  return request(`matches?${p}`);
+}
+
+/** Calificación de cada jugador en cada partido (para tendencias y evolución semanal). */
+export function getRatingsTimeline(f) {
+  const p = filterParams(f);
+  p.set('select', 'match_id,played_at,person_id,rating,incomplete');
+  p.set('order', 'played_at.asc');
+  if (f.excludeIncomplete) p.set('incomplete', 'is.false');
+  return request(`v_player_match_stats?${p}`);
+}
+
+/** Goleadores y MVP de una lista de partidos. */
+export function getMatchHighlights(matchIds) {
+  if (!matchIds.length) return Promise.resolve([]);
+  const p = new URLSearchParams({ select: 'match_id,person_name,goals,is_mom', match_id: `in.(${matchIds.map((id) => `"${String(id).replaceAll('"', '')}"`).join(',')})`, or: '(goals.gt.0,is_mom.is.true)' });
+  return request(`v_player_match_stats?${p}`);
+}
+
 export function getMatches(f) {
   const p = filterParams(f);
   p.set('select', 'match_id,match_type,played_at,goals_for,goals_against,outcome,winner_by_dnf,opponent_name,opponent_skill_rating');

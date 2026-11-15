@@ -6,8 +6,8 @@
   <title>Stats del club · EA FC</title>
   <meta name="description" content="Estadísticas de nuestro club de Clubes (Pro Clubs) en EA SPORTS FC">
   <meta name="referrer" content="no-referrer">
-  <meta name="theme-color" content="#0b1410">
-  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Cpath d='M16 2l12 5v8c0 8-5.5 13-12 15C9.5 28 4 23 4 15V7z' fill='%2322c55e'/%3E%3C/svg%3E">
+  <meta name="theme-color" content="#0f1115">
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Cpath d='M16 2l12 5v8c0 8-5.5 13-12 15C9.5 28 4 23 4 15V7z' fill='%233d8bfd'/%3E%3C/svg%3E">
   <!-- __V__ lo reemplaza el despliegue por el commit (pages.yml): evita mezclar archivos viejos de la caché. -->
   <link rel="stylesheet" href="styles.css?v=__V__">
   <script type="module" src="app.js?v=__V__"></script>
@@ -37,6 +37,9 @@
         <button type="button" class="status guide-btn" id="open-guide" aria-haspopup="dialog">
           <span class="icon" aria-hidden="true">?</span><span>Cómo leer esto</span>
         </button>
+        <button type="button" class="status guide-btn version-btn" id="open-changelog" aria-haspopup="dialog" title="Ver qué cambió en cada versión">
+          <span id="version-label">v—</span><span class="muted">Novedades</span>
+        </button>
       </div>
     </div>
     <div class="kpis" id="club-kpis" aria-label="Resumen del club"></div>
@@ -55,44 +58,52 @@
   </nav>
 
   <main>
-    <!-- En el celular los filtros se pliegan (app.js cierra el <details>); en escritorio siempre abiertos. -->
-    <details class="filters-box card" id="filters-box" open>
-    <summary class="filters-summary"><span>Filtros</span><span class="muted small" id="filters-summary-text"></span></summary>
-    <section class="filters" aria-label="Filtros">
-      <div class="filter-group">
-        <span class="filter-label">Tipo de partido</span>
-        <div class="chips">
-          <label class="chip"><input type="checkbox" name="type" value="leagueMatch" checked><span>Liga</span></label>
-          <label class="chip"><input type="checkbox" name="type" value="playoffMatch" checked><span>Play-off</span></label>
-          <label class="chip"><input type="checkbox" name="type" value="friendlyMatch" checked><span>Amistoso</span></label>
+    <!-- Filtros en una sola franja: tipos a la vista; fechas y opciones de vista en menús desplegables. -->
+    <section class="filters filters-bar card" aria-label="Filtros">
+      <div class="chips" role="group" aria-label="Tipo de partido">
+        <label class="chip"><input type="checkbox" name="type" value="leagueMatch" checked><span>Liga</span></label>
+        <label class="chip"><input type="checkbox" name="type" value="playoffMatch" checked><span>Play-off</span></label>
+        <label class="chip"><input type="checkbox" name="type" value="friendlyMatch" checked><span>Amistoso</span></label>
+      </div>
+      <details class="pop" id="dates-pop">
+        <summary><span>Fechas</span><span class="pop-value" id="dates-value"></span></summary>
+        <div class="pop-panel">
+          <label class="field">Desde <input type="date" id="from"></label>
+          <label class="field">Hasta <input type="date" id="to"></label>
+          <button type="button" class="link-btn" id="clear-dates">Quitar fechas</button>
         </div>
-      </div>
-      <label class="field">Desde <input type="date" id="from"></label>
-      <label class="field">Hasta <input type="date" id="to"></label>
-      <label class="field" title="Mínimo de partidos para aparecer en las tablas">Mín. partidos
-        <input type="number" id="min-matches" min="1" value="1" inputmode="numeric">
-      </label>
-      <div class="switches">
-        <label class="switch" title="Excluye abandonos y partidos donde nadie del club llegó al 90 % del tiempo">
-          <input type="checkbox" id="exclude-incomplete"><span class="track" aria-hidden="true"></span>Excluir incompletos
-        </label>
-        <label class="switch" title="Métricas calculadas con datos oficiales: por 90 min, conversión, forma, presencia…">
-          <input type="checkbox" id="show-adv"><span class="track" aria-hidden="true"></span>Métricas avanzadas
-        </label>
-        <label class="switch" title="Datos que EA no documenta; ver nota al pie">
-          <input type="checkbox" id="show-exp" checked><span class="track" aria-hidden="true"></span>Experimentales*
-        </label>
-      </div>
+      </details>
+      <details class="pop" id="view-pop">
+        <summary><span>Vista</span><span class="pop-value" id="view-value"></span></summary>
+        <div class="pop-panel">
+          <label class="field" title="Mínimo de partidos para aparecer en las tablas">Mín. partidos
+            <input type="number" id="min-matches" min="1" value="1" inputmode="numeric">
+          </label>
+          <label class="switch" title="Excluye abandonos y partidos donde nadie del club llegó al 90 % del tiempo">
+            <input type="checkbox" id="exclude-incomplete"><span class="track" aria-hidden="true"></span>Excluir incompletos
+          </label>
+          <label class="switch" title="Métricas calculadas con datos oficiales: por 90 min, conversión, forma, presencia…">
+            <input type="checkbox" id="show-adv"><span class="track" aria-hidden="true"></span>Métricas avanzadas
+          </label>
+          <label class="switch" title="Datos que EA no documenta; ver nota al pie">
+            <input type="checkbox" id="show-exp" checked><span class="track" aria-hidden="true"></span>Experimentales*
+          </label>
+        </div>
+      </details>
     </section>
-    </details>
+
+    <!-- Aviso mientras el club tenga pocos partidos (las diferencias aún son casualidad). -->
+    <p id="few-data" class="few-data" hidden></p>
 
     <p id="error" class="error" hidden></p>
 
     <section id="view-ranking" class="view">
       <div id="podium" class="podium" aria-label="Los tres primeros según la columna ordenada"></div>
       <div class="card table-card">
-        <div class="card-head"><h2>Jugadores <span class="tag">partidos capturados</span></h2><p class="muted small">Ordena con un clic en cualquier columna. Toca un jugador para ver su detalle.</p></div>
-        <div class="table-wrap"><table id="ranking-table" class="data"></table></div>
+        <div class="card-head"><h2>Jugadores <span class="tag">partidos capturados</span></h2><p class="muted small">Ordena con un clic en cualquier columna. Toca un jugador para ver su detalle.</p>
+          <label class="sort-mobile">Ordenar por <select id="sort-select"></select></label></div>
+        <div class="table-wrap ranking-table-wrap"><table id="ranking-table" class="data"></table></div>
+        <div id="ranking-cards" class="ranking-cards"></div>
       </div>
     </section>
 
@@ -210,6 +221,7 @@
         <div class="card"><div class="card-head"><h2>Nivel del club</h2><p class="muted small">skillRating según EA, una foto por día.</p></div><div id="club-chart" class="chart"></div></div>
         <div class="card"><div class="card-head"><h2>Temporada actual</h2></div><div id="club-season-card"></div></div>
       </div>
+      <div class="card"><div class="card-head"><h2>Evolución semanal del equipo</h2><p class="muted small">Calificación media de todos los jugadores, semana a semana (lunes a domingo), con los filtros actuales.</p></div><div id="club-weekly" class="chart"></div></div>
     </section>
 
     <section id="person-detail" class="detail card" hidden aria-live="polite"></section>
@@ -254,6 +266,14 @@
       <h3>¿Y el mejor jugador?</h3>
       <p>Todavía no hay fórmula: por ahora solo juntamos los datos. Se definirá más adelante, de forma transparente y sin castigar a quien rota de posición.</p>
     </div>
+  </dialog>
+
+  <dialog id="changelog" class="guide" aria-labelledby="changelog-title">
+    <div class="guide-head">
+      <h2 id="changelog-title">Novedades</h2>
+      <button type="button" class="close" id="close-changelog">Cerrar</button>
+    </div>
+    <div class="guide-body" id="changelog-body"></div>
   </dialog>
 
   <footer class="foot">

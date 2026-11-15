@@ -97,6 +97,19 @@ API no oficial de EA ──► Colector (GitHub Actions, cada 30 min) ──► 
      - **Idea del usuario para la fórmula futura:** pesar el rendimiento según el nivel con que cada uno entra y la división.
        - Recomendación dada: usar el **nivel del rival por partido**, que es más fino que la división.
        - No usar la media del Pro para ponderar sin pensarlo, porque mide progreso del personaje, no rendimiento.
+     - **Rediseño v2.0 (2026-11-15):**
+       - **Paleta "grafito y azul eléctrico"**, elegida por el usuario entre 4 muestras.
+       - **Cabecera:** 4 fichas (nivel, división, temporada y forma de los últimos 5) y la racha calculada con los partidos capturados.
+       - **Filtros:** en una franja con menús "Fechas" y "Vista".
+       - **Pocos datos:** aviso con menos de 10 partidos. Los jugadores con menos de 3 PJ se ven atenuados, y el podio vacío muestra un mensaje.
+       - **Ranking en el celular:** tarjetas con un selector "Ordenar por", y mini tendencia de las últimas 5 calificaciones.
+       - **Detalle del jugador:** pestañas Resumen, Rendimiento, Contexto y Partidos.
+       - **Partidos:** goleadores y MVP de cada uno.
+       - **Evolución semanal:** del equipo en Club y del jugador en Rendimiento.
+       - **Duplicados quitados:** el nivel del rival en Avanzadas, y en Club la división, el V-E-D y los puntos.
+     - **Versiones:** `dashboard/changelog.js` guarda la lista de versiones. La cabecera muestra la versión ("v2.0 · Novedades") y abre una ventana con los cambios de cada una.
+       - **Al publicar un cambio visible, agregar una entrada arriba.**
+     - **Escudo real:** EA manda `details.customKit.crestAssetId` (99020510 para 100 D CILANTRO) y `crestColor`. No se usó: no se pudo verificar desde qué dirección carga EA la imagen, y no se quiere enlazar a imágenes de EA sin confirmarlo.
      - **Nombres de arquetipos:** mapeo de la comunidad (Interactive-63, issue #5, nov. 2026), no oficial.
        - Los deducidos sin confirmar llevan "?": 1 y 2 (porteros), 4 (Boss), 7 y 9.
        - Contrastado con nuestros datos: 4, 5 y 8 cuadran con las posiciones jugadas. El 13 (Target Man) aparece sobre todo en el medio, aunque la comunidad lo ve un 95 % de las veces como delantero.

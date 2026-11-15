@@ -2,6 +2,7 @@
 // se inserta como TEXTO, nunca como HTML: evita inyección de código (XSS).
 import * as api from './api.js?v=__V__';
 import { STALE_CRITICAL_MINUTES, STALE_WARNING_MINUTES } from './config.js?v=__V__';
+import { CHANGELOG } from './changelog.js?v=__V__';
 
 const TYPE_LABEL = { leagueMatch: 'Liga', playoffMatch: 'Play-off', friendlyMatch: 'Amistoso' };
 const POS_LABEL = { forward: 'Delantero', midfielder: 'Mediocampista', defender: 'Defensa', goalkeeper: 'Portero' };
@@ -31,6 +32,9 @@ const state = {
   roleGroup: 'position',
   roleMode: 'relative', // 'relative' (índices vs. el rol) | 'real' (valores por posición)
   h2h: { a: null, b: null }, // Cara a cara: person_id de cada lado
+  trend: new Map(), // person_id -> calificaciones por partido (de más vieja a más nueva)
+  personTab: 'resumen', // pestaña abierta en el detalle del jugador
+  timeline: [], // filas {match_id, played_at, person_id, rating} con los filtros actuales
   roleSort: { key: 'rating_idx', dir: -1 },
   relative: new Map(),
   clubs: [],
@@ -239,18 +243,44 @@ async function renderHeader() {
   const last = snaps.at(-1);
   const first = snaps[0];
   const delta = last && first && last.skill_rating != null && first.skill_rating != null ? last.skill_rating - first.skill_rating : null;
+  const recent = await api.getRecentMatches(state.clubId).catch(() => []);
   const capturedMatches = state.ranking[0]?.club_matches;
+  if (club) {
+    $('#club-season').textContent = `Temporada ${club.season} · ${fmtNum(capturedMatches ?? 0)} partido${capturedMatches === 1 ? '' : 's'}`;
+    $('#club-season').title = 'Partidos capturados con los filtros actuales';
+  }
+  const form = el('div', { class: 'form-chips', role: 'img', 'aria-label': `Últimos resultados: ${recent.slice(0, 5).map((m) => OUTCOME[m.outcome]?.label ?? '—').join(', ')}` },
+    recent.length ? [...recent.slice(0, 5)].reverse().map((m) => el('span', {
+      class: `result ${m.outcome}`, title: `${OUTCOME[m.outcome]?.label ?? ''} ${m.goals_for}–${m.goals_against}${m.opponent_name ? ` vs. ${m.opponent_name}` : ''} · ${fmtDate(m.played_at, false)}`,
+    }, OUTCOME[m.outcome]?.letter ?? '?')) : el('span', { class: 'muted' }, '—'));
   $('#club-kpis').replaceChildren(
     kpi('Nivel del club', fmtNum(last?.skill_rating),
       delta == null || snaps.length < 2 ? 'skillRating de EA' : `${fmtSigned(delta)} desde ${fmtDate(`${first.snapshot_date}T12:00:00Z`, false)}`,
       delta > 0 ? 'up' : delta < 0 ? 'down' : null),
     kpi('División', last?.current_division != null ? `${last.current_division}ª` : '—', last?.best_division != null ? `Mejor: ${last.best_division}ª` : null),
-    kpi('Puntos de liga', fmtNum(last?.season_points), last?.season_games != null ? `${last.season_games} partidos de temporada` : null),
-    kpi('Temporada V-E-D', last?.season_wins != null ? `${last.season_wins}-${last.season_draws}-${last.season_losses}` : '—',
-      last?.season_goals != null ? `Goles ${last.season_goals} : ${last.season_goals_against}` : null),
-    kpi('Racha', last?.unbeaten_streak != null ? `${last.unbeaten_streak} sin perder` : '—', last?.win_streak ? `${last.win_streak} victorias seguidas` : null),
-    kpi('Partidos capturados', fmtNum(capturedMatches), 'con los filtros actuales'),
+    kpi('Temporada', last?.season_wins != null ? `${last.season_wins}-${last.season_draws}-${last.season_losses}` : '—',
+      last?.season_points != null ? `${fmtNum(last.season_points)} pts · goles ${last.season_goals ?? '—'} : ${last.season_goals_against ?? '—'}` : 'V-E-D'),
+    kpi('Forma (últ. 5)', form, streakText(recent)),
   );
+}
+
+/**
+ * Racha actual según los partidos capturados (del más reciente hacia atrás):
+ * "3 victorias seguidas", "2 derrotas seguidas" o "4 sin perder".
+ */
+function streakText(recent) {
+  if (!recent.length) return null;
+  const plural = (n, one, many) => `${n} ${n === 1 ? one : many}`;
+  if (recent[0].outcome === 'loss') {
+    const n = recent.findIndex((m) => m.outcome !== 'loss');
+    return plural(n < 0 ? recent.length : n, 'derrota', 'derrotas seguidas').replace(/^1 derrota$/, 'Viene de 1 derrota');
+  }
+  const unbeaten = recent.findIndex((m) => m.outcome === 'loss');
+  const runUnbeaten = unbeaten < 0 ? recent.length : unbeaten;
+  const wins = recent.findIndex((m) => m.outcome !== 'win');
+  const runWins = wins < 0 ? recent.length : wins;
+  if (runWins === runUnbeaten && runWins > 1) return `${runWins} victorias seguidas`;
+  return plural(runUnbeaten, 'partido sin perder', 'sin perder');
 }
 
 // ---------------------------------------------------------------------------
@@ -353,7 +383,14 @@ function renderPodium(rows) {
   const col = RANKING_COLUMNS.find((c) => c.key === state.sort.key);
   const box = $('#podium');
   const ordered = col ? bestFirst(rows.filter((r) => r.matches >= Math.max(state.minMatches, PODIUM_MIN_MATCHES)), col) : null;
-  if (!ordered || ordered.length < 3) { box.replaceChildren(); return; }
+  if (!ordered) { box.replaceChildren(); return; }
+  if (ordered.length < 3) {
+    // Mensaje claro en vez de un hueco: dice cuándo aparece el podio.
+    box.replaceChildren(el('div', { class: 'podium-empty' },
+      el('strong', {}, 'El podio aparece cuando haya 3 jugadores con al menos 3 partidos.'),
+      el('span', { class: 'muted' }, ` Ahora ${ordered.length === 1 ? 'hay 1' : `hay ${ordered.length}`}.`)));
+    return;
+  }
   const places = placesOf(ordered, col);
   // Si más de 3 comparten el primer puesto, el podio no distingue a nadie: no se muestra.
   if (ordered.filter((r) => places.get(r.person_id) === 1).length > 3) { box.replaceChildren(); return; }
@@ -391,14 +428,89 @@ function renderRanking() {
   const sortCol = RANKING_COLUMNS.find((c) => c.key === state.sort.key);
   const best = sortCol ? bestFirst(rows, sortCol) : null;
   const place = best ? placesOf(best, sortCol) : new Map();
+  const low = (r) => (r.matches < PODIUM_MIN_MATCHES ? 'low-sample' : '');
+  const lowTitle = (r) => (r.matches < PODIUM_MIN_MATCHES ? `Solo ${r.matches} PJ: sus números todavía pueden ser casualidad` : null);
   const body = rows.length
-    ? rows.map((r) => el('tr', { class: 'clickable', ...onActivate(() => openPerson(r.person_id)) },
+    ? rows.map((r) => el('tr', { class: `clickable ${low(r)}`.trim(), title: lowTitle(r), ...onActivate(() => openPerson(r.person_id)) },
         el('td', { class: 'rank' }, place.has(r.person_id) ? String(place.get(r.person_id)) : '—'),
         columns.map((c) => el('td', { class: cellClass(c, c.key === state.sort.key && !c.text ? 'sorted' : '') },
-          c.render ? c.render(r) : fmtNum(r[c.key], c.digits ?? 0)))))
+          c.render ? c.render(r) : fmtNum(r[c.key], c.digits ?? 0),
+          c.key === 'avg_rating' ? sparkline(state.trend.get(r.person_id)) : null))))
     : [emptyRow(columns.length + 1)];
   // La columna "#" va primero y es la fija; el nombre queda justo después.
   table.replaceChildren(el('thead', {}, head), el('tbody', {}, body));
+
+  // Selector "Ordenar por" (solo celular): mismas columnas que la tabla, sin las de texto.
+  const sel = $('#sort-select');
+  sel.replaceChildren(...columns.filter((c) => !c.text).map((c) => el('option', { value: c.key }, c.title ?? c.label)));
+  sel.value = state.sort.key;
+  sel.onchange = () => { const c = RANKING_COLUMNS.find((x) => x.key === sel.value); state.sort = { key: c.key, dir: betterOf(c) === 'low' ? 1 : -1 }; renderRanking(); };
+
+  // En el celular, tarjetas en vez de la tabla ancha (el CSS muestra una u otra).
+  const cardKeys = [['avg_rating', 'Calif.', 2], ['goal_contributions', 'G+A', 0], ['mom_pct', 'MVP %', 0], ['matches', 'PJ', 0]];
+  const extra = sortCol && !sortCol.text && !cardKeys.some(([k]) => k === sortCol.key) ? sortCol : null;
+  $('#ranking-cards').replaceChildren(...(rows.length ? rows.map((r) => el('button', { type: 'button', class: `rank-card ${low(r)}`.trim(), title: lowTitle(r), onclick: () => openPerson(r.person_id) },
+    el('div', { class: 'rank-card-head' },
+      el('span', { class: 'place' }, place.has(r.person_id) ? String(place.get(r.person_id)) : '—'),
+      avatar(r.person_name),
+      el('span', { class: 'person' }, r.person_name),
+      posBadge(r.main_position),
+      sparkline(state.trend.get(r.person_id))),
+    el('div', { class: 'rank-card-stats' },
+      cardKeys.map(([k, label, d]) => el('div', { class: k === state.sort.key ? 'sorted' : null }, el('div', { class: 'v' }, fmtNum(r[k], d)), el('div', { class: 'l' }, label))),
+      extra ? el('div', { class: 'sorted' }, el('div', { class: 'v' }, extra.render ? extra.render(r) : fmtNum(r[extra.key], extra.digits ?? 0)), el('div', { class: 'l' }, extra.label)) : null))) : [el('p', { class: 'muted', style: 'padding: 12px' }, 'Sin datos para estos filtros.')]));
+}
+
+/** person_id -> calificación de cada partido (si jugó con 2 cuentas, el promedio). */
+function trendByPerson(rows) {
+  const per = new Map();
+  for (const r of rows) {
+    if (r.rating == null) continue;
+    const key = `${r.person_id}|${r.match_id}`;
+    if (!per.has(key)) per.set(key, { person: r.person_id, at: r.played_at, sum: 0, n: 0 });
+    const e = per.get(key); e.sum += Number(r.rating); e.n++;
+  }
+  const out = new Map();
+  for (const e of [...per.values()].sort((a, b) => a.at.localeCompare(b.at))) {
+    if (!out.has(e.person)) out.set(e.person, []);
+    out.get(e.person).push(e.sum / e.n);
+  }
+  return out;
+}
+
+/**
+ * Calificación media por semana (lunes a domingo, hora local), del equipo o de
+ * una persona. Devuelve [{ week: 'YYYY-MM-DD' (lunes), avg, n }] en orden.
+ */
+function weeklyAverages(rows, personId = null) {
+  const weeks = new Map();
+  for (const r of rows) {
+    if (r.rating == null || (personId != null && r.person_id !== personId)) continue;
+    const d = new Date(r.played_at);
+    d.setHours(0, 0, 0, 0);
+    d.setDate(d.getDate() - ((d.getDay() + 6) % 7)); // lunes
+    const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+    if (!weeks.has(key)) weeks.set(key, { week: key, sum: 0, n: 0, matches: new Set() });
+    const w = weeks.get(key); w.sum += Number(r.rating); w.n++; w.matches.add(r.match_id);
+  }
+  return [...weeks.values()].sort((a, b) => a.week.localeCompare(b.week))
+    .map((w) => ({ week: w.week, avg: w.sum / w.n, n: w.matches.size }));
+}
+
+/** Mini línea con las últimas 5 calificaciones (más vieja a la izquierda). */
+function sparkline(values) {
+  const v = (values ?? []).slice(-5);
+  if (v.length < 2) return null;
+  const W = 52, H = 16, min = Math.min(...v, 5), max = Math.max(...v, 8);
+  const x = (i) => (i * (W - 4)) / (v.length - 1) + 2;
+  const y = (n) => H - 2 - ((n - min) / (max - min || 1)) * (H - 4);
+  const s = svg('svg', { viewBox: `0 0 ${W} ${H}`, width: W, height: H, class: 'spark', role: 'img', 'aria-label': `Últimas calificaciones: ${v.map((n) => fmtNum(n, 1)).join(', ')}` });
+  s.append(svg('polyline', { points: v.map((n, i) => `${x(i)},${y(n)}`).join(' '), fill: 'none', stroke: 'currentColor', 'stroke-width': 2, 'stroke-linecap': 'round', 'stroke-linejoin': 'round' }));
+  s.append(svg('circle', { cx: x(v.length - 1), cy: y(v.at(-1)), r: 2.5, fill: 'currentColor' }));
+  const t = document.createElementNS(SVG_NS, 'title');
+  t.textContent = `Últimas calificaciones: ${v.map((n) => fmtNum(n, 1)).join(' → ')}`;
+  s.prepend(t);
+  return s;
 }
 
 // ---------------------------------------------------------------------------
@@ -842,6 +954,24 @@ async function renderMatches(filters, requestId) {
     : [[], new Map()];
   if (requestId !== state.requestId) return;
   const shown = filters.excludeIncomplete ? matches.filter((m) => !flags.get(m.match_id)?.incomplete) : matches;
+  // Goleadores y MVP de cada partido, para verlos sin abrirlo.
+  const hl = await api.getMatchHighlights(shown.map((m) => m.match_id)).catch(() => []);
+  if (requestId !== state.requestId) return;
+  const byMatch = new Map();
+  for (const h of hl) {
+    if (!byMatch.has(h.match_id)) byMatch.set(h.match_id, { scorers: new Map(), mvp: [] });
+    const e = byMatch.get(h.match_id);
+    if (h.goals > 0) e.scorers.set(h.person_name, (e.scorers.get(h.person_name) ?? 0) + h.goals);
+    if (h.is_mom) e.mvp.push(h.person_name);
+  }
+  const highlights = (id) => {
+    const e = byMatch.get(id);
+    if (!e) return null;
+    const goals = [...e.scorers].map(([n, g]) => (g > 1 ? `${n} (${g})` : n)).join(', ');
+    return el('div', { class: 'match-hl muted small' },
+      goals ? el('span', {}, el('span', { class: 'hl-tag' }, 'Goles'), ` ${goals}`) : null,
+      e.mvp.length ? el('span', {}, el('span', { class: 'hl-tag mvp' }, '★ MVP'), ` ${e.mvp.join(', ')}`) : null);
+  };
   const cols = ['Fecha', 'Tipo', 'Rival', 'Nivel rival', 'Div.', 'Jug.', 'Marcador', 'Res.'];
   const body = el('tbody');
   if (!shown.length) body.append(emptyRow(cols.length, 'Sin partidos para estos filtros.'));
@@ -850,7 +980,7 @@ async function renderMatches(filters, requestId) {
     const row = el('tr', { class: 'clickable', 'aria-expanded': 'false' },
       el('td', { class: 'left' }, fmtDate(m.played_at)),
       el('td', { class: 'left' }, el('span', { class: 'badge' }, TYPE_LABEL[m.match_type] ?? m.match_type)),
-      el('td', { class: 'left' }, m.opponent_name ?? '—', f?.incomplete ? [' ', el('span', { class: 'badge warn', title: 'Abandono o menos del 90 % del tiempo' }, 'incompleto')] : null),
+      el('td', { class: 'left' }, m.opponent_name ?? '—', f?.incomplete ? [' ', el('span', { class: 'badge warn', title: 'Abandono o menos del 90 % del tiempo' }, 'incompleto')] : null, highlights(m.match_id)),
       el('td', {}, fmtNum(m.opponent_skill_rating)),
       el('td', { title: 'División del club ese día (según la foto diaria del club)' }, f?.club_division != null ? `${f.club_division}ª` : '—'),
       el('td', { title: 'Jugadores del club en cancha' }, fmtNum(f?.team_size)),
@@ -983,14 +1113,20 @@ function renderClub() {
     tooltip: (s) => [el('div', {}, el('strong', {}, `Nivel ${fmtNum(s.skill_rating)}`), s.current_division != null ? ` · ${s.current_division}ª división` : ''),
       el('div', { class: 'muted' }, fmtDate(`${s.snapshot_date}T12:00:00Z`, false))],
   });
+  const weeklyBox = $('#club-weekly');
+  weeklyBox.replaceChildren();
+  drawLineChart(weeklyBox, weeklyAverages(state.timeline), {
+    label: 'Calificación media del equipo por semana', value: (w) => w.avg, date: (w) => `${w.week}T12:00:00`,
+    min: 0, max: 10, pad: 0.5, emptyText: 'Sin partidos en este rango.',
+    tooltip: (w) => [el('div', {}, el('strong', {}, fmtNum(w.avg, 2)), ` · ${w.n} PJ`), el('div', { class: 'muted' }, `Semana del ${fmtDate(`${w.week}T12:00:00`, false)}`)],
+  });
   const last = snaps.at(-1);
   $('#club-season-card').replaceChildren(last
+    // Sin lo que ya está en la cabecera (división, V-E-D y puntos de la temporada).
     ? el('div', { class: 'season-grid' },
-        tile('Puntos', fmtNum(last.season_points)),
-        tile('División', last.current_division != null ? `${last.current_division}ª` : '—'),
-        tile('Partidos', fmtNum(last.season_games)),
-        tile('V-E-D', last.season_wins != null ? `${last.season_wins}-${last.season_draws}-${last.season_losses}` : '—'),
+        tile('Partidos de temporada', fmtNum(last.season_games)),
         tile('Goles', last.season_goals != null ? `${last.season_goals} : ${last.season_goals_against}` : '—'),
+        tile('Mejor división', last.best_division != null ? `${last.best_division}ª` : '—'),
         tile('Ascensos', fmtNum(last.promotions)), tile('Descensos', fmtNum(last.relegations)),
         tile('Histórico V-E-D', last.wins != null ? `${last.wins}-${last.draws}-${last.losses}` : '—'))
     : el('p', { class: 'muted', style: 'padding: 0 18px 18px' }, 'Sin fotos del club todavía.'));
@@ -1001,6 +1137,7 @@ function renderClub() {
 // ---------------------------------------------------------------------------
 
 function openPerson(personId) {
+  if (state.personId !== personId) state.personTab = 'resumen';
   state.personId = personId;
   renderPerson(readFilters(), state.requestId).catch(showError);
 }
@@ -1162,8 +1299,7 @@ async function renderPerson(filters, requestId) {
     tile('Forma (últ. 5)', fmtNum(summary?.form_rating, 2)),
     tile('Presencia', fmtPct(summary?.attendance_pct)),
     tile('Part. en goles', fmtPct(summary?.goal_participation_pct)),
-    tile('Dif. de goles', fmtSigned(summary?.goal_diff)),
-    tile('Nivel rival medio', fmtNum(summary?.avg_opponent_skill))) : null;
+    tile('Dif. de goles', fmtSigned(summary?.goal_diff))) : null;
   const records = rec ? el('div', { class: 'tiles' },
     tile('Más goles en un partido', fmtNum(rec.max_goals_match), 'record'),
     tile('Hat-tricks', fmtNum(rec.hat_tricks), 'record'),
@@ -1196,7 +1332,50 @@ async function renderPerson(filters, requestId) {
           state.showExp ? [m.dribbles_exp, m.interceptions_exp, m.possession_won_exp, m.possession_lost_exp].map((v) => el('td', { class: 'exp' }, fmtNum(v))) : null))
       : [emptyRow(state.showExp ? 13 : 9, 'Sin partidos para estos filtros.')])));
 
-  // replaceChildren no aplana listas: se aplanan y se quitan los null aquí.
+  // Evolución semanal: su calificación media por semana (el tooltip muestra la del equipo).
+  const weeklyBox = el('div', { class: 'chart' }, el('h3', {}, 'Calificación media por semana'));
+  const drawWeekly = () => {
+    const team = new Map(weeklyAverages(state.timeline).map((w) => [w.week, w]));
+    drawLineChart(weeklyBox, weeklyAverages(state.timeline, state.personId), {
+      label: 'Calificación media por semana', value: (w) => w.avg, date: (w) => `${w.week}T12:00:00`,
+      min: 0, max: 10, pad: 0.5, emptyText: 'Sin partidos en este rango.',
+      tooltip: (w) => [
+        el('div', {}, el('strong', {}, fmtNum(w.avg, 2)), ` · ${w.n} PJ`),
+        el('div', { class: 'muted' }, `Semana del ${fmtDate(`${w.week}T12:00:00`, false)}`),
+        team.get(w.week) ? el('div', {}, `Equipo: ${fmtNum(team.get(w.week).avg, 2)}`) : null,
+      ],
+    });
+  };
+
+  // Pestañas internas: menos desplazamiento, sobre todo en el celular.
+  const sec = (title, content) => (content ? [el('p', { class: 'section-title' }, title), content] : null);
+  const panels = {
+    resumen: [basics, el('div', { class: 'grid-2' }, chartBox, overallBox)],
+    rendimiento: [
+      sec('Relativo a su rol (100 = promedio de su posición)', relTiles),
+      sec('Posición recomendada', fit),
+      sec('Avanzadas', advanced),
+      weeklyBox,
+    ],
+    contexto: [sec('Nivel y división', divisionSection), sec('Récords y rachas', records)],
+    partidos: [table],
+  };
+  const labels = { resumen: 'Resumen', rendimiento: 'Rendimiento', contexto: 'Contexto', partidos: `Partidos (${matches.length})` };
+  if (!panels[state.personTab]) state.personTab = 'resumen';
+  const drawn = new Set();
+  const panelEls = Object.fromEntries(Object.entries(panels).map(([k, v]) =>
+    [k, el('div', { class: 'detail-panel', role: 'tabpanel', id: `panel-${k}`, hidden: k !== state.personTab }, v.flat(Infinity).filter(Boolean))]));
+  const tabButtons = Object.keys(panels).map((k) => el('button', {
+    type: 'button', role: 'tab', 'aria-selected': String(k === state.personTab), 'aria-controls': `panel-${k}`,
+    onclick: () => {
+      state.personTab = k;
+      for (const b of tabButtons) b.setAttribute('aria-selected', String(b === tabButtons[Object.keys(panels).indexOf(k)]));
+      for (const [pk, p] of Object.entries(panelEls)) p.hidden = pk !== k;
+      // Los gráficos se dibujan al mostrarse: oculto no tienen ancho.
+      if (k === 'rendimiento' && !drawn.has(k)) { drawn.add(k); drawWeekly(); }
+    },
+  }, labels[k]));
+
   box.replaceChildren(...[
     el('div', { class: 'detail-head' },
       el('div', { class: 'detail-id' }, avatar(name, true), el('div', {}, el('h2', {}, name),
@@ -1206,16 +1385,11 @@ async function renderPerson(filters, requestId) {
       el('div', { class: 'detail-actions' },
         el('button', { type: 'button', class: 'close', onclick: () => compareWith(state.personId) }, 'Comparar con…'),
         close)),
-    el('p', { class: 'section-title' }, 'Resumen'), basics,
-    relTiles ? [el('p', { class: 'section-title' }, 'Relativo a su rol (100 = promedio de su posición)'), relTiles] : null,
-    fit ? [el('p', { class: 'section-title' }, 'Posición recomendada'), fit] : null,
-    el('p', { class: 'section-title' }, 'Nivel y división'), divisionSection,
-    advanced ? [el('p', { class: 'section-title' }, 'Avanzadas'), advanced] : null,
-    records ? [el('p', { class: 'section-title' }, 'Récords y rachas'), records] : null,
-    el('div', { class: 'grid-2' }, chartBox, overallBox),
-    el('p', { class: 'section-title' }, 'Partidos'), table,
-  ].flat().filter(Boolean));
+    el('div', { class: 'detail-tabs', role: 'tablist', 'aria-label': 'Secciones del jugador' }, tabButtons),
+    ...Object.values(panelEls),
+  ]);
   box.hidden = false;
+  if (state.personTab === 'rendimiento') { drawn.add('rendimiento'); drawWeekly(); }
   drawLineChart(chartBox, matches.filter((m) => m.rating != null), {
     label: 'Calificación por partido', value: (p) => p.rating, date: (p) => p.played_at,
     min: 0, max: 10, pad: 0.5, emptyText: 'Sin calificaciones en este rango.',
@@ -1342,9 +1516,11 @@ async function refresh() {
   const filters = readFilters();
   showError(null);
   try {
-    const [ranking, records, relative] = filters.types.length
-      ? await Promise.all([api.getPersonStats(filters), api.getPersonRecords(filters), api.getRelativeStats('position', filters)])
-      : [[], [], []];
+    const [ranking, records, relative, timeline] = filters.types.length
+      ? await Promise.all([api.getPersonStats(filters), api.getPersonRecords(filters), api.getRelativeStats('position', filters), api.getRatingsTimeline(filters).catch(() => [])])
+      : [[], [], [], []];
+    state.timeline = timeline;
+    state.trend = trendByPerson(timeline);
     if (!state.members) state.members = await api.getMembers(state.clubId).catch(() => []);
     if (requestId !== state.requestId) return;
     // Media del Pro (EA) por persona: la más alta entre sus cuentas.
@@ -1359,6 +1535,7 @@ async function refresh() {
     renderReconAlert().catch(() => {});
     state.relative = new Map(relative.map((r) => [r.person_id, r]));
     renderRanking();
+    renderFewData();
     renderHeader().catch(() => {});
     const tasks = [];
     if (state.view === 'roles') {
@@ -1428,15 +1605,43 @@ function watchPlayerColumns() {
   }).observe(document.querySelector('main'), { childList: true, subtree: true });
 }
 
-/** Resumen de los filtros activos (se ve en el celular, con los filtros plegados). */
+/**
+ * Etiqueta de versión y ventana de novedades: cada versión es un desplegable con
+ * sus cambios; la actual viene abierta. El commit publicado va al pie, para soporte.
+ */
+function renderChangelog() {
+  const current = CHANGELOG[0];
+  $('#version-label').textContent = `v${current.version}`;
+  const commit = new URL(import.meta.url).searchParams.get('v');
+  $('#changelog-body').replaceChildren(
+    ...CHANGELOG.map((v, i) => el('details', { class: 'release', open: i === 0 },
+      el('summary', {},
+        el('span', { class: 'release-version' }, `v${v.version}`),
+        el('span', { class: 'release-title' }, v.title),
+        el('span', { class: 'muted small' }, fmtDate(`${v.date}T12:00:00`, false))),
+      el('ul', {}, v.changes.map((c) => el('li', {}, c))))),
+    commit && commit !== '__V__' ? el('p', { class: 'muted small' }, `Publicación ${commit}`) : null);
+}
+
+/** Lo elegido en los menús "Fechas" y "Vista", a la vista sin abrirlos. */
 function updateFiltersSummary() {
-  const f = readFilters();
-  const types = f.types.length === 3 ? 'Todos los tipos' : f.types.map((t) => TYPE_LABEL[t]).join(', ') || 'Ningún tipo';
-  const parts = [types];
-  if ($('#from').value || $('#to').value) parts.push('fechas');
-  if (f.excludeIncomplete) parts.push('sin incompletos');
-  if (state.minMatches > 1) parts.push(`mín. ${state.minMatches} PJ`);
-  $('#filters-summary-text').textContent = parts.join(' · ');
+  const from = $('#from').value, to = $('#to').value;
+  const short = (v) => new Date(`${v}T12:00:00`).toLocaleDateString('es-CO', { day: 'numeric', month: 'short' });
+  $('#dates-value').textContent = from || to ? `${from ? short(from) : '…'} – ${to ? short(to) : 'hoy'}` : 'Todas';
+  const opts = [];
+  if (state.minMatches > 1) opts.push(`mín. ${state.minMatches} PJ`);
+  if ($('#exclude-incomplete').checked) opts.push('sin incompletos');
+  if ($('#show-adv').checked) opts.push('avanzadas');
+  $('#view-value').textContent = opts.join(' · ');
+}
+
+/** Aviso de pocos datos: con menos de 10 partidos, las diferencias suelen ser casualidad. */
+const FEW_MATCHES = 10;
+function renderFewData() {
+  const n = state.ranking[0]?.club_matches ?? 0;
+  const box = $('#few-data');
+  box.hidden = !(n > 0 && n < FEW_MATCHES);
+  if (!box.hidden) box.textContent = `Con ${n} partido${n === 1 ? '' : 's'}, las diferencias entre jugadores todavía no son confiables: pueden ser casualidad. Los jugadores con menos de ${PODIUM_MIN_MATCHES} partidos se ven atenuados.`;
 }
 
 /**
@@ -1468,10 +1673,17 @@ async function initClubs() {
 async function init() {
   watchPlayerColumns();
   await initClubs();
-  // En el celular los filtros arrancan plegados para dejar ver los datos primero.
-  if (window.matchMedia('(max-width: 700px)').matches) $('#filters-box').open = false;
   document.querySelector('.filters').addEventListener('change', updateFiltersSummary);
-  updateFiltersSummary();
+  document.querySelector('.filters').addEventListener('input', updateFiltersSummary);
+  $('#clear-dates').addEventListener('click', () => {
+    $('#from').value = ''; $('#to').value = '';
+    $('#dates-pop').open = false;
+    updateFiltersSummary(); refresh();
+  });
+  // Un menú abierto se cierra al abrir el otro o al tocar fuera.
+  const pops = document.querySelectorAll('details.pop');
+  for (const p of pops) p.addEventListener('toggle', () => { if (p.open) for (const o of pops) if (o !== p) o.open = false; });
+  document.addEventListener('click', (e) => { for (const p of pops) if (p.open && !p.contains(e.target)) p.open = false; });
   for (const input of document.querySelectorAll('input[name="type"], #from, #to, #exclude-incomplete')) {
     input.addEventListener('change', refresh);
   }
@@ -1496,17 +1708,21 @@ async function init() {
   const resetSortIf = (flag) => {
     if (RANKING_COLUMNS.find((c) => c.key === state.sort.key)?.[flag]) state.sort = { key: 'avg_rating', dir: -1 };
   };
-  // Guía: <dialog> nativo (Esc cierra; clic fuera del contenido también).
-  const guide = $('#guide');
-  $('#open-guide').addEventListener('click', () => guide.showModal());
-  $('#close-guide').addEventListener('click', () => guide.close());
-  guide.addEventListener('click', (e) => { if (e.target === guide) guide.close(); });
+  // Guía y novedades: <dialog> nativo (Esc cierra; clic fuera del contenido también).
+  for (const [dlg, open, close] of [['#guide', '#open-guide', '#close-guide'], ['#changelog', '#open-changelog', '#close-changelog']]) {
+    const d = $(dlg);
+    $(open).addEventListener('click', () => d.showModal());
+    $(close).addEventListener('click', () => d.close());
+    d.addEventListener('click', (e) => { if (e.target === d) d.close(); });
+  }
+  renderChangelog();
 
   const saved = prefs.load();
   if (typeof saved.showExp === 'boolean') state.showExp = saved.showExp;
   if (typeof saved.showAdv === 'boolean') state.showAdv = saved.showAdv;
   $('#show-exp').checked = state.showExp;
   $('#show-adv').checked = state.showAdv;
+  updateFiltersSummary();
   $('#show-exp').addEventListener('change', (e) => { state.showExp = e.target.checked; prefs.save({ showExp: state.showExp }); if (!state.showExp) resetSortIf('exp'); refresh(); });
   $('#show-adv').addEventListener('change', (e) => { state.showAdv = e.target.checked; prefs.save({ showAdv: state.showAdv }); if (!state.showAdv) resetSortIf('adv'); refresh(); });
   bindSegmented('#role-group-buttons', 'group', (v) => { state.roleGroup = v; refresh(); });
