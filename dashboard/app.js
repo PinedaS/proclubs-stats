@@ -1277,6 +1277,158 @@ function fillLevelTiles(box, history, matches) {
   if (before > 1) box.children[0].querySelector('.label').textContent = 'Media al iniciar registro';
 }
 
+// ---------------------------------------------------------------------------
+// Gráficas del jugador (SVG con viewBox: se escalan al ancho disponible).
+// Un solo color de marca (acento); el texto usa los colores de texto, no el de la serie.
+// ---------------------------------------------------------------------------
+
+/** Una partida por persona y partido (si jugó con 2 cuentas en el mismo partido, se promedia). */
+function perMatchRows(matches) {
+  const by = new Map();
+  for (const m of matches) {
+    if (!by.has(m.match_id)) by.set(m.match_id, { ...m, ratings: [], seconds: 0 });
+    const e = by.get(m.match_id);
+    if (m.rating != null) e.ratings.push(Number(m.rating));
+    e.seconds += Number(m.seconds_played ?? 0);
+  }
+  return [...by.values()].map((e) => ({ ...e, rating: e.ratings.length ? e.ratings.reduce((a, b) => a + b, 0) / e.ratings.length : null }));
+}
+
+const chartCard = (title, sub, body) => el('div', { class: 'pchart' }, el('h3', {}, title), sub ? el('p', { class: 'muted small' }, sub) : null, body);
+const svgText = (x, y, text, attrs = {}) => { const t = svg('text', { x, y, ...attrs }); t.textContent = text; return t; };
+const svgTitle = (node, text) => { const t = document.createElementNS(SVG_NS, 'title'); t.textContent = text; node.prepend(t); return node; };
+
+/** 2. Calificación contra el nivel del rival: un punto por partido y la tendencia. */
+function chartRatingVsRival(rows, W = 560) {
+  const pts = rows.filter((r) => r.rating != null && r.opponent_skill_rating != null);
+  if (pts.length < 2) return chartCard('Calificación vs. nivel del rival', null, el('p', { class: 'muted' }, 'Hacen falta al menos 2 partidos con el nivel del rival.'));
+  const H = Math.round(Math.min(240, Math.max(180, W * 0.45))), L = 30, R = 10, T = 12, B = 34;
+  const xs = pts.map((p) => Number(p.opponent_skill_rating)), ys = pts.map((p) => p.rating);
+  const x0 = Math.floor((Math.min(...xs) - 30) / 50) * 50, x1 = Math.ceil((Math.max(...xs) + 30) / 50) * 50;
+  const y0 = Math.max(0, Math.floor(Math.min(...ys, 6) - 0.5)), y1 = Math.min(10, Math.ceil(Math.max(...ys, 8) + 0.5));
+  const sx = (v) => L + ((v - x0) / (x1 - x0)) * (W - L - R), sy = (v) => T + (1 - (v - y0) / (y1 - y0)) * (H - T - B);
+  const s = svg('svg', { viewBox: `0 0 ${W} ${H}`, width: W, height: H, class: 'pchart-svg', role: 'img', 'aria-label': 'Calificación de cada partido según el nivel del rival' });
+  for (let y = y0; y <= y1; y++) {
+    s.append(svg('line', { x1: L, x2: W - R, y1: sy(y), y2: sy(y), class: 'grid-line' }));
+    s.append(svgText(L - 8, sy(y) + 4, String(y), { class: 'axis', 'text-anchor': 'end' }));
+  }
+  s.append(svgText(L, H - 8, fmtNum(x0), { class: 'axis' }));
+  s.append(svgText(W - R, H - 8, fmtNum(x1), { class: 'axis', 'text-anchor': 'end' }));
+  s.append(svgText((L + W - R) / 2, H - 8, W < 380 ? 'Nivel del rival →' : 'Nivel del rival (skillRating) →', { class: 'axis', 'text-anchor': 'middle' }));
+  // Tendencia (mínimos cuadrados) con 3 o más partidos: ¿baja contra rivales más fuertes?
+  let slopeText = null;
+  if (pts.length >= 3) {
+    const mx = xs.reduce((a, b) => a + b, 0) / xs.length, my = ys.reduce((a, b) => a + b, 0) / ys.length;
+    const den = xs.reduce((a, x) => a + (x - mx) ** 2, 0);
+    if (den > 0) {
+      const b = xs.reduce((a, x, i) => a + (x - mx) * (ys[i] - my), 0) / den, a = my - b * mx;
+      s.append(svg('line', { x1: sx(x0), y1: sy(a + b * x0), x2: sx(x1), y2: sy(a + b * x1), class: 'trend-line' }));
+      const per100 = b * 100;
+      slopeText = Math.abs(per100) < 0.05 ? 'Rinde parecido contra rivales fuertes y débiles.'
+        : per100 < 0 ? `Por cada 100 puntos más de nivel del rival, su calificación baja ${fmtNum(-per100, 2)} en promedio.`
+          : `Por cada 100 puntos más de nivel del rival, su calificación sube ${fmtNum(per100, 2)} en promedio.`;
+    }
+  }
+  for (const p of pts) {
+    s.append(svgTitle(svg('circle', { cx: sx(Number(p.opponent_skill_rating)), cy: sy(p.rating), r: 6, class: 'dot' }),
+      `${fmtDate(p.played_at, false)} · ${p.opponent_name ?? 'Rival'} (nivel ${fmtNum(p.opponent_skill_rating)}) · calificación ${fmtNum(p.rating, 1)}`));
+  }
+  return chartCard('Calificación vs. nivel del rival', slopeText ?? 'Cada punto es un partido. Con 3 o más aparece la tendencia.', s);
+}
+
+/** 4. Regularidad: cuántos partidos en cada tramo de calificación. */
+function chartRatingDistribution(rows, W = 560) {
+  const vals = rows.map((r) => r.rating).filter((v) => v != null);
+  if (!vals.length) return chartCard('Regularidad', null, el('p', { class: 'muted' }, 'Sin calificaciones en este rango.'));
+  const bins = [['<5,5', -Infinity, 5.5], ['5,5', 5.5, 6], ['6', 6, 6.5], ['6,5', 6.5, 7], ['7', 7, 7.5], ['7,5', 7.5, 8], ['8', 8, 8.5], ['8,5+', 8.5, Infinity]];
+  const counts = bins.map(([, lo, hi]) => vals.filter((v) => v >= lo && v < hi).length);
+  const max = Math.max(...counts);
+  const H = Math.round(Math.min(220, Math.max(170, W * 0.38))), B = 30, T = 18, gap = W < 380 ? 4 : 10, bw = (W - gap * (bins.length - 1)) / bins.length;
+  const s = svg('svg', { viewBox: `0 0 ${W} ${H}`, width: W, height: H, class: 'pchart-svg', role: 'img', 'aria-label': `Distribución de ${vals.length} calificaciones` });
+  s.append(svg('line', { x1: 0, x2: W, y1: H - B, y2: H - B, class: 'grid-line' }));
+  bins.forEach(([label, lo, hi], i) => {
+    const x = i * (bw + gap), h = max ? ((H - B - T) * counts[i]) / max : 0;
+    if (counts[i]) {
+      s.append(svgTitle(svg('rect', { x, y: H - B - h, width: bw, height: h, rx: 4, class: 'bar-mark' }),
+        `${counts[i]} partido${counts[i] === 1 ? '' : 's'} con calificación ${Number.isFinite(lo) ? fmtNum(lo, 1) : 'menor a'}${Number.isFinite(hi) ? `–${fmtNum(hi, 1)}` : ' o más'}`));
+      s.append(svgText(x + bw / 2, H - B - h - 5, String(counts[i]), { class: 'axis strong', 'text-anchor': 'middle' }));
+    }
+    s.append(svgText(x + bw / 2, H - 9, label, { class: 'axis', 'text-anchor': 'middle' }));
+  });
+  const mean = vals.reduce((a, b) => a + b, 0) / vals.length;
+  const sd = Math.sqrt(vals.reduce((a, v) => a + (v - mean) ** 2, 0) / vals.length);
+  return chartCard('Regularidad', `${vals.length} partidos · media ${fmtNum(mean, 2)} · variación ${fmtNum(sd, 2)} (más baja = más regular)`, s);
+}
+
+/** 5. Dónde juega: reparto de minutos por posición, con calificación y PJ en cada una. */
+function chartPositions(rows) {
+  const by = new Map();
+  for (const r of rows) {
+    if (!r.position) continue;
+    if (!by.has(r.position)) by.set(r.position, { sec: 0, ratings: [], n: 0 });
+    const e = by.get(r.position); e.sec += r.seconds; e.n++; if (r.rating != null) e.ratings.push(r.rating);
+  }
+  const total = [...by.values()].reduce((a, e) => a + e.sec, 0);
+  if (!total) return chartCard('Dónde juega', null, el('p', { class: 'muted' }, 'Sin minutos registrados en este rango.'));
+  const list = [...by.entries()].sort((a, b) => b[1].sec - a[1].sec);
+  const bar = el('div', { class: 'pos-bar', role: 'img', 'aria-label': list.map(([p, e]) => `${POS_LABEL[p] ?? p} ${Math.round((100 * e.sec) / total)} %`).join(', ') },
+    list.map(([p, e]) => el('span', { class: `seg pos-${p}`, style: `flex:${e.sec}`, title: `${POS_LABEL[p] ?? p}: ${Math.round((100 * e.sec) / total)} % de sus minutos` },
+      (100 * e.sec) / total >= 18 ? `${Math.round((100 * e.sec) / total)} %` : '')));
+  const avg = (a) => (a.length ? a.reduce((x, y) => x + y, 0) / a.length : null);
+  const table = el('div', { class: 'pos-rows' }, list.map(([p, e]) => el('div', { class: 'pos-row' },
+    posBadge(p),
+    el('span', { class: 'muted small' }, `${Math.round((100 * e.sec) / total)} % · ${fmtNum(e.sec / 60)} min`),
+    el('span', {}, el('strong', {}, fmtNum(avg(e.ratings), 2)), el('span', { class: 'muted small' }, ` · ${e.n} PJ`)))));
+  return chartCard('Dónde juega', 'Reparto de sus minutos por posición, y su calificación media en cada una.', el('div', {}, bar, table));
+}
+
+/** 6. Calendario: cada día jugado, coloreado por su calificación media (más intenso = mejor). */
+function chartCalendar(rows) {
+  const days = new Map();
+  for (const r of rows) {
+    if (r.rating == null) continue;
+    const d = new Date(r.played_at); d.setHours(0, 0, 0, 0);
+    const key = d.getTime();
+    if (!days.has(key)) days.set(key, { d, ratings: [] });
+    days.get(key).ratings.push(r.rating);
+  }
+  if (!days.size) return chartCard('Calendario', null, el('p', { class: 'muted' }, 'Sin partidos en este rango.'));
+  const monday = (d) => { const x = new Date(d); x.setDate(x.getDate() - ((x.getDay() + 6) % 7)); return x; };
+  const keys = [...days.keys()].sort((a, b) => a - b);
+  const MAX_WEEKS = 26;
+  let start = monday(new Date(keys[0]));
+  const end = monday(new Date(keys.at(-1)));
+  const weeksAll = Math.round((end - start) / (7 * 864e5)) + 1;
+  if (weeksAll > MAX_WEEKS) { start = new Date(end); start.setDate(start.getDate() - 7 * (MAX_WEEKS - 1)); }
+  const weeks = Math.min(weeksAll, MAX_WEEKS);
+  const C = 18, G = 4, L = 22, T = 18, W = L + weeks * (C + G), H = T + 7 * (C + G);
+  const s = svg('svg', { viewBox: `0 0 ${Math.max(W, 200)} ${H}`, width: Math.max(W, 200), height: H, class: 'pchart-svg cal', role: 'img', 'aria-label': `Calendario de ${days.size} días con partidos` });
+  ['L', '', 'X', '', 'V', '', 'D'].forEach((l, i) => l && s.append(svgText(0, T + i * (C + G) + 13, l, { class: 'axis' })));
+  let lastMonth = -1;
+  for (let w = 0; w < weeks; w++) {
+    const wd = new Date(start); wd.setDate(wd.getDate() + w * 7);
+    if (wd.getMonth() !== lastMonth) {
+      lastMonth = wd.getMonth();
+      s.append(svgText(L + w * (C + G), 11, wd.toLocaleDateString('es-CO', { month: 'short' }), { class: 'axis' }));
+    }
+    for (let i = 0; i < 7; i++) {
+      const d = new Date(wd); d.setDate(d.getDate() + i);
+      const e = days.get(d.getTime());
+      const x = L + w * (C + G), y = T + i * (C + G);
+      if (!e) { s.append(svg('rect', { x, y, width: C, height: C, rx: 4, class: 'cal-empty' })); continue; }
+      const avg = e.ratings.reduce((a, b) => a + b, 0) / e.ratings.length;
+      // Escala de un solo tono: 5,5 o menos = tenue; 8,5 o más = acento pleno.
+      const pct = Math.round(25 + 75 * Math.min(1, Math.max(0, (avg - 5.5) / 3)));
+      s.append(svgTitle(svg('rect', { x, y, width: C, height: C, rx: 4, style: `fill: color-mix(in srgb, var(--accent) ${pct}%, var(--surface-2))` }),
+        `${d.toLocaleDateString('es-CO', { weekday: 'long', day: 'numeric', month: 'long' })} · ${e.ratings.length} partido${e.ratings.length === 1 ? '' : 's'} · calificación ${fmtNum(avg, 2)}`));
+    }
+  }
+  const legend = el('div', { class: 'cal-legend muted small' }, 'Peor ',
+    [25, 50, 75, 100].map((p) => el('span', { class: 'cal-swatch', style: `background: color-mix(in srgb, var(--accent) ${p}%, var(--surface-2))` })), ' Mejor',
+    weeksAll > MAX_WEEKS ? ` · últimas ${MAX_WEEKS} semanas` : '');
+  return chartCard('Calendario', 'Cada cuadro es un día; los días con partido se colorean según su calificación media.', el('div', {}, el('div', { class: 'cal-scroll' }, s), legend));
+}
+
 /** Los avatares se dibujan por nombre: traduce person_id -> foto a nombre -> foto. */
 function syncPhotoNames() {
   state.photoByName = new Map(state.ranking.filter((r) => state.photos.has(r.person_id)).map((r) => [r.person_name, state.photos.get(r.person_id)]));
@@ -1412,6 +1564,16 @@ async function renderPerson(filters, requestId) {
     });
   };
 
+  const byMatch = perMatchRows(matches);
+  // Las gráficas con ejes se dibujan al mostrarse su pestaña, con el ancho real
+  // disponible: así los textos de los ejes no se encogen en el celular.
+  const rivalSlot = el('div', { class: 'pchart-slot' }), distSlot = el('div', { class: 'pchart-slot' });
+  const drawMeasured = () => {
+    for (const [slot, make] of [[rivalSlot, chartRatingVsRival], [distSlot, chartRatingDistribution]]) {
+      const w = Math.max(240, Math.floor(slot.clientWidth) - 30);
+      slot.replaceChildren(make(byMatch, w));
+    }
+  };
   // Pestañas internas: menos desplazamiento, sobre todo en el celular.
   const sec = (title, content) => (content ? [el('p', { class: 'section-title' }, title), content] : null);
   const panels = {
@@ -1421,10 +1583,15 @@ async function renderPerson(filters, requestId) {
     rendimiento: [
       sec('Avanzadas', advanced),
       sec('Relativo a su rol (100 = promedio de su posición)', relTiles),
+      el('div', { class: 'grid-2' }, rivalSlot, distSlot),
       weeklyBox,
       sec('Posición recomendada', fit),
     ],
-    contexto: [sec('Nivel y división', divisionSection), sec('Récords y rachas', records)],
+    contexto: [
+      sec('Nivel y división', divisionSection),
+      el('div', { class: 'grid-2' }, chartPositions(byMatch), chartCalendar(byMatch)), // sin escala: no hace falta medir
+      sec('Récords y rachas', records),
+    ],
     partidos: [table],
   };
   const labels = { resumen: 'Resumen', rendimiento: 'Rendimiento', contexto: 'Contexto', partidos: `Partidos (${matches.length})` };
@@ -1439,7 +1606,7 @@ async function renderPerson(filters, requestId) {
       for (const b of tabButtons) b.setAttribute('aria-selected', String(b === tabButtons[Object.keys(panels).indexOf(k)]));
       for (const [pk, p] of Object.entries(panelEls)) p.hidden = pk !== k;
       // Los gráficos se dibujan al mostrarse: oculto no tienen ancho.
-      if (k === 'rendimiento' && !drawn.has(k)) { drawn.add(k); drawWeekly(); }
+      if (k === 'rendimiento' && !drawn.has(k)) { drawn.add(k); drawWeekly(); drawMeasured(); }
     },
   }, labels[k]));
 
@@ -1456,7 +1623,7 @@ async function renderPerson(filters, requestId) {
     ...Object.values(panelEls),
   ]);
   box.hidden = false;
-  if (state.personTab === 'rendimiento') { drawn.add('rendimiento'); drawWeekly(); }
+  if (state.personTab === 'rendimiento') { drawn.add('rendimiento'); drawWeekly(); drawMeasured(); }
   drawLineChart(chartBox, matches.filter((m) => m.rating != null), {
     label: 'Calificación por partido', value: (p) => p.rating, date: (p) => p.played_at,
     min: 0, max: 10, pad: 0.5, emptyText: 'Sin calificaciones en este rango.',

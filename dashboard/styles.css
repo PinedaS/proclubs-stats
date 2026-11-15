@@ -629,3 +629,32 @@ dialog.guide::backdrop { background: rgb(0 0 0 / .55); }
 .link-btn.danger { color: var(--critical); }
 .photo-status { flex-basis: 100%; }
 .photo-status:empty { display: none; }
+
+/* Gráficas del jugador */
+.pchart { background: var(--surface-2); border: 1px solid var(--border); border-radius: 12px; padding: 12px 14px; min-width: 0; }
+.pchart h3 { margin: 0 0 2px; font-size: .95rem; }
+.pchart > p { margin: 0 0 8px; }
+.pchart-svg { width: 100%; height: auto; display: block; overflow: visible; }
+.pchart-svg .axis { font-size: 12px; fill: var(--ink-3); }
+.pchart-svg .axis.strong { fill: var(--ink); font-weight: 700; }
+.pchart-svg .grid-line { stroke: var(--grid); stroke-width: 1; }
+.pchart-svg .trend-line { stroke: var(--ink-3); stroke-width: 2; stroke-dasharray: 6 5; }
+.pchart-svg .dot { fill: var(--accent); stroke: var(--surface-2); stroke-width: 2; }
+.pchart-svg .bar-mark { fill: var(--accent); }
+.pchart-svg .cal-empty { fill: var(--surface-3); }
+.cal-scroll { overflow-x: auto; }
+.cal-legend { display: flex; align-items: center; gap: 4px; margin-top: 6px; }
+.cal-swatch { width: 12px; height: 12px; border-radius: 3px; display: inline-block; }
+.pos-bar { display: flex; gap: 2px; height: 26px; margin: 4px 0 10px; }
+.pos-bar .seg { border-radius: 4px; display: grid; place-items: center; font-size: .75rem; font-weight: 700; color: #0f1115; min-width: 6px; }
+.pos-bar .seg.pos-forward { background: #f87171; }
+.pos-bar .seg.pos-midfielder { background: #4ade80; }
+.pos-bar .seg.pos-defender { background: #60a5fa; }
+.pos-bar .seg.pos-goalkeeper { background: #facc15; }
+.pos-rows { display: grid; gap: 6px; }
+.pos-row { display: grid; grid-template-columns: auto 1fr auto; gap: 10px; align-items: center; }
+#panel-rendimiento .grid-2, #panel-contexto .grid-2 { margin: 12px 0; }
+/* Se dibujan al ancho real (sin escalar): el texto de los ejes queda a su tamaño. */
+.pchart-svg { width: auto; max-width: 100%; }
+.pchart-svg.cal { max-width: none; }
+.pchart-slot { min-width: 0; }

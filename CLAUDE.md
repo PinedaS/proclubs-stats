@@ -120,6 +120,11 @@ API no oficial de EA ──► Colector (GitHub Actions, cada 30 min) ──► 
        - **Costo:** el plan Free incluye 1 GB de Storage y 5 GB de transferencia; si se superan, no cobra.
        - Las fotos de personas borradas con `purge_club` quedan huérfanas; se pueden borrar desde Storage.
      - **Orden por importancia (pedido del usuario):** en Cara a cara y en la pestaña Rendimiento del detalle va primero el rendimiento y después "Relativo a su rol". La posición recomendada va al final.
+     - **Gráficas del jugador (v2.2, 2026-11-15):**
+       - **Rendimiento:** calificación vs. nivel del rival (dispersión con tendencia desde 3 PJ) y regularidad (histograma de calificaciones).
+       - **Contexto:** dónde juega (minutos por posición) y calendario (días coloreados por calificación).
+       - Las de ejes se dibujan al ancho real al mostrarse la pestaña, para que el texto no se encoja en el celular.
+       - **El usuario autorizó usar los datos experimentales** en comparaciones y gráficas, siempre marcados con *.
      - **Escudo real:** EA manda `details.customKit.crestAssetId` (99020510 para 100 D CILANTRO) y `crestColor`. No se usó: no se pudo verificar desde qué dirección carga EA la imagen, y no se quiere enlazar a imágenes de EA sin confirmarlo.
      - **Nombres de arquetipos:** mapeo de la comunidad (Interactive-63, issue #5, nov. 2026), no oficial.
        - Los deducidos sin confirmar llevan "?": 1 y 2 (porteros), 4 (Boss), 7 y 9.

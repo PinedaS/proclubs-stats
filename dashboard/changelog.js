@@ -2,6 +2,17 @@
 // para el equipo, agregar una entrada arriba: versión, fecha y cambios en lenguaje simple.
 export const CHANGELOG = [
   {
+    version: '2.2',
+    date: '2026-11-15',
+    title: 'Más gráficas del jugador',
+    changes: [
+      'Rendimiento: calificación de cada partido según el nivel del rival, con la tendencia.',
+      'Rendimiento: regularidad, cuántos partidos jugó con cada calificación.',
+      'Contexto: dónde juega, el reparto de sus minutos por posición y su calificación en cada una.',
+      'Contexto: calendario de los días que jugó, coloreados según su calificación.',
+    ],
+  },
+  {
     version: '2.1',
     date: '2026-11-15',
     title: 'Fotos de los jugadores',
