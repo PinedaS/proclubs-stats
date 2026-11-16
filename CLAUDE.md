@@ -338,7 +338,15 @@ No hay API oficial. Se usan los endpoints públicos que lee la web de Clubes de 
 1. ~~Repo público o privado.~~ **Decidido (2026-11-10): público.**
    - Dashboard en GitHub Pages, y minutos de Actions ilimitados.
    - **Riesgo:** GitHub desactiva los workflows programados de un repo público tras **60 días sin actividad** en el repo. Hay que mitigarlo en el paso 4 (p. ej. un *keepalive*).
-2. **Fórmula de "mejor jugador": POSPUESTA por decisión del usuario (2026-11-11).** Por ahora solo se recopilan y muestran los datos; la fórmula se decidirá más adelante. No implementar ningún puntaje ni ranking ponderado sin que el usuario lo pida.
+2. **Fórmula de "mejor jugador": EXPERIMENTAL desde la v2.10 (2026-11-16, aprobada por el usuario).** Pestaña "Mejor jugador" (`computeBest` en `app.js`). **No cambiar criterios, pesos ni el mínimo sin que el usuario lo pida.**
+   - **Pesos fijos, iguales para todos** (decisión del usuario): calificación frente al rol 30, ataque frente al rol 15, defensa frente al rol 15 (portero: % de atajadas), pase frente al rol 10, impacto (% de victorias con él − sin él) 10, MVP frente al promedio 10, ante rivales fuertes (≥ mediana) 5 y regularidad 5.
+   - **Cálculo:** índice (100 = promedio) → corrección por pocos partidos `100 + (i − 100) × PJ / (PJ + 5)` → nota `50 + (i − 100)`, recortada a 0–100 → promedio ponderado. Si falta un criterio, su peso se reparte entre los demás, con aviso.
+   - **Mínimo para entrar:** 30 % de los partidos del club en el rango filtrado (decisión del usuario).
+   - **Efectos observados con 12 partidos (2026-11-16):**
+     - A quien jugó todos los partidos le falta "Impacto", porque no hay partidos sin él.
+     - El índice relativo al rol de quien más juega tiende a 100, porque él mismo pesa mucho en el promedio de su posición. Revisarlo con más jugadores y partidos.
+   - Lo de abajo queda como historia del diseño.
+   - **Antes (2026-11-11):** POSPUESTA por decisión del usuario.
    - **Requisito de justicia (usuario, 2026-11-11):** varios jugadores cambian de **posición y arquetipo**. Ninguna métrica ni la fórmula debe penalizar a quien rota, sobre todo hacia **roles defensivos** (p. ej. un defensa no debe quedar abajo por marcar pocos goles). Las comparaciones deben ser **relativas a la posición o arquetipo** de cada partido.
    - Ideas para entonces:
    - Métricas por partido (G+A, calificación media, % MVP).
