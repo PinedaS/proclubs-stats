@@ -517,6 +517,7 @@ select pg_temp.assert_eq('anon lee las temporadas', (select count(*) from public
 select pg_temp.assert_eq('anon lee el escudo', (select crest_asset_id from public.clubs where club_id = 1330384), 99020510::bigint);
 select pg_temp.assert_eq('vista con contadores nuevos', (select count(*) from public.v_player_match_stats where (short_passes_ok_exp is null) <> (dribbles_exp is null) or (out_of_position_severe_exp is null) <> (dribbles_exp is null)), 0::bigint);
 select pg_temp.assert_eq('vista con tipos de atajada', (select count(parry_saves) >= 0 from public.v_player_match_stats), true);
+select pg_temp.assert_eq('022: vista con media del Pro por partido', (select count(pro_overall) >= 0 from public.v_player_match_stats), true);
 do $$
 begin
   insert into public.club_seasons (club_id, season_no, started_at, detected_by) values (1330384, 5, now(), 'reinicio de EA');
