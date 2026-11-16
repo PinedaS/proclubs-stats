@@ -116,16 +116,16 @@ export function getRecentMatches(clubId, limit = 30) {
 /** Calificación de cada jugador en cada partido (para tendencias y evolución semanal). */
 export function getRatingsTimeline(f) {
   const p = filterParams(f);
-  p.set('select', 'match_id,played_at,person_id,rating,incomplete');
+  p.set('select', 'match_id,played_at,person_id,rating,incomplete,goals,goals_for');
   p.set('order', 'played_at.asc');
   if (f.excludeIncomplete) p.set('incomplete', 'is.false');
   return request(`v_player_match_stats?${p}`);
 }
 
-/** Goleadores y MVP de una lista de partidos. */
+/** Jugadores de una lista de partidos: goleadores, MVP, minutos (parciales) y goles humanos. */
 export function getMatchHighlights(matchIds) {
   if (!matchIds.length) return Promise.resolve([]);
-  const p = new URLSearchParams({ select: 'match_id,person_name,goals,is_mom', match_id: `in.(${matchIds.map((id) => `"${String(id).replaceAll('"', '')}"`).join(',')})`, or: '(goals.gt.0,is_mom.is.true)' });
+  const p = new URLSearchParams({ select: 'match_id,person_name,goals,is_mom,seconds_played', match_id: `in.(${matchIds.map((id) => `"${String(id).replaceAll('"', '')}"`).join(',')})` });
   return request(`v_player_match_stats?${p}`);
 }
 

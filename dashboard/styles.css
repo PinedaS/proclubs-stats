@@ -660,3 +660,5 @@ dialog.guide::backdrop { background: rgb(0 0 0 / .55); }
 .pchart-slot { min-width: 0; }
 /* Cara a cara: fila experimental (dato que EA no documenta), integrada en su tema */
 .h2h-row.exp { background-image: linear-gradient(var(--exp-tint), var(--exp-tint)); }
+/* Resultado asignado por abandono: atenuado para no confundirlo con un marcador jugado */
+.forfeit { color: var(--ink-3); white-space: nowrap; }

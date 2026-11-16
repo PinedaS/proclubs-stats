@@ -2,6 +2,18 @@
 // para el equipo, agregar una entrada arriba: versión, fecha y cambios en lenguaje simple.
 export const CHANGELOG = [
   {
+    version: '2.4',
+    date: '2026-11-16',
+    title: 'Banca, abandonos e IA',
+    changes: [
+      'La calificación media y el % MVP pesan cada partido según los minutos jugados.',
+      'Los partidos abandonados ya no cuentan por defecto (su marcador lo asigna EA); se pueden incluir en "Vista".',
+      'Partidos: se marca quién jugó parcial, los goles de la IA y los resultados por abandono.',
+      'Detalle del jugador: minutos de cada partido.',
+      'Club: goles de jugadores contra goles de la IA.',
+    ],
+  },
+  {
     version: '2.3',
     date: '2026-11-15',
     title: 'Comparaciones más finas',

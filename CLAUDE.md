@@ -127,6 +127,16 @@ API no oficial de EA ──► Colector (GitHub Actions, cada 30 min) ──► 
        - **Contexto:** dónde juega (minutos por posición) y calendario (días coloreados por calificación).
        - Las de ejes se dibujan al ancho real al mostrarse la pestaña, para que el texto no se encoja en el celular.
        - **El usuario autorizó usar los datos experimentales** en comparaciones y gráficas, siempre marcados con *.
+     - **Banca, abandonos e IA (v2.4, migración 017, 2026-11-16; verificado con datos reales de 100 D CILANTRO):**
+       - **Banca:** un jugador jugó 47 de 92 min. `person_stats` pondera la calificación media y el % MVP por segundos jugados; los PJ siguen contando enteros.
+         - Partidos y el detalle del jugador marcan "Parcial" con menos del 75 % del tiempo.
+         - EA no dice si entró tarde o salió antes.
+       - **Abandonos:** hubo partidos cortados en 29 y 65 min, con marcadores asignados por EA (3-0 y 0-3). En el de 0-3 un jugador había marcado.
+         - "Excluir incompletos" viene **activado por defecto**.
+         - Si se incluyen, el marcador se muestra como "por abandono".
+       - **IA:** EA solo da las estadísticas de los humanos, pero `goals_for` incluye los goles de la IA (por ejemplo, en un 5-2, 3 fueron de la IA). Goles de la IA = `goals_for` − goles humanos, sin abandonos.
+         - Se muestran en Partidos y en Club ("Goles: jugadores / IA").
+         - **No se cambió el denominador de "Participación en goles"**, que sigue usando todos los goles del equipo. Con solo los goles humanos podría pasar del 100 %, porque una asistencia a un gol de la IA cuenta como G+A pero ese gol no estaría en el denominador. EA no dice qué gol asistió cada uno.
      - **Escudo real:** EA manda `details.customKit.crestAssetId` (99020510 para 100 D CILANTRO) y `crestColor`. No se usó: no se pudo verificar desde qué dirección carga EA la imagen, y no se quiere enlazar a imágenes de EA sin confirmarlo.
      - **Nombres de arquetipos:** mapeo de la comunidad (Interactive-63, issue #5, nov. 2026), no oficial.
        - Los deducidos sin confirmar llevan "?": 1 y 2 (porteros), 4 (Boss), 7 y 9.

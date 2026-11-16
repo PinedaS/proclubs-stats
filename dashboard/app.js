@@ -473,6 +473,24 @@ function renderRanking() {
       extra ? el('div', { class: 'sorted' }, el('div', { class: 'v' }, extra.render ? extra.render(r) : fmtNum(r[extra.key], extra.digits ?? 0)), el('div', { class: 'l' }, extra.label)) : null))) : [el('p', { class: 'muted', style: 'padding: 12px' }, 'Sin datos para estos filtros.')]));
 }
 
+/**
+ * Goles de jugadores humanos vs. goles de la IA en los partidos capturados (con los
+ * filtros actuales). Los abandonos no cuentan: su marcador lo asigna EA.
+ */
+function goalSplitTile() {
+  const by = new Map();
+  for (const r of state.timeline) {
+    if (r.incomplete) continue;
+    if (!by.has(r.match_id)) by.set(r.match_id, { team: r.goals_for ?? 0, human: 0 });
+    by.get(r.match_id).human += r.goals ?? 0;
+  }
+  let human = 0, ai = 0;
+  for (const m of by.values()) { human += m.human; ai += Math.max(0, m.team - m.human); }
+  const t = tile('Goles: jugadores / IA', by.size ? `${human} / ${ai}` : '—');
+  t.title = 'Goles de los jugadores humanos y goles de la IA de nuestro equipo, en los partidos capturados (sin abandonos)';
+  return t;
+}
+
 /** person_id -> calificación de cada partido (si jugó con 2 cuentas, el promedio). */
 function trendByPerson(rows) {
   const per = new Map();
@@ -979,18 +997,29 @@ async function renderMatches(filters, requestId) {
   if (requestId !== state.requestId) return;
   const byMatch = new Map();
   for (const h of hl) {
-    if (!byMatch.has(h.match_id)) byMatch.set(h.match_id, { scorers: new Map(), mvp: [] });
+    if (!byMatch.has(h.match_id)) byMatch.set(h.match_id, { scorers: new Map(), mvp: [], humanGoals: 0, players: [] });
     const e = byMatch.get(h.match_id);
     if (h.goals > 0) e.scorers.set(h.person_name, (e.scorers.get(h.person_name) ?? 0) + h.goals);
     if (h.is_mom) e.mvp.push(h.person_name);
+    e.humanGoals += h.goals ?? 0;
+    e.players.push(h);
   }
-  const highlights = (id) => {
-    const e = byMatch.get(id);
+  const highlights = (m, incomplete) => {
+    const e = byMatch.get(m.match_id);
     if (!e) return null;
     const goals = [...e.scorers].map(([n, g]) => (g > 1 ? `${n} (${g})` : n)).join(', ');
+    // Goles de la IA = marcador del equipo menos los goles de los jugadores humanos.
+    // En un abandono el marcador lo asigna EA (p. ej. 0-3), así que no se calcula.
+    const ai = incomplete ? 0 : m.goals_for - e.humanGoals;
+    // Parcial: jugó menos del 75 % del tiempo del que más jugó (entró desde la banca o salió antes).
+    const full = Math.max(...e.players.map((p) => p.seconds_played ?? 0));
+    const partial = incomplete ? [] : e.players.filter((p) => full && p.seconds_played < full * 0.75);
     return el('div', { class: 'match-hl muted small' },
       goals ? el('span', {}, el('span', { class: 'hl-tag' }, 'Goles'), ` ${goals}`) : null,
-      e.mvp.length ? el('span', {}, el('span', { class: 'hl-tag mvp' }, '★ MVP'), ` ${e.mvp.join(', ')}`) : null);
+      ai > 0 ? el('span', { title: 'Goles de los jugadores controlados por la IA de nuestro equipo (marcador menos goles de los jugadores humanos)' }, el('span', { class: 'hl-tag' }, 'IA'), ` ${ai} gol${ai === 1 ? '' : 'es'}`) : null,
+      e.mvp.length ? el('span', {}, el('span', { class: 'hl-tag mvp' }, '★ MVP'), ` ${e.mvp.join(', ')}`) : null,
+      partial.length ? el('span', { title: 'Jugó menos del 75 % del partido: entró desde la banca o salió antes (EA no dice cuál)' }, el('span', { class: 'hl-tag' }, 'Parcial'),
+        ` ${partial.map((p) => `${p.person_name} (${Math.round(p.seconds_played / 60)} de ${Math.round(full / 60)} min)`).join(', ')}`) : null);
   };
   const cols = ['Fecha', 'Tipo', 'Rival', 'Nivel rival', 'Div.', 'Jug.', 'Marcador', 'Res.'];
   const body = el('tbody');
@@ -1000,11 +1029,14 @@ async function renderMatches(filters, requestId) {
     const row = el('tr', { class: 'clickable', 'aria-expanded': 'false' },
       el('td', { class: 'left' }, fmtDate(m.played_at)),
       el('td', { class: 'left' }, el('span', { class: 'badge' }, TYPE_LABEL[m.match_type] ?? m.match_type)),
-      el('td', { class: 'left' }, m.opponent_name ?? '—', f?.incomplete ? [' ', el('span', { class: 'badge warn', title: 'Abandono o menos del 90 % del tiempo' }, 'incompleto')] : null, highlights(m.match_id)),
+      el('td', { class: 'left' }, m.opponent_name ?? '—', f?.incomplete ? [' ', el('span', { class: 'badge warn', title: 'Abandono o menos del 90 % del tiempo' }, 'abandono')] : null, highlights(m, f?.incomplete)),
       el('td', {}, fmtNum(m.opponent_skill_rating)),
       el('td', { title: 'División del club ese día (según la foto diaria del club)' }, f?.club_division != null ? `${f.club_division}ª` : '—'),
       el('td', { title: 'Jugadores del club en cancha' }, fmtNum(f?.team_size)),
-      el('td', {}, el('strong', {}, `${m.goals_for} – ${m.goals_against}`)),
+      // En un abandono el marcador es el que asigna EA, no el jugado: se dice así.
+      el('td', {}, f?.incomplete
+        ? el('span', { class: 'forfeit', title: 'Resultado asignado por EA por abandono; no es el marcador que se jugó' }, el('span', { class: 'muted small' }, 'por abandono '), `${m.goals_for} – ${m.goals_against}`)
+        : el('strong', {}, `${m.goals_for} – ${m.goals_against}`)),
       el('td', {}, resultBadge(m.outcome, m.winner_by_dnf)));
     const toggle = () => toggleMatchPlayers(row, m.match_id, cols.length);
     Object.entries(onActivate(toggle)).forEach(([k, v]) => (k.startsWith('on') ? row.addEventListener(k.slice(2), v) : row.setAttribute(k, v)));
@@ -1147,6 +1179,7 @@ function renderClub() {
         tile('Partidos de temporada', fmtNum(last.season_games)),
         tile('Goles', last.season_goals != null ? `${last.season_goals} : ${last.season_goals_against}` : '—'),
         tile('Mejor división', last.best_division != null ? `${last.best_division}ª` : '—'),
+        goalSplitTile(),
         tile('Ascensos', fmtNum(last.promotions)), tile('Descensos', fmtNum(last.relegations)),
         tile('Histórico V-E-D', last.wins != null ? `${last.wins}-${last.draws}-${last.losses}` : '—'))
     : el('p', { class: 'muted', style: 'padding: 0 18px 18px' }, 'Sin fotos del club todavía.'));
@@ -1541,21 +1574,24 @@ async function renderPerson(filters, requestId) {
   const chartBox = el('div', { class: 'chart' }, el('h3', {}, 'Calificación por partido'));
   const overallBox = el('div', { class: 'chart' }, el('h3', {}, 'Media del Pro (EA), día a día'));
   const table = el('div', { class: 'table-wrap' }, el('table', { class: 'data' },
-    el('thead', {}, el('tr', {}, ['Fecha', 'Tipo', 'Rival', 'Res.', 'Pos.', 'Calif.', 'G', 'A', 'MVP'].map((h, i) =>
-      el('th', { scope: 'col', class: i < 3 || i === 4 ? 'left' : null }, h)),
+    el('thead', {}, el('tr', {}, ['Fecha', 'Tipo', 'Rival', 'Res.', 'Pos.', 'Min.', 'Calif.', 'G', 'A', 'MVP'].map((h, i) =>
+      el('th', { scope: 'col', class: i < 3 || i === 4 ? 'left' : null, title: h === 'Min.' ? 'Minutos de juego; "parcial" si jugó menos del 75 % (entró desde la banca o salió antes)' : null }, h)),
       state.showExp ? ['Regates*', 'Intercep.*', 'Recup.*', 'Pérdidas*'].map((h) => el('th', { scope: 'col', class: 'exp' }, h)) : null)),
     el('tbody', {}, matches.length
       ? [...matches].reverse().map((m) => el('tr', {},
           el('td', { class: 'left' }, fmtDate(m.played_at, false)),
           el('td', { class: 'left' }, el('span', { class: 'badge' }, TYPE_LABEL[m.match_type] ?? m.match_type)),
-          el('td', { class: 'left' }, m.opponent_name ?? '—', m.incomplete ? [' ', el('span', { class: 'badge warn' }, 'incompleto')] : null),
+          el('td', { class: 'left' }, m.opponent_name ?? '—', m.incomplete ? [' ', el('span', { class: 'badge warn', title: 'Partido abandonado o cortado: el resultado lo asigna EA' }, 'abandono')] : null),
           el('td', {}, resultBadge(m.outcome), ` ${m.goals_for}–${m.goals_against}`),
           el('td', { class: 'left' }, posBadge(m.position)),
+          // Un partido completo ronda los 90 min de juego (≈5.400 s); menos del 75 % = parcial.
+          el('td', {}, fmtNum((m.seconds_played ?? 0) / 60), !m.incomplete && (m.seconds_played ?? 0) < 4050
+            ? [' ', el('span', { class: 'badge', title: 'Jugó menos del 75 % del partido: entró desde la banca o salió antes' }, 'parcial')] : null),
           el('td', {}, el('strong', {}, fmtNum(m.rating, 1))),
           el('td', {}, fmtNum(m.goals)), el('td', {}, fmtNum(m.assists)),
           el('td', {}, m.is_mom ? '★' : ''),
           state.showExp ? [m.dribbles_exp, m.interceptions_exp, m.possession_won_exp, m.possession_lost_exp].map((v) => el('td', { class: 'exp' }, fmtNum(v))) : null))
-      : [emptyRow(state.showExp ? 13 : 9, 'Sin partidos para estos filtros.')])));
+      : [emptyRow(state.showExp ? 14 : 10, 'Sin partidos para estos filtros.')])));
 
   // Evolución semanal: su calificación media por semana (el tooltip muestra la del equipo).
   const weeklyBox = el('div', { class: 'chart' }, el('h3', {}, 'Calificación media por semana'));
@@ -1877,7 +1913,8 @@ function updateFiltersSummary() {
   $('#dates-value').textContent = from || to ? `${from ? short(from) : '…'} – ${to ? short(to) : 'hoy'}` : 'Todas';
   const opts = [];
   if (state.minMatches > 1) opts.push(`mín. ${state.minMatches} PJ`);
-  if ($('#exclude-incomplete').checked) opts.push('sin incompletos');
+  // Por defecto se excluyen los abandonos: solo se avisa cuando se incluyen.
+  if (!$('#exclude-incomplete').checked) opts.push('con abandonos');
   if ($('#show-adv').checked) opts.push('avanzadas');
   $('#view-value').textContent = opts.join(' · ');
 }
