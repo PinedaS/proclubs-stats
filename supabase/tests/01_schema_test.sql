@@ -416,19 +416,18 @@ select pg_temp.assert_eq('con y sin: Pineda nunca jugó sin Hecodes',
 rollback;
 
 -- =============================================================================
--- 4e2. Calificación y % MVP ponderados por minutos (migración 017).
---      Todos jugaron m2 solo 30 min (1800 s); m1 completo (5400 s).
---      PinedaDS: (8,00×5400 + 6,50×1800) / 7200 = 7,625 -> 7,63 (antes 7,25).
---      Hecodes98: MVP solo en m1 -> 5400 / 7200 = 75 % (antes 50 %).
+-- 4e2. Promedios tal cual EA (018 deshace la ponderación por minutos de 017).
+--      Aunque m2 dure solo 30 min (1800 s), cada partido pesa igual:
+--      PinedaDS: (8,00 + 6,50) / 2 = 7,25; Hecodes98: 1 MVP / 2 PJ = 50 %.
 -- =============================================================================
 begin;
 update public.player_match_stats set seconds_played = 1800 where match_id = 'm2';
 set local role anon;
-select pg_temp.assert_eq('ponderado: calificación media de PinedaDS',
-  (select avg_rating from public.person_stats() t join public.accounts a on a.person_id = t.person_id where a.player_id = '333'), 7.63::numeric);
-select pg_temp.assert_eq('ponderado: % MVP de Hecodes98',
-  (select mom_pct from public.person_stats() where person_name = 'Hecodes98'), 75.0::numeric);
-select pg_temp.assert_eq('ponderado: los partidos siguen contando enteros en PJ',
+select pg_temp.assert_eq('tal cual EA: calificación media de PinedaDS (sin ponderar)',
+  (select avg_rating from public.person_stats() t join public.accounts a on a.person_id = t.person_id where a.player_id = '333'), 7.25::numeric);
+select pg_temp.assert_eq('tal cual EA: % MVP de Hecodes98 (sin ponderar)',
+  (select mom_pct from public.person_stats() where person_name = 'Hecodes98'), 50.0::numeric);
+select pg_temp.assert_eq('tal cual EA: partidos jugados',
   (select matches from public.person_stats() where person_name = 'Hecodes98'), 2::bigint);
 rollback;
 
