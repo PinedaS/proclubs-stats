@@ -2,6 +2,15 @@
 // para el equipo, agregar una entrada arriba: versión, fecha y cambios en lenguaje simple.
 export const CHANGELOG = [
   {
+    version: '2.6',
+    date: '2026-11-16',
+    title: 'División como en el juego',
+    changes: [
+      'La división se muestra como en el juego: EA la envía con un número más (la 4ª del juego llega como 5).',
+      'Al pasar el cursor se ve cómo la envía EA. La división por encima de la 1ª se llama "División máxima" hasta confirmar su nombre.',
+    ],
+  },
+  {
     version: '2.5',
     date: '2026-11-16',
     title: 'Datos tal cual EA',

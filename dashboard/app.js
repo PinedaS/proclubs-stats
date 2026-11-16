@@ -131,6 +131,21 @@ const posBadge = (pos) => (pos ? el('span', { class: `badge pos-${pos}`, title: 
   el('span', { class: 'pos-long' }, POS_LABEL[pos] ?? pos), el('span', { class: 'pos-short' }, POS_SHORT[pos] ?? pos)) : null);
 const platformLabel = (p) => PLATFORM_LABEL[p] ?? p;
 
+/**
+ * División como la muestra el JUEGO. Verificado con el usuario (2026-11-16): el juego
+ * muestra siempre una menos que la API de EA (API 6 = 5ª del juego, API 5 = 4ª). La API
+ * tiene 6 niveles: el 1 es una división por encima de la 1ª del juego, cuyo nombre aún
+ * no conocemos ("División máxima" mientras tanto). En la base se guarda el número de EA,
+ * tal cual; solo se traduce al mostrar, y el tooltip dice cómo lo envía EA.
+ */
+const TOP_DIVISION_NAME = 'División máxima';
+function gameDivision(apiDiv) {
+  if (apiDiv == null) return null;
+  const n = Number(apiDiv) - 1;
+  return n >= 1 ? `${n}ª` : TOP_DIVISION_NAME;
+}
+const divisionTitle = (apiDiv) => (apiDiv == null ? null : `División del juego. EA la envía como ${apiDiv} (el juego muestra una menos).`);
+
 function playerCell(name, sub) {
   return el('span', { class: 'player-cell' }, avatar(name), el('span', {}, el('span', { class: 'person' }, name),
     sub ? el('span', { class: 'muted small' }, ` ${sub}`) : null));
@@ -264,7 +279,7 @@ async function renderHeader() {
     kpi('Nivel del club', fmtNum(last?.skill_rating),
       delta == null || snaps.length < 2 ? 'skillRating de EA' : `${fmtSigned(delta)} desde ${fmtDate(`${first.snapshot_date}T12:00:00Z`, false)}`,
       delta > 0 ? 'up' : delta < 0 ? 'down' : null),
-    kpi('División', last?.current_division != null ? `${last.current_division}ª` : '—', last?.best_division != null ? `Mejor: ${last.best_division}ª` : null),
+    Object.assign(kpi('División', gameDivision(last?.current_division) ?? '—', last?.best_division != null ? `Mejor: ${gameDivision(last.best_division)}` : null), { title: divisionTitle(last?.current_division) ?? '' }),
     kpi('Temporada', last?.season_wins != null ? `${last.season_wins}-${last.season_draws}-${last.season_losses}` : '—',
       last?.season_points != null ? `${fmtNum(last.season_points)} pts · goles ${last.season_goals ?? '—'} : ${last.season_goals_against ?? '—'}` : 'V-E-D'),
     kpi('Forma (últ. 5)', form, streakText(recent)),
@@ -922,8 +937,13 @@ async function renderCompare(filters, requestId) {
     .sort((a, b) => a[1].name.localeCompare(b[1].name, 'es'));
   const max = Math.max(1, ...rows.map((r) => Number(r[metric] ?? 0)));
   const table = $('#compare-table');
+  // Los grupos de división llegan como "División N" con el número de EA: se muestran como en el juego.
+  const bucketLabel = (b) => {
+    const m = /^División (\d+)$/.exec(b);
+    return m ? { text: Number(m[1]) > 1 ? `División ${gameDivision(m[1])}` : TOP_DIVISION_NAME, title: divisionTitle(m[1]) } : { text: b, title: null };
+  };
   const head = el('thead', {}, el('tr', {}, el('th', { scope: 'col' }, 'Jugador'),
-    buckets.map((b) => el('th', { scope: 'col' }, b))));
+    buckets.map((b) => el('th', { scope: 'col', title: bucketLabel(b).title }, bucketLabel(b).text))));
   const body = el('tbody', {}, list.length ? list.map(([id, p]) => {
     const values = buckets.map((b) => p.cells[b]?.[metric]).filter((v) => v != null).map(Number);
     const best = values.length > 1 ? Math.max(...values) : null;
@@ -1070,7 +1090,7 @@ async function renderMatches(filters, requestId) {
       el('td', { class: 'left' }, el('span', { class: 'badge' }, TYPE_LABEL[m.match_type] ?? m.match_type)),
       el('td', { class: 'left' }, m.opponent_name ?? '—', f?.incomplete ? [' ', el('span', { class: 'badge warn', title: 'El partido se cortó antes del 90 % del tiempo o un equipo abandonó. El marcador es el que da EA.' }, 'Abandonado')] : null, highlights(m, f?.incomplete)),
       el('td', {}, fmtNum(m.opponent_skill_rating)),
-      el('td', { title: 'División del club ese día (según la foto diaria del club)' }, f?.club_division != null ? `${f.club_division}ª` : '—'),
+      el('td', { title: f?.club_division != null ? `División del club ese día. ${divisionTitle(f.club_division)}` : 'Sin dato de división' }, gameDivision(f?.club_division) ?? '—'),
       el('td', { title: 'Jugadores del club en cancha' }, fmtNum(f?.team_size)),
       // Marcador tal cual EA (en un abandono es el que asigna EA; la etiqueta "Abandonado" lo avisa).
       el('td', {}, el('strong', {}, `${m.goals_for} – ${m.goals_against}`)),
@@ -1200,7 +1220,7 @@ function renderClub() {
   drawLineChart(chartBox, snaps.filter((s) => s.skill_rating != null), {
     label: 'Nivel del club', value: (s) => s.skill_rating, date: (s) => `${s.snapshot_date}T12:00:00Z`,
     min: 0, max: 5000, pad: 25, step: 50, emptyText: 'Sin fotos del club todavía.',
-    tooltip: (s) => [el('div', {}, el('strong', {}, `Nivel ${fmtNum(s.skill_rating)}`), s.current_division != null ? ` · ${s.current_division}ª división` : ''),
+    tooltip: (s) => [el('div', {}, el('strong', {}, `Nivel ${fmtNum(s.skill_rating)}`), s.current_division != null ? ` · ${gameDivision(s.current_division)}${Number(s.current_division) > 1 ? ' división' : ''}` : ''),
       el('div', { class: 'muted' }, fmtDate(`${s.snapshot_date}T12:00:00Z`, false))],
   });
   const weeklyBox = $('#club-weekly');
@@ -1216,7 +1236,7 @@ function renderClub() {
     ? el('div', { class: 'season-grid' },
         tile('Partidos de temporada', fmtNum(last.season_games)),
         tile('Goles', last.season_goals != null ? `${last.season_goals} : ${last.season_goals_against}` : '—'),
-        tile('Mejor división', last.best_division != null ? `${last.best_division}ª` : '—'),
+        Object.assign(tile('Mejor división', gameDivision(last.best_division) ?? '—'), { title: divisionTitle(last.best_division) ?? '' }),
         goalSplitTile(),
         tile('Ascensos', fmtNum(last.promotions)), tile('Descensos', fmtNum(last.relegations)),
         tile('Histórico V-E-D', last.wins != null ? `${last.wins}-${last.draws}-${last.losses}` : '—'))
@@ -1298,7 +1318,7 @@ function divisionContext(matches, summary, levelTiles) {
   levelTiles.replaceChildren(
     tile('Media al entrar', '…'),
     tile('Media actual', summary?.pro_overall != null ? fmtNum(summary.pro_overall) : '…'),
-    tile('Entró en', first ? `${first.club_division}ª división` : '—'),
+    tile('Entró en', first ? `${gameDivision(first.club_division)}${Number(first.club_division) > 1 ? ' división' : ''}` : '—'),
     tile('Nivel medio de sus rivales', fmtNum(summary?.avg_opponent_skill)));
   levelTiles.lastElementChild.title = 'skillRating medio de los rivales que enfrentó: más alto = rivales más difíciles';
   levelTiles.children[2].title = first ? `Su primer partido con división registrada: ${fmtDate(first.played_at, false)}` : 'Sus partidos son anteriores al registro de la división';
@@ -1319,14 +1339,14 @@ function divisionContext(matches, summary, levelTiles) {
       const list = groups.get(k);
       const count = (o) => list.filter((m) => m.outcome === o).length;
       return el('tr', {},
-        el('td', { class: 'left' }, k === 'sin' ? el('span', { class: 'muted', title: 'Partidos anteriores al registro de la división' }, 'Sin dato') : `${k}ª`),
+        el('td', { class: 'left', title: k === 'sin' ? null : divisionTitle(k) }, k === 'sin' ? el('span', { class: 'muted', title: 'Partidos anteriores al registro de la división' }, 'Sin dato') : gameDivision(k)),
         el('td', {}, String(list.length)),
         el('td', {}, el('strong', {}, fmtNum(avg(list, (m) => m.rating), 2))),
         el('td', {}, `${count('win')}-${count('draw')}-${count('loss')}`),
         el('td', {}, fmtNum(avg(list, (m) => m.opponent_skill_rating))));
     }) : [emptyRow(5, 'Sin partidos para estos filtros.')])));
   return [levelTiles, table,
-    el('p', { class: 'muted small' }, 'Contexto para valorar su rendimiento: no es lo mismo jugar en 6ª que en 2ª, ni contra rivales débiles que fuertes. La 1ª es la división más alta. Con pocos partidos en una división, su promedio ahí no es confiable.')];
+    el('p', { class: 'muted small' }, 'Contexto para valorar su rendimiento: no es lo mismo jugar en 5ª que en 1ª, ni contra rivales débiles que fuertes. Las divisiones son las del juego: de la 5ª a la 1ª, y por encima la división máxima. Con pocos partidos en una división, su promedio ahí no es confiable.')];
 }
 
 /** Media del Pro al entrar (primera foto diaria) y actual (última). */
