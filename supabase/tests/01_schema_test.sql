@@ -493,9 +493,43 @@ end $$;
 reset role;
 
 -- =============================================================================
+-- 4h. 020: temporadas, escudo y contadores nuevos
+-- =============================================================================
+insert into public.club_seasons (club_id, season_no, started_at, ended_at, detected_by) values
+  (1330384, 1, '2026-10-22T07:00Z', '2026-12-03T07:00Z', 'inicio del registro'),
+  (1330384, 2, '2026-12-03T07:00Z', null, 'reinicio de EA');
+do $$
+begin
+  begin
+    insert into public.club_seasons (club_id, season_no, started_at, detected_by) values (1330384, 3, now(), 'reinicio de EA');
+    raise exception 'FAIL: dos temporadas abiertas en el mismo club';
+  exception when unique_violation then raise notice 'PASS una sola temporada abierta por club';
+  end;
+  begin
+    insert into public.club_seasons (club_id, season_no, started_at, ended_at, detected_by) values (1330384, 9, '2026-12-05', '2026-12-01', 'reinicio de EA');
+    raise exception 'FAIL: temporada que termina antes de empezar';
+  exception when check_violation then raise notice 'PASS fin anterior al inicio rechazado';
+  end;
+end $$;
+update public.clubs set team_id = 243, crest_asset_id = 99020510 where club_id = 1330384;
+set role anon;
+select pg_temp.assert_eq('anon lee las temporadas', (select count(*) from public.club_seasons), 2::bigint);
+select pg_temp.assert_eq('anon lee el escudo', (select crest_asset_id from public.clubs where club_id = 1330384), 99020510::bigint);
+select pg_temp.assert_eq('vista con contadores nuevos', (select count(*) from public.v_player_match_stats where (short_passes_ok_exp is null) <> (dribbles_exp is null) or (out_of_position_severe_exp is null) <> (dribbles_exp is null)), 0::bigint);
+select pg_temp.assert_eq('vista con tipos de atajada', (select count(parry_saves) >= 0 from public.v_player_match_stats), true);
+do $$
+begin
+  insert into public.club_seasons (club_id, season_no, started_at, detected_by) values (1330384, 5, now(), 'reinicio de EA');
+  raise exception 'FAIL: anon pudo escribir temporadas';
+exception when insufficient_privilege then raise notice 'PASS anon no escribe temporadas';
+end $$;
+reset role;
+
+-- =============================================================================
 -- 5. Borrar el club de prueba
 -- =============================================================================
 select public.purge_club(1330384);
+select pg_temp.assert_eq('purge: sin temporadas', (select count(*) from public.club_seasons), 0::bigint);
 select pg_temp.assert_eq('purge: sin fotos crudas de EA', (select count(*) from public.ea_snapshots), 0::bigint);
 
 select pg_temp.assert_eq('purge: sin partidos',  (select count(*) from public.matches), 0::bigint);
