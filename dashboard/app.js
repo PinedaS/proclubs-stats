@@ -134,11 +134,12 @@ const platformLabel = (p) => PLATFORM_LABEL[p] ?? p;
 /**
  * División como la muestra el JUEGO. Verificado con el usuario (2026-11-16): el juego
  * muestra siempre una menos que la API de EA (API 6 = 5ª del juego, API 5 = 4ª). La API
- * tiene 6 niveles: el 1 es una división por encima de la 1ª del juego, cuyo nombre aún
- * no conocemos ("División máxima" mientras tanto). En la base se guarda el número de EA,
- * tal cual; solo se traduce al mostrar, y el tooltip dice cómo lo envía EA.
+ * tiene 6 niveles: el 1 es la División Élite, por encima de la 1ª (identificada por su
+ * ícono; EA describe la pirámide "de la División 5 a la División Élite"). En la base se
+ * guarda el número de EA, tal cual; solo se traduce al mostrar, y el tooltip dice cómo
+ * lo envía EA.
  */
-const TOP_DIVISION_NAME = 'División máxima';
+const TOP_DIVISION_NAME = 'División Élite';
 function gameDivision(apiDiv) {
   if (apiDiv == null) return null;
   const n = Number(apiDiv) - 1;
@@ -1346,7 +1347,7 @@ function divisionContext(matches, summary, levelTiles) {
         el('td', {}, fmtNum(avg(list, (m) => m.opponent_skill_rating))));
     }) : [emptyRow(5, 'Sin partidos para estos filtros.')])));
   return [levelTiles, table,
-    el('p', { class: 'muted small' }, 'Contexto para valorar su rendimiento: no es lo mismo jugar en 5ª que en 1ª, ni contra rivales débiles que fuertes. Las divisiones son las del juego: de la 5ª a la 1ª, y por encima la división máxima. Con pocos partidos en una división, su promedio ahí no es confiable.')];
+    el('p', { class: 'muted small' }, 'Contexto para valorar su rendimiento: no es lo mismo jugar en 5ª que en 1ª, ni contra rivales débiles que fuertes. Las divisiones son las del juego: de la 5ª a la 1ª, y por encima la División Élite. Con pocos partidos en una división, su promedio ahí no es confiable.')];
 }
 
 /** Media del Pro al entrar (primera foto diaria) y actual (última). */

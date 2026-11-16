@@ -95,7 +95,7 @@ API no oficial de EA ──► Colector (GitHub Actions, cada 30 min) ──► 
        - **Tabla por división:** PJ, calificación media, V-E-D y nivel del rival.
      - **⚠️ División del juego = número de la API − 1 (confirmado por el usuario el 2026-11-16, v2.6).**
        - **Evidencia:** 100 D CILANTRO empezó en la 5ª del juego (API: 6) y hoy está en la 4ª (API: `currentDivision` 5, con 1 ascenso).
-       - Por encima de la 1ª del juego hay una división más (API: 1). El usuario no recuerda su nombre y no se encontró en la web: en el dashboard es "División máxima" (`TOP_DIVISION_NAME` en `app.js`).
+       - Por encima de la 1ª del juego está la **División Élite** (API: 1), identificada por el ícono que mostró el usuario (escudo morado con león). El análisis de Clubes de EA para FC 24 describe la pirámide "de la División 5 a la División Élite". En el código es `TOP_DIVISION_NAME` en `app.js`.
        - **En la base se guarda el número de EA tal cual**; `gameDivision()` traduce solo al mostrar, y el tooltip dice cómo lo envía EA.
      - **Divisiones (verificado en la respuesta de EA):** hay **6**. `overallStats` trae `finishesInDivision1..6`, y la 1 es la más alta.
        - 100 D CILANTRO, con su primer partido, quedó en 6ª.

@@ -7,7 +7,7 @@ export const CHANGELOG = [
     title: 'División como en el juego',
     changes: [
       'La división se muestra como en el juego: EA la envía con un número más (la 4ª del juego llega como 5).',
-      'Al pasar el cursor se ve cómo la envía EA. La división por encima de la 1ª se llama "División máxima" hasta confirmar su nombre.',
+      'Al pasar el cursor se ve cómo la envía EA. Por encima de la 1ª está la División Élite.',
     ],
   },
   {
