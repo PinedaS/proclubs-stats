@@ -416,6 +416,23 @@ select pg_temp.assert_eq('con y sin: Pineda nunca jugó sin Hecodes',
 rollback;
 
 -- =============================================================================
+-- 4e2. Calificación y % MVP ponderados por minutos (migración 017).
+--      Todos jugaron m2 solo 30 min (1800 s); m1 completo (5400 s).
+--      PinedaDS: (8,00×5400 + 6,50×1800) / 7200 = 7,625 -> 7,63 (antes 7,25).
+--      Hecodes98: MVP solo en m1 -> 5400 / 7200 = 75 % (antes 50 %).
+-- =============================================================================
+begin;
+update public.player_match_stats set seconds_played = 1800 where match_id = 'm2';
+set local role anon;
+select pg_temp.assert_eq('ponderado: calificación media de PinedaDS',
+  (select avg_rating from public.person_stats() t join public.accounts a on a.person_id = t.person_id where a.player_id = '333'), 7.63::numeric);
+select pg_temp.assert_eq('ponderado: % MVP de Hecodes98',
+  (select mom_pct from public.person_stats() where person_name = 'Hecodes98'), 75.0::numeric);
+select pg_temp.assert_eq('ponderado: los partidos siguen contando enteros en PJ',
+  (select matches from public.person_stats() where person_name = 'Hecodes98'), 2::bigint);
+rollback;
+
+-- =============================================================================
 -- 4f. Mejoras (migración 014).
 -- =============================================================================
 -- La división anotada al capturar tiene prioridad sobre la foto diaria (4ª).
