@@ -98,11 +98,20 @@ Mejor resultado por temporada de play-off, con su división y posición final.
 
 **Campos de jugador guardados solo en el JSON crudo (`match_raw`):** `realtimeidle` (posible AFK), `realtimegame`, `vproattr`, `SCORE`, `cleansheetsany` y `vprohackreason`. También se guardan las estadísticas de los **jugadores rivales** y el `aggregate` del partido.
 
-**Pendiente:**
-1. Migración con tablas para carrera, play-off, `clubs/info` y la foto del rival (JSON completo más columnas clave).
-2. Capturar todo eso en el colector.
-3. En el dashboard, mostrar solo lo importante: atajadas por tipo, división del rival y algunos contadores nuevos.
-4. Agregar una sección visible de "datos guardados que no se muestran".
+**Hecho (2026-11-16, migración 019 y v2.7):**
+1. Tabla `ea_snapshots`: JSON completo de `clubs/info`, `club/playoffAchievements` y `members/career/stats` (una foto por día), y de cada **rival** (`clubs/overallStats` y su fila del ranking) al capturar el partido. anon no la lee. Lo crudo de nuestro `overallStats`, ranking y `members/stats` ya estaba en `club_snapshots.raw` y `member_snapshots.raw`.
+2. `matches.opponent_division`: división del rival, solo en partidos nuevos de menos de 6 h (como la nuestra). Se muestra en Partidos cuando esté en más de la mitad de los partidos; antes, la columna queda oculta. Con algunos faltantes, lleva la etiqueta "Parcial".
+3. La guía del dashboard ("Cómo leer esto") tiene la sección "Datos guardados que no se muestran".
+
+**Pendiente (opcional):** mostrar las atajadas por tipo y algunos contadores nuevos (pases por distancia, entradas de pie y barridas, tiros dentro y fuera del área).
+
+**Preguntas del usuario (2026-11-16), verificado contra el mapeo de la comunidad:**
+
+| Dato | ¿Existe? | Detalle |
+|---|---|---|
+| **Goles de penal** | ❌ No | Ningún código conocido los identifica. Hay códigos de "goles por técnica" sin nombre (46, 141, 126…); uno podría ser el penal, pero haría falta un partido con un gol de penal conocido para confirmarlo. |
+| **Penales cometidos** | 🧪 Sí | Código 94. En el dashboard: "Penales cometidos*". |
+| **% de regates exitosos** | ❌ No | Solo hay regates **completados** (174), conducciones (97) y regates superando al rival (112). No hay regates intentados ni fallidos, así que no se puede calcular un %. |
 
 ## 3. Lo que EA no expone (✅ verificado)
 

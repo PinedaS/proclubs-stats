@@ -58,7 +58,22 @@ API no oficial de EA ──► Colector (GitHub Actions, cada 30 min) ──► 
    - Filtros: tipo de partido, fechas, mínimo de partidos y excluir incompletos.
    - Los archivos se versionan con el commit en `pages.yml` (`__V__`), para no mezclar versiones viejas desde la caché de Pages.
    - Probado en Chrome con los datos del club de prueba.
-   - **Migraciones aplicadas en Supabase:** 001–015, cada una verificada después de aplicarla.
+   - **Migraciones aplicadas en Supabase:** 001–019, cada una verificada después de aplicarla.
+   - **Documentación (2026-11-16):** `README.md`, `docs/manual-de-usuario.md` (para el equipo) y `docs/arquitectura.md` (técnica, con diagramas Mermaid). Actualizarlas al cambiar funciones.
+   - **v2.7 (2026-11-16, pedidos del usuario):**
+     - **Ranking:**
+       - Botones "Datos": Totales / Proporciones / Oficiales / Experimentales.
+       - "+ Añadir dato" para datos menos importantes, que se quitan con la ×. Se guardan en `localStorage`.
+       - Se quitó el interruptor "Métricas avanzadas".
+       - "Posiciones": todas, con el % de minutos, en vez de una sola.
+       - Gráfica del dato ordenado.
+     - **Cara a cara:** el jugador B puede ser el "Promedio del equipo". Los totales se suman y las tasas se recalculan; ver `teamAverageRow`.
+     - **Duplas unificada,** calculada en el navegador: el equipo con y sin cada jugador, con gráfica divergente, y por jugador elegido las secciones "Con él" (junto a cada compañero) y "Sin él".
+     - **Club:** resultados por semana y goles por partido.
+     - **Datos parciales** (pedido del usuario): etiqueta "Parcial" si un dato falta en algunos partidos, y la columna se oculta si falta en más del 50 % (`coverage()`).
+     - **Textos para el equipo:** sin códigos de EA.
+     - **Fechas de Novedades:** se usa la hora de Colombia. La v2.4–2.6 decía 16/11 y era el 15/11.
+     - **Ni goles de penal ni % de regates:** EA no los da. Ver `datos-ea.md` §2b.
    - **Mejoras del 2026-11-11 (noche):**
      - **Vista simple:** "Métricas avanzadas" arranca apagada y "Experimentales" activa (decisión del usuario). Cada navegador recuerda lo elegido en `localStorage`.
      - **Guía:** botón "Cómo leer esto" en la cabecera, un `<dialog>` con la explicación de cada pestaña.
@@ -380,7 +395,11 @@ No hay API oficial. Se usan los endpoints públicos que lee la web de Clubes de 
    - Hay que modelar dos niveles: **juego** (FC 27, FC 28) y **temporada dentro del juego**.
    - Idea a verificar: EA reinicia `currentSeason` (partidos, puntos, V-E-D) al empezar cada temporada; detectar ese reinicio en `club_snapshots`.
    - El dashboard debería poder filtrar por temporada y mostrar "FC 27 · Temporada N".
-10. **PENDIENTE: capturar todos los datos de EA** (plan en `docs/datos-ea.md`, sección 2b): carrera, play-off, `clubs/info`, foto completa del rival y sección "datos guardados que no se muestran".
+10. ~~Capturar todos los datos de EA.~~ **Hecho el 2026-11-16 (migración 019):**
+    - `ea_snapshots` guarda crudos `clubs/info`, play-off, carrera y la foto de cada rival.
+    - `matches.opponent_division` guarda la división del rival.
+    - La guía del dashboard explica qué se guarda sin mostrarse.
+    - Queda opcional: mostrar atajadas por tipo y más contadores.
 
 ## 8. Orden sugerido de trabajo
 
