@@ -3,6 +3,20 @@
 // La fecha es la de Colombia (UTC−5), no la UTC: de noche ya es "mañana" en UTC.
 export const CHANGELOG = [
   {
+    version: '2.9',
+    date: '2026-11-16',
+    title: 'Gráficas nuevas',
+    changes: [
+      'Ranking: "Dos datos a la vez" (eliges qué va en cada eje), "Mapa de calor" (en qué destaca cada uno) y "Carrera por el mejor" (calificación acumulada partido a partido). Se quitó la gráfica de barras, que repetía la tabla.',
+      'Por rol: cada índice como un punto alrededor del 100.',
+      'Comparar: una línea por jugador entre los grupos (por ejemplo, rival fuerte y débil).',
+      'Duplas: matriz con el % de victorias de cada pareja.',
+      'Partidos: nivel del rival contra la diferencia de goles, con la tendencia.',
+      'Detalle del jugador: "Su lugar en el equipo", dato por dato.',
+      'Cada jugador tiene siempre el mismo color en todas las gráficas, con su nombre al lado.',
+    ],
+  },
+  {
     version: '2.8',
     date: '2026-11-16',
     title: 'Temporadas, escudo y más datos',

@@ -117,8 +117,17 @@
         <div id="ranking-cards" class="ranking-cards"></div>
       </div>
       <div class="card">
-        <div class="card-head"><h2 id="ranking-chart-title">En gráfica</h2><p class="muted small">El dato por el que está ordenada la tabla, del mejor al peor. Toca una barra para ver al jugador.</p></div>
-        <div id="ranking-chart" class="ranking-chart"></div>
+        <div class="card-head"><h2>Dos datos a la vez</h2><p class="muted small">Elige qué comparar en cada eje. Toca un punto para ver al jugador.</p>
+          <div class="sc-axes"><label class="field">Eje horizontal <select id="sc-x"></select></label><label class="field">Eje vertical <select id="sc-y"></select></label></div></div>
+        <div id="rk-scatter" class="viz"></div>
+      </div>
+      <div class="card table-card">
+        <div class="card-head"><h2>Mapa de calor</h2><p class="muted small">En qué destaca cada uno: cada casilla se colorea según su puesto en el equipo en ese dato.</p></div>
+        <div id="rk-heat" class="viz"></div>
+      </div>
+      <div class="card">
+        <div class="card-head"><h2>Carrera por el mejor</h2><p class="muted small">Calificación media acumulada de cada jugador, partido a partido: quién sube y quién se estanca.</p></div>
+        <div id="rk-race" class="viz"></div>
       </div>
     </section>
 
@@ -138,6 +147,7 @@
           </div>
           <p class="muted small">Cada jugador se compara con el <strong>promedio del club en el mismo rol</strong> que jugó en cada partido: un defensa contra defensas, un delantero contra delanteros. <strong>100 = promedio del rol</strong>; 120 = 20 % mejor. Si jugó varios roles, se pondera por los minutos en cada uno. Toca una fila para ver el desglose por rol.</p>
         </div>
+        <div id="roles-chart" class="viz"></div>
         <div class="table-wrap"><table id="roles-table" class="data"></table></div>
       </div>
       <div class="card table-card" id="positions-card" hidden>
@@ -188,6 +198,7 @@
           </div>
           <p class="muted small" id="split-help"></p>
         </div>
+        <div id="compare-chart" class="viz"></div>
         <div class="table-wrap"><table id="compare-table" class="data"></table></div>
       </div>
     </section>
@@ -204,6 +215,10 @@
       <div class="card table-card">
         <div class="card-head">
           <h2>Duplas</h2>
+          <p class="muted small">Cada casilla es el % de victorias cuando esos dos juegan juntos.</p>
+        </div>
+        <div id="pairs-matrix" class="viz"></div>
+        <div class="card-head">
           <label class="field pairs-pick">Jugador <select id="pairs-person"></select></label>
           <p class="muted small">Elige un jugador: a la izquierda, cómo le va al equipo <strong>con él</strong> y junto a cada compañero; a la derecha, cómo le va <strong>sin él</strong>, y cómo cambia la calificación de cada compañero con y sin él.</p>
         </div>
@@ -217,6 +232,7 @@
     <section id="view-matches" class="view" hidden>
       <div class="card table-card">
         <div class="card-head"><h2>Partidos</h2><p class="muted small"><strong>Nivel rival:</strong> skillRating del rival según EA al capturar el partido. Toca un partido para ver a los jugadores.</p></div>
+        <div id="matches-chart" class="viz"></div>
         <div class="table-wrap"><table id="matches-table" class="data"></table></div>
       </div>
     </section>
@@ -264,7 +280,8 @@
       <p>De la web pública de Clubes de EA, que se consulta sola cada 15 minutos. Nadie carga nada a mano. EA solo guarda los <strong>últimos 10 partidos</strong> de cada tipo, por eso hay que capturarlos seguido. Cuentan liga, play-off y amistosos; arriba puedes filtrar por tipo, fechas y un mínimo de partidos.</p>
 
       <h3>Ranking</h3>
-      <p>Totales y promedios de cada jugador. Toca un encabezado para ordenar y un jugador para ver su detalle. Con los botones <strong>Datos</strong> eliges qué datos importantes ver: <strong>Totales</strong> (goles, entradas…), <strong>Proporciones</strong> (por 90 minutos y porcentajes, que no favorecen a quien jugó más), <strong>Oficiales</strong> (los que publica EA) y <strong>Experimentales</strong> (marcados con <strong>*</strong>, ver abajo). Con <strong>+ Añadir dato</strong> sumas a la tabla otros datos menos importantes; se quitan con la <strong>×</strong> de su columna. Todo se recuerda en este navegador. Debajo de la tabla, la gráfica muestra el dato por el que está ordenada.</p>
+      <p>Totales y promedios de cada jugador. Toca un encabezado para ordenar y un jugador para ver su detalle. Con los botones <strong>Datos</strong> eliges qué datos importantes ver: <strong>Totales</strong> (goles, entradas…), <strong>Proporciones</strong> (por 90 minutos y porcentajes, que no favorecen a quien jugó más), <strong>Oficiales</strong> (los que publica EA) y <strong>Experimentales</strong> (marcados con <strong>*</strong>, ver abajo). Con <strong>+ Añadir dato</strong> sumas a la tabla otros datos menos importantes; se quitan con la <strong>×</strong> de su columna. Todo se recuerda en este navegador.</p>
+      <p><strong>Gráficas del ranking:</strong> "Dos datos a la vez" cruza los dos datos que elijas (las líneas punteadas son la mediana del equipo); el "Mapa de calor" colorea cada dato según el puesto en el equipo (más intenso = mejor); "Carrera por el mejor" muestra la calificación media acumulada partido a partido. Cada jugador tiene siempre el mismo color, con su nombre al lado.</p>
       <p><strong>Posiciones:</strong> cada jugador muestra todas las posiciones que jugó y el % de sus minutos en cada una (las de menos del 10 % se ven al pasar el cursor).</p>
 
       <h3>Índice 100 (Por rol)</h3>

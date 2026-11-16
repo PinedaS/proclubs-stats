@@ -26,6 +26,7 @@ const state = {
   addedCols: [],
   positions: new Map(), // person_id -> [{ pos, pct, sec }] de más a menos minutos
   pairsPerson: null, // Duplas: jugador elegido
+  scatter: { x: 'avg_rating', y: 'ga_per90' }, // ejes de "Dos datos a la vez"
   seasons: [], // temporadas del club (club_seasons), de la más reciente a la más vieja
   seasonNo: null, // temporada elegida en el filtro (null = todas)
   ranking: [],
@@ -743,7 +744,8 @@ function renderRanking() {
   // La columna "#" va primero y es la fija; el nombre queda justo después.
   table.replaceChildren(el('thead', {}, head), el('tbody', {}, body));
 
-  renderRankingChart(rows, sortCol);
+  // Gráficas del ranking (se dibujan al ancho real; ocultas no tienen ancho).
+  if (state.view === 'ranking') { renderScatter(rows); renderHeatmap(rows); renderRace(rows); }
 
   // Selector "Ordenar por" (solo celular): mismas columnas que la tabla, sin las de texto.
   const sel = $('#sort-select');
@@ -766,29 +768,6 @@ function renderRanking() {
       extra ? el('div', { class: 'sorted' }, el('div', { class: 'v' }, extra.render ? extra.render(r) : fmtNum(r[extra.key], extra.digits ?? 0)), el('div', { class: 'l' }, extra.label)) : null))) : [el('p', { class: 'muted', style: 'padding: 12px' }, 'Sin datos para estos filtros.')]));
 }
 
-/**
- * Gráfica del dato por el que se ordena la tabla: una barra por jugador, del mejor
- * al peor en ese dato (si "menos es mejor", la barra más corta va arriba). Una sola
- * serie: el título la nombra; el valor va al final de cada barra en color de texto.
- */
-function renderRankingChart(rows, col) {
-  const box = $('#ranking-chart');
-  const title = $('#ranking-chart-title');
-  if (!col || col.text) { box.replaceChildren(el('p', { class: 'muted small' }, 'Ordena por un dato numérico para verlo en gráfica.')); title.textContent = 'En gráfica'; return; }
-  title.textContent = `En gráfica: ${col.title ?? col.label}${col.exp ? ' *' : ''}`;
-  const ordered = bestFirst(rows, col) ?? rows.filter((r) => r[col.key] != null).sort((a, b) => Number(b[col.key]) - Number(a[col.key]));
-  if (!ordered.length) { box.replaceChildren(el('p', { class: 'muted small' }, 'Sin datos de este dato con los filtros actuales.')); return; }
-  const max = Math.max(...ordered.map((r) => Math.abs(Number(r[col.key])))) || 1;
-  // replaceChildren escribe "null" si recibe null: se filtran los vacíos.
-  box.replaceChildren(...[el('div', { class: 'hbars', role: 'list' }, ordered.map((r) => {
-    const v = Number(r[col.key]);
-    const text = col.render ? col.render(r) : fmtNum(v, col.digits ?? 0);
-    return el('div', { class: `hbar${r.matches < PODIUM_MIN_MATCHES ? ' low-sample' : ''}`, role: 'listitem', title: `${r.person_name}: ${typeof text === 'string' ? text : fmtNum(v, col.digits ?? 0)} · ${r.matches} PJ`, ...onActivate(() => openPerson(r.person_id)) },
-      el('span', { class: 'hbar-name' }, r.person_name),
-      el('span', { class: 'hbar-track' }, el('i', { style: `width:${Math.max(1, (100 * Math.abs(v)) / max)}%` })),
-      el('span', { class: 'hbar-val' }, text));
-  })), betterOf(col) === 'low' ? el('p', { class: 'muted small' }, 'En este dato, menos es mejor: arriba va quien tiene menos.') : null].filter(Boolean));
-}
 
 /**
  * Entradas desde la banca y salidas antes de tiempo, DEDUCIDAS de los tiempos que da
@@ -1018,6 +997,7 @@ async function renderRoles(filters, requestId) {
     body.append(row);
   });
   $('#roles-table').replaceChildren(el('thead', {}, head), body);
+  renderRoleDots(list);
 }
 
 // ---------------------------------------------------------------------------
@@ -1322,6 +1302,7 @@ async function renderCompare(filters, requestId) {
       }));
   }) : [emptyRow(buckets.length + 1)]);
   table.replaceChildren(head, body);
+  renderSlope(list, buckets, metric, bucketLabel);
 }
 
 // ---------------------------------------------------------------------------
@@ -1401,6 +1382,7 @@ function renderPairs() {
       el('td', {}, `${fmtNum(a.ga, 2)} / ${fmtNum(b.ga, 2)}`)))
       : [emptyRow(cols.length, 'Sin datos para estos filtros.')]));
   renderImpactChart(impact.filter((x) => x.delta != null && x.b.n > 0));
+  renderPairMatrix(all, people.filter((p) => p.matches >= state.minMatches));
 
   // 2. Un jugador: con él (junto a cada compañero) y sin él
   const sel = $('#pairs-person');
@@ -1531,6 +1513,7 @@ async function renderMatches(filters, requestId) {
   const [hl, times] = await Promise.all([api.getMatchHighlights(ids).catch(() => []), api.getPlayerTimes(ids).catch(() => [])]);
   if (requestId !== state.requestId) return;
   const tflags = playerTimeFlags(times);
+  renderRivalScatter(shown, flags);
   const byMatch = new Map();
   for (const h of hl) {
     if (!byMatch.has(h.match_id)) byMatch.set(h.match_id, { scorers: new Map(), mvp: [], humanGoals: 0, players: [] });
@@ -2224,6 +2207,7 @@ async function renderPerson(filters, requestId) {
     // Orden por importancia (decisión del usuario): rendimiento, relativo al rol,
     // evolución y, al final, la posición recomendada (orientativa).
     rendimiento: [
+      sec('Su lugar en el equipo', teamPlaceSection(state.personId)),
       sec('Avanzadas', advanced),
       sec('Relativo a su rol (100 = promedio de su posición)', relTiles),
       el('div', { class: 'grid-2' }, rivalSlot, distSlot),
@@ -2297,6 +2281,262 @@ async function renderPerson(filters, requestId) {
     overallBox.append(el('p', { class: 'muted' }, `No se pudo cargar la media: ${err.message}`));
     fillLevelTiles(levelTiles, [], matches);
   }
+}
+
+// ---------------------------------------------------------------------------
+// Gráficas del equipo (v2.9). Un color fijo por jugador (--s1..--s8, en orden de
+// aparición, nunca por puesto: filtrar no repinta a nadie) y SIEMPRE el nombre al
+// lado de la marca, porque en modo claro algunos colores tienen poco contraste.
+// ---------------------------------------------------------------------------
+
+const colorSlots = new Map(); // person_id -> 1..8 (se asigna una vez por sesión)
+function personColor(id) {
+  if (!colorSlots.has(id)) colorSlots.set(id, colorSlots.size + 1);
+  const n = colorSlots.get(id);
+  return n <= 8 ? `var(--s${n})` : 'var(--ink-3)';
+}
+/** Ancho real del contenedor para dibujar a escala (texto legible en el celular). */
+const widthOf = (box, min = 280) => Math.max(min, Math.floor(box.clientWidth || 600));
+const median = (vals) => { const v = [...vals].sort((a, b) => a - b); return v.length ? (v.length % 2 ? v[(v.length - 1) / 2] : (v[v.length / 2 - 1] + v[v.length / 2]) / 2) : null; };
+function niceRange(vals, pad = 0.1) {
+  let lo = Math.min(...vals), hi = Math.max(...vals);
+  if (lo === hi) { lo -= 1; hi += 1; }
+  const p = (hi - lo) * pad;
+  return [lo - p, hi + p];
+}
+const colLabel = (key) => { const c = RANKING_COLUMNS.find((x) => x.key === key); return c ? `${c.title ?? c.label}${c.exp ? ' *' : ''}` : key; };
+const colValue = (key, r) => { const c = RANKING_COLUMNS.find((x) => x.key === key); return c?.render ? null : fmtNum(r[key], c?.digits ?? 0); };
+/** Datos numéricos que tienen sentido en un eje o en el mapa de calor. */
+const numericColumns = () => RANKING_COLUMNS.filter((c) => !c.text && c.key !== 'wins');
+
+/** 1. Dos datos a la vez: dispersión con ejes a elegir; el tamaño es PJ y las líneas punteadas, la mediana. */
+function renderScatter(rows) {
+  const box = $('#rk-scatter');
+  const cols = numericColumns();
+  for (const [sel, key] of [['#sc-x', 'x'], ['#sc-y', 'y']]) {
+    const s = $(sel);
+    if (!s.options.length) s.replaceChildren(...cols.map((c) => el('option', { value: c.key }, `${c.title ?? c.label}${c.exp ? ' *' : ''}`)));
+    s.value = state.scatter[key];
+  }
+  const { x: kx, y: ky } = state.scatter;
+  const pts = rows.filter((r) => r[kx] != null && r[ky] != null).map((r) => ({ r, x: Number(r[kx]), y: Number(r[ky]) }));
+  if (pts.length < 2) { box.replaceChildren(el('p', { class: 'muted small' }, 'Hacen falta al menos 2 jugadores con los dos datos.')); return; }
+  const W = widthOf(box), H = Math.round(Math.min(340, Math.max(240, W * 0.5))), L = 44, R = 16, T = 14, B = 36;
+  const [x0, x1] = niceRange(pts.map((p) => p.x)), [y0, y1] = niceRange(pts.map((p) => p.y));
+  const sx = (v) => L + ((v - x0) / (x1 - x0)) * (W - L - R), sy = (v) => T + (1 - (v - y0) / (y1 - y0)) * (H - T - B);
+  const maxPj = Math.max(...pts.map((p) => p.r.matches));
+  const s = svg('svg', { viewBox: `0 0 ${W} ${H}`, width: W, height: H, class: 'pchart-svg', role: 'img', 'aria-label': `${colLabel(kx)} contra ${colLabel(ky)} por jugador` });
+  for (let i = 0; i <= 4; i++) {
+    const yv = y0 + ((y1 - y0) * i) / 4;
+    s.append(svg('line', { x1: L, x2: W - R, y1: sy(yv), y2: sy(yv), class: 'grid-line' }), svgText(L - 6, sy(yv) + 4, fmtNum(yv, Math.abs(y1 - y0) < 10 ? 1 : 0), { class: 'axis', 'text-anchor': 'end' }));
+  }
+  s.append(svgText(L, H - 8, fmtNum(x0, Math.abs(x1 - x0) < 10 ? 1 : 0), { class: 'axis' }), svgText(W - R, H - 8, fmtNum(x1, Math.abs(x1 - x0) < 10 ? 1 : 0), { class: 'axis', 'text-anchor': 'end' }));
+  s.append(svgText((L + W - R) / 2, H - 8, `${state.scatter.xLabel ?? colLabel(kx)} →`, { class: 'axis', 'text-anchor': 'middle' }));
+  const mx = median(pts.map((p) => p.x)), my = median(pts.map((p) => p.y));
+  s.append(svg('line', { x1: sx(mx), x2: sx(mx), y1: T, y2: H - B, class: 'median-line' }), svg('line', { x1: L, x2: W - R, y1: sy(my), y2: sy(my), class: 'median-line' }));
+  const placed = [];
+  for (const p of [...pts].sort((a, b) => b.r.matches - a.r.matches)) {
+    const rr = 5 + 9 * Math.sqrt(p.r.matches / maxPj);
+    const few = p.r.matches < PODIUM_MIN_MATCHES;
+    const g = svg('g', { class: `sc-dot${few ? ' few' : ''}`, tabindex: '0' });
+    g.append(svg('circle', { cx: sx(p.x), cy: sy(p.y), r: rr, style: `fill:${few ? 'var(--ink-3)' : personColor(p.r.person_id)}` }));
+    const right = sx(p.x) < W - 110;
+    // Etiquetas sin pisarse: si choca con una ya puesta, baja 14 px.
+    const lx = sx(p.x) + (right ? rr + 4 : -rr - 4), lw = p.r.person_name.length * 7;
+    const x0b = right ? lx : lx - lw;
+    let ly = sy(p.y) + 4;
+    while (placed.some((b) => Math.abs(b.y - ly) < 13 && x0b < b.x1 && x0b + lw > b.x0)) ly += 14;
+    placed.push({ x0: x0b, x1: x0b + lw, y: ly });
+    g.append(svgText(lx, ly, p.r.person_name, { class: 'dot-label', 'text-anchor': right ? 'start' : 'end' }));
+    svgTitle(g, `${p.r.person_name} (${p.r.matches} PJ): ${colLabel(kx)} ${colValue(kx, p.r) ?? p.x} · ${colLabel(ky)} ${colValue(ky, p.r) ?? p.y}`);
+    g.addEventListener('click', () => openPerson(p.r.person_id));
+    s.append(g);
+  }
+  box.replaceChildren(el('div', { class: 'sc-ylabel muted small' }, `↑ ${colLabel(ky)}`), s,
+    el('p', { class: 'muted small' }, 'Las líneas punteadas son la mediana del equipo: arriba a la derecha, mejor en los dos datos (si en alguno menos es mejor, al revés). El tamaño del punto es la cantidad de partidos; en gris, menos de 3.'));
+}
+
+/** 2. Mapa de calor: jugador × dato, color según el puesto en el equipo (más intenso = mejor). */
+function renderHeatmap(rows) {
+  const box = $('#rk-heat');
+  const cols = visibleColumns().filter((c) => !c.text && c.kind !== 'base' && betterOf(c));
+  const people = rows.filter((r) => r.matches >= state.minMatches);
+  if (people.length < 2 || !cols.length) { box.replaceChildren(el('p', { class: 'muted small' }, 'Hacen falta al menos 2 jugadores.')); return; }
+  const places = new Map(cols.map((c) => { const o = bestFirst(people, c) ?? []; return [c.key, { p: placesOf(o, c), n: o.length }]; }));
+  const shade = (place, n) => (n < 2 ? 50 : Math.round(15 + 85 * (1 - (place - 1) / (n - 1))));
+  const head = el('tr', {}, el('th', { scope: 'col', class: 'left' }, 'Jugador'), cols.map((c) => el('th', { scope: 'col', class: c.exp ? 'exp' : null, title: c.title }, c.label)));
+  const body = people.map((r) => el('tr', { class: `clickable${r.matches < PODIUM_MIN_MATCHES ? ' low-sample' : ''}`, ...onActivate(() => openPerson(r.person_id)) },
+    el('td', { class: 'left' }, playerCell(r.person_name)),
+    cols.map((c) => {
+      const { p, n } = places.get(c.key);
+      const place = p.get(r.person_id);
+      if (r[c.key] == null || place == null) return el('td', { class: 'muted' }, '—');
+      const pct = shade(place, n);
+      return el('td', { class: 'heat', style: `--heat:${pct}%`, title: `${c.title ?? c.label}: ${place}º de ${n}` }, c.render ? c.render(r) : fmtNum(r[c.key], c.digits ?? 0));
+    })));
+  box.replaceChildren(el('div', { class: 'table-wrap' }, el('table', { class: 'data heatmap' }, el('thead', {}, head), el('tbody', {}, body))),
+    el('p', { class: 'muted small heat-legend' }, 'Puesto en el equipo: ', el('span', { class: 'heat-sw', style: '--heat:15%' }), ' último ', el('span', { class: 'heat-sw', style: '--heat:57%' }), ' medio ', el('span', { class: 'heat-sw', style: '--heat:100%' }), ' primero. En los datos donde menos es mejor, el primero es quien tiene menos. Usa los mismos datos que la tabla ("Datos" y "+ Añadir dato").'));
+}
+
+/** 3. Carrera: calificación media acumulada partido a partido, una línea por jugador. */
+function renderRace(rows) {
+  const box = $('#rk-race');
+  const series = rows.filter((r) => r.matches >= state.minMatches).map((r) => {
+    const v = state.trend.get(r.person_id) ?? [];
+    let sum = 0;
+    return { r, pts: v.map((x, i) => (sum += x) / (i + 1)) };
+  }).filter((s) => s.pts.length >= 2);
+  if (!series.length) { box.replaceChildren(el('p', { class: 'muted small' }, 'Hacen falta jugadores con al menos 2 partidos.')); return; }
+  const W = widthOf(box), H = 260, L = 34, R = 110, T = 12, B = 30;
+  const maxN = Math.max(...series.map((s) => s.pts.length));
+  const [y0, y1] = niceRange(series.flatMap((s) => s.pts), 0.15);
+  const sx = (i) => L + (maxN === 1 ? 0 : (i / (maxN - 1)) * (W - L - R)), sy = (v) => T + (1 - (v - y0) / (y1 - y0)) * (H - T - B);
+  const s = svg('svg', { viewBox: `0 0 ${W} ${H}`, width: W, height: H, class: 'pchart-svg', role: 'img', 'aria-label': 'Calificación media acumulada de cada jugador, partido a partido' });
+  for (let i = 0; i <= 4; i++) { const v = y0 + ((y1 - y0) * i) / 4; s.append(svg('line', { x1: L, x2: W - R, y1: sy(v), y2: sy(v), class: 'grid-line' }), svgText(L - 6, sy(v) + 4, fmtNum(v, 1), { class: 'axis', 'text-anchor': 'end' })); }
+  s.append(svgText(L, H - 8, 'Partido 1', { class: 'axis' }), svgText(W - R, H - 8, `Partido ${maxN}`, { class: 'axis', 'text-anchor': 'end' }));
+  // Etiquetas al final de cada línea, separadas para que no se pisen.
+  const ends = series.map((x) => ({ x, y: sy(x.pts.at(-1)) })).sort((a, b) => a.y - b.y);
+  for (let i = 1; i < ends.length; i++) if (ends[i].y - ends[i - 1].y < 14) ends[i].y = ends[i - 1].y + 14;
+  for (const { x: se, y: ly } of ends) {
+    const color = personColor(se.r.person_id);
+    const g = svg('g', { class: 'race-line', tabindex: '0' });
+    g.append(svg('polyline', { points: se.pts.map((v, i) => `${sx(i)},${sy(v)}`).join(' '), style: `stroke:${color}` }));
+    g.append(svg('circle', { cx: sx(se.pts.length - 1), cy: sy(se.pts.at(-1)), r: 4, style: `fill:${color}` }));
+    g.append(svgText(sx(se.pts.length - 1) + 8, ly + 4, `${se.r.person_name} ${fmtNum(se.pts.at(-1), 2)}`, { class: 'dot-label' }));
+    svgTitle(g, `${se.r.person_name}: ${se.pts.map((v) => fmtNum(v, 2)).join(' → ')}`);
+    g.addEventListener('click', () => openPerson(se.r.person_id));
+    s.append(g);
+  }
+  box.replaceChildren(s, el('p', { class: 'muted small' }, 'Cada punto es su calificación media hasta ese partido (el eje cuenta sus partidos, no fechas). Al principio la línea salta mucho; con más partidos se estabiliza.'));
+}
+
+/** 4. Por rol: cada índice como un punto por jugador alrededor de la línea 100. */
+function renderRoleDots(rows) {
+  const box = $('#roles-chart');
+  const cols = ROLE_COLUMNS.filter((c) => state.showExp || !c.exp);
+  const people = rows.filter((r) => r.matches >= state.minMatches);
+  const vals = people.flatMap((r) => cols.map((c) => r[c.key]).filter((v) => v != null).map(Number));
+  if (!vals.length) { box.replaceChildren(); return; }
+  // Escala limitada a ±60: un valor extremo (p. ej. 332 con 2 PJ) no aplasta a los demás;
+  // se dibuja en el borde, hueco y con su número.
+  const CAP = 60;
+  const span = Math.min(CAP, Math.max(30, ...vals.map((v) => Math.abs(v - 100)))) * 1.1;
+  const W = widthOf(box), L = 120, R = 44, rowH = 34, T = 10, H = T + cols.length * rowH + 26;
+  const sxRaw = (v) => L + ((v - (100 - span)) / (2 * span)) * (W - L - R);
+  const sx = (v) => sxRaw(Math.max(100 - span, Math.min(100 + span, v)));
+  const s = svg('svg', { viewBox: `0 0 ${W} ${H}`, width: W, height: H, class: 'pchart-svg', role: 'img', 'aria-label': 'Índices relativos al rol de cada jugador alrededor de 100' });
+  s.append(svg('line', { x1: sx(100), x2: sx(100), y1: T - 4, y2: H - 24, class: 'axis-line' }), svgText(sx(100), H - 8, '100 = promedio del rol', { class: 'axis', 'text-anchor': 'middle' }));
+  s.append(svgText(L, H - 8, `${fmtNum(100 - span)} peor`, { class: 'axis' }), svgText(W - R, H - 8, `mejor ${fmtNum(100 + span)}`, { class: 'axis', 'text-anchor': 'end' }));
+  cols.forEach((c, i) => {
+    const y = T + i * rowH + rowH / 2;
+    s.append(svg('line', { x1: L, x2: W - R, y1: y, y2: y, class: 'grid-line' }), svgText(L - 8, y + 4, c.label, { class: 'axis strong', 'text-anchor': 'end' }));
+    for (const r of people) {
+      if (r[c.key] == null) continue;
+      const v = Number(r[c.key]);
+      const g = svg('g', { tabindex: '0' });
+      const out = Math.abs(v - 100) > span;
+      g.append(svg('line', { x1: sx(100), x2: sx(v), y1: y, y2: y, style: `stroke:${personColor(r.person_id)}`, class: 'lolli' }),
+        svg('circle', { cx: sx(v), cy: y, r: 6, style: out ? `fill:none;stroke:${personColor(r.person_id)};stroke-width:2.5` : `fill:${personColor(r.person_id)}` }));
+      if (out) g.append(svgText(sx(v) + (v > 100 ? 9 : -9), y + 4, fmtNum(v, 0), { class: 'axis strong', 'text-anchor': v > 100 ? 'start' : 'end' }));
+      svgTitle(g, `${r.person_name} · ${c.label}: ${fmtNum(v, 0)} (${r.matches} PJ)${out ? ' · fuera de la escala' : ''}`);
+      s.append(g);
+    }
+  });
+  box.replaceChildren(s, el('p', { class: 'chart-legend muted small' }, people.map((r) => el('span', {}, el('span', { class: 'sw', style: `background:${personColor(r.person_id)}` }), ` ${r.person_name}  `))),
+    el('p', { class: 'muted small' }, 'Pasa el cursor sobre un punto para ver de quién es y su índice. Un círculo hueco en el borde está fuera de la escala; lleva su valor al lado (suele pasar con pocos partidos).'));
+}
+
+/** 5. Comparar: una línea por jugador entre los grupos (p. ej. rival débil → fuerte). */
+function renderSlope(list, buckets, metric, bucketLabel) {
+  const box = $('#compare-chart');
+  if (buckets.length < 2) { box.replaceChildren(); return; }
+  const series = list.map(([id, p]) => ({ id, name: p.name, pts: buckets.map((b, i) => ({ i, b, v: p.cells[b]?.[metric] == null ? null : Number(p.cells[b][metric]), n: p.cells[b]?.matches })) }))
+    .filter((s) => s.pts.filter((p) => p.v != null).length >= 2);
+  if (!series.length) { box.replaceChildren(el('p', { class: 'muted small' }, 'Nadie tiene datos en al menos dos grupos todavía.')); return; }
+  const W = widthOf(box), H = 240, L = 40, R = 120, T = 14, B = 30;
+  const [y0, y1] = niceRange(series.flatMap((s) => s.pts.filter((p) => p.v != null).map((p) => p.v)), 0.15);
+  const sx = (i) => L + (i / (buckets.length - 1)) * (W - L - R), sy = (v) => T + (1 - (v - y0) / (y1 - y0)) * (H - T - B);
+  const digits = METRIC[metric]?.digits ?? 1;
+  const s = svg('svg', { viewBox: `0 0 ${W} ${H}`, width: W, height: H, class: 'pchart-svg', role: 'img', 'aria-label': `${METRIC[metric]?.label ?? metric} de cada jugador en cada grupo` });
+  for (let i = 0; i <= 4; i++) { const v = y0 + ((y1 - y0) * i) / 4; s.append(svg('line', { x1: L, x2: W - R, y1: sy(v), y2: sy(v), class: 'grid-line' }), svgText(L - 6, sy(v) + 4, fmtNum(v, digits), { class: 'axis', 'text-anchor': 'end' })); }
+  buckets.forEach((b, i) => s.append(svg('line', { x1: sx(i), x2: sx(i), y1: T, y2: H - B, class: 'grid-line' }), svgText(sx(i), H - 8, bucketLabel(b).text, { class: 'axis', 'text-anchor': i === 0 ? 'start' : i === buckets.length - 1 ? 'end' : 'middle' })));
+  const ends = series.map((se) => ({ se, last: se.pts.filter((p) => p.v != null).at(-1) })).map((e) => ({ ...e, y: sy(e.last.v) })).sort((a, b) => a.y - b.y);
+  for (let i = 1; i < ends.length; i++) if (ends[i].y - ends[i - 1].y < 14) ends[i].y = ends[i - 1].y + 14;
+  for (const { se, last, y } of ends) {
+    const color = personColor(se.id);
+    const g = svg('g', { class: 'race-line', tabindex: '0' });
+    const ok = se.pts.filter((p) => p.v != null);
+    g.append(svg('polyline', { points: ok.map((p) => `${sx(p.i)},${sy(p.v)}`).join(' '), style: `stroke:${color}` }));
+    for (const p of ok) g.append(svg('circle', { cx: sx(p.i), cy: sy(p.v), r: 4 + Math.min(4, (p.n ?? 1) / 3), style: `fill:${color}` }));
+    g.append(svgText(sx(last.i) + 10, y + 4, `${se.name}`, { class: 'dot-label' }));
+    svgTitle(g, `${se.name}: ${ok.map((p) => `${bucketLabel(p.b).text} ${fmtNum(p.v, digits)} (${p.n} PJ)`).join(' · ')}`);
+    g.addEventListener('click', () => openPerson(se.id));
+    s.append(g);
+  }
+  box.replaceChildren(s, el('p', { class: 'muted small' }, 'Una línea por jugador. Si baja de izquierda a derecha, rinde menos en el grupo de la derecha. El punto más grande = más partidos ahí; con pocos partidos la diferencia puede ser casualidad.'));
+}
+
+/** 6. Matriz de duplas: % de victorias cuando dos juegan juntos (gris = menos de 3 partidos juntos). */
+function renderPairMatrix(all, people) {
+  const box = $('#pairs-matrix');
+  const ppl = people.slice(0, 10);
+  if (ppl.length < 2) { box.replaceChildren(); return; }
+  const head = el('tr', {}, el('th', { scope: 'col' }), ppl.map((p) => el('th', { scope: 'col', title: p.person_name }, p.person_name)));
+  const body = ppl.map((a) => el('tr', {}, el('th', { scope: 'row', class: 'left' }, a.person_name), ppl.map((b) => {
+    if (a.person_id === b.person_id) return el('td', { class: 'pm-self' }, '');
+    const t = teamResults(all.filter((m) => m.people.has(a.person_id) && m.people.has(b.person_id)));
+    if (!t.n) return el('td', { class: 'muted' }, '—');
+    const few = t.n < PODIUM_MIN_MATCHES;
+    return el('td', { class: `heat${few ? ' few' : ''}`, style: few ? null : `--heat:${Math.round(15 + 0.85 * t.winPct)}%`,
+      title: `${a.person_name} + ${b.person_name}: ${t.n} PJ juntos, ${vedText(t)} (${fmtNum(t.winPct, 0)} % de victorias)${few ? '. Pocos partidos: no es confiable' : ''}` },
+    el('strong', {}, `${fmtNum(t.winPct, 0)} %`), el('span', { class: 'muted small' }, ` ${t.n} PJ`));
+  })));
+  box.replaceChildren(el('div', { class: 'table-wrap' }, el('table', { class: 'data heatmap matrix' }, el('thead', {}, head), el('tbody', {}, body))),
+    el('p', { class: 'muted small heat-legend' }, '% de victorias cuando juegan juntos: ', el('span', { class: 'heat-sw', style: '--heat:15%' }), ' 0 % ', el('span', { class: 'heat-sw', style: '--heat:100%' }), ' 100 %. En gris, menos de 3 partidos juntos (no es confiable).'));
+}
+
+/** 8. Nivel del rival contra diferencia de goles: un punto por partido y la tendencia. */
+function renderRivalScatter(matches, flags) {
+  const box = $('#matches-chart');
+  const pts = matches.filter((m) => m.opponent_skill_rating != null).map((m) => ({ m, x: Number(m.opponent_skill_rating), y: m.goals_for - m.goals_against, inc: flags.get(m.match_id)?.incomplete }));
+  if (pts.length < 3) { box.replaceChildren(el('p', { class: 'muted small' }, 'Hacen falta al menos 3 partidos con el nivel del rival.')); return; }
+  const W = widthOf(box), H = 240, L = 36, R = 14, T = 12, B = 32;
+  const [x0, x1] = niceRange(pts.map((p) => p.x)), yMax = Math.max(1, ...pts.map((p) => Math.abs(p.y))) + 0.5;
+  const sx = (v) => L + ((v - x0) / (x1 - x0)) * (W - L - R), sy = (v) => T + (1 - (v + yMax) / (2 * yMax)) * (H - T - B);
+  const s = svg('svg', { viewBox: `0 0 ${W} ${H}`, width: W, height: H, class: 'pchart-svg', role: 'img', 'aria-label': 'Diferencia de goles de cada partido según el nivel del rival' });
+  for (const v of [-Math.floor(yMax), 0, Math.floor(yMax)]) s.append(svg('line', { x1: L, x2: W - R, y1: sy(v), y2: sy(v), class: v === 0 ? 'axis-line' : 'grid-line' }), svgText(L - 6, sy(v) + 4, v > 0 ? `+${v}` : String(v), { class: 'axis', 'text-anchor': 'end' }));
+  s.append(svgText(L, H - 8, fmtNum(x0), { class: 'axis' }), svgText(W - R, H - 8, fmtNum(x1), { class: 'axis', 'text-anchor': 'end' }), svgText((L + W - R) / 2, H - 8, 'Nivel del rival →', { class: 'axis', 'text-anchor': 'middle' }));
+  const xs = pts.map((p) => p.x), ys = pts.map((p) => p.y), mx = xs.reduce((a, b) => a + b, 0) / xs.length, my = ys.reduce((a, b) => a + b, 0) / ys.length;
+  const den = xs.reduce((a, x) => a + (x - mx) ** 2, 0);
+  let note = 'Cada punto es un partido.';
+  if (den > 0) {
+    const b = xs.reduce((a, x, i) => a + (x - mx) * (ys[i] - my), 0) / den, a = my - b * mx;
+    s.append(svg('line', { x1: sx(x0), y1: sy(a + b * x0), x2: sx(x1), y2: sy(a + b * x1), class: 'trend-line' }));
+    note = Math.abs(b * 100) < 0.1 ? 'El resultado casi no cambia con el nivel del rival.' : `Por cada 100 puntos más de nivel del rival, la diferencia de goles ${b < 0 ? 'baja' : 'sube'} ${fmtNum(Math.abs(b * 100), 2)} en promedio.`;
+  }
+  for (const p of pts) {
+    const c = svg('circle', { cx: sx(p.x), cy: sy(p.y), r: 6, class: `rv-dot ${p.m.outcome}${p.inc ? ' abandoned' : ''}` });
+    s.append(svgTitle(c, `${fmtDate(p.m.played_at, false)} · ${p.m.opponent_name ?? 'Rival'} (nivel ${fmtNum(p.x)}) · ${p.m.goals_for}–${p.m.goals_against}${p.inc ? ' · Abandonado' : ''}`));
+  }
+  box.replaceChildren(s, el('p', { class: 'chart-legend muted small' }, ['win', 'draw', 'loss'].map((o) => el('span', {}, el('span', { class: `sw seg-${o}` }), ` ${OUTCOME[o].label}  `)), el('span', {}, el('span', { class: 'sw hollow' }), ' Abandonado'), ` · ${note}`));
+}
+
+/** 11. Su lugar en el equipo: por cada dato, de último a primero, entre quienes cumplen el mínimo de partidos. */
+function teamPlaceSection(personId) {
+  const people = state.ranking.filter((r) => r.matches >= state.minMatches);
+  const me = people.find((r) => r.person_id === personId);
+  if (!me || people.length < 2) return null;
+  const cols = visibleColumns().filter((c) => !c.text && c.kind !== 'base' && betterOf(c) && me[c.key] != null);
+  const rows = cols.map((c) => {
+    const o = bestFirst(people, c) ?? [];
+    const place = placesOf(o, c).get(personId), n = o.length;
+    return { c, place, n, pct: n < 2 ? 50 : (100 * (n - place)) / (n - 1) };
+  }).filter((x) => x.place != null);
+  return el('div', {}, el('div', { class: 'place-rows' }, rows.map(({ c, place, n, pct }) => el('div', { class: `place-row${c.exp ? ' exp' : ''}`, title: `${c.title ?? c.label}: ${place}º de ${n}` },
+    el('span', { class: 'place-label' }, `${c.title ?? c.label}${c.exp ? ' *' : ''}`),
+    el('span', { class: 'place-track' }, el('i', { style: `width:${Math.max(3, pct)}%` }), el('b', { 'aria-hidden': 'true' })),
+    el('span', { class: 'place-val' }, `${place}º de ${n}`)))),
+  el('p', { class: 'muted small' }, `La barra llena = el mejor del equipo en ese dato; la marca del centro = la mitad. Entre los ${people.length} jugadores con el mínimo de partidos. Usa los mismos datos que la tabla del ranking.`));
 }
 
 // ---------------------------------------------------------------------------
@@ -2615,6 +2855,10 @@ async function init() {
   if (typeof saved.showExp === 'boolean') state.showExp = saved.showExp;
   if (saved.colKinds && typeof saved.colKinds === 'object') state.colKinds = { ...state.colKinds, ...saved.colKinds };
   if (Array.isArray(saved.addedCols)) state.addedCols = saved.addedCols.filter((k) => RANKING_COLUMNS.some((c) => c.key === k));
+  if (saved.scatter && RANKING_COLUMNS.some((c) => c.key === saved.scatter.x) && RANKING_COLUMNS.some((c) => c.key === saved.scatter.y)) state.scatter = { x: saved.scatter.x, y: saved.scatter.y };
+  for (const [sel, key] of [['#sc-x', 'x'], ['#sc-y', 'y']]) {
+    $(sel).addEventListener('change', (e) => { state.scatter = { ...state.scatter, [key]: e.target.value }; prefs.save({ scatter: state.scatter }); renderScatter(sortRows(state.ranking.filter((r) => r.matches >= state.minMatches))); });
+  }
   $('#show-exp').checked = state.showExp;
   updateFiltersSummary();
   const syncKinds = bindDataKinds();

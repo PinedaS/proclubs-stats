@@ -36,6 +36,11 @@
      Validadas con dataviz/validate_palette.js contra --surface en los dos modos. */
   --pa: #3987e5;
   --pb: #d95926;
+  /* Un color fijo por jugador en las gráficas (orden fijo, nunca por puesto).
+     Validada con validate_palette.js (oscuro: pasa todo; claro: aviso de contraste,
+     por eso cada marca lleva el nombre del jugador al lado). */
+  --s1: #3987e5; --s2: #d95926; --s3: #199e70; --s4: #c98500;
+  --s5: #d55181; --s6: #008300; --s7: #9085e9; --s8: #e66767;
   color-scheme: dark;
 }
 @media (prefers-color-scheme: light) {
@@ -69,6 +74,8 @@
     --shadow: 0 8px 24px rgb(18 21 27 / .08);
     --pa: #2a78d6;
     --pb: #eb6834;
+    --s1: #2a78d6; --s2: #eb6834; --s3: #1baf7a; --s4: #eda100;
+    --s5: #e87ba4; --s6: #008300; --s7: #6250d6; --s8: #e34948;
     color-scheme: light;
   }
 }
@@ -768,3 +775,49 @@ dialog.guide::backdrop { background: rgb(0 0 0 / .55); }
 .div-value.icon-ok:not(.elite) .div-text { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
 #season-select { font: inherit; text-transform: none; letter-spacing: normal; font-weight: 500; color: var(--ink); background: var(--bg); border: 1px solid var(--border); border-radius: 10px; padding: 6px 8px; }
 .pop-panel input:disabled { opacity: .45; }
+
+/* v2.9 · Gráficas del equipo (colores por jugador: --s1..--s8, siempre con nombre al lado) */
+.viz { padding: 0 18px 16px; position: relative; }
+.viz .pchart-svg { max-width: 100%; }
+.sc-axes { display: flex; flex-wrap: wrap; gap: 12px; margin-top: 8px; }
+.sc-axes select { font: inherit; text-transform: none; letter-spacing: normal; font-weight: 500; color: var(--ink); background: var(--bg); border: 1px solid var(--border); border-radius: 10px; padding: 6px 8px; max-width: 280px; }
+.sc-ylabel { margin: 0 0 4px; }
+.median-line { stroke: var(--ink-3); stroke-width: 1; stroke-dasharray: 4 4; }
+.axis-line { stroke: var(--ink-3); stroke-width: 1.5; }
+.dot-label { fill: var(--ink-2); font-size: 12px; font-weight: 600; }
+.sc-dot, .race-line { cursor: pointer; }
+.sc-dot circle { stroke: var(--surface); stroke-width: 2; }
+.sc-dot.few .dot-label { fill: var(--ink-3); }
+.sc-dot:hover circle, .sc-dot:focus circle { stroke: var(--ink); }
+.race-line polyline { fill: none; stroke-width: 2; stroke-linejoin: round; stroke-linecap: round; }
+.race-line circle { stroke: var(--surface); stroke-width: 2; }
+.race-line:hover polyline, .race-line:focus polyline { stroke-width: 3.5; }
+.lolli { stroke-width: 2; opacity: .55; }
+.pchart-svg g circle { transition: r .1s; }
+/* Mapas de calor: un solo tono (acento), más intenso = mejor puesto */
+.data.heatmap td.heat { background: color-mix(in srgb, var(--accent) var(--heat), var(--surface)); color: var(--ink); font-variant-numeric: tabular-nums; }
+.data.heatmap td.heat.few { background: var(--surface-3); color: var(--ink-3); }
+.data.heatmap td { border: 2px solid var(--surface); }
+.data.matrix td, .data.matrix th { text-align: center; white-space: nowrap; }
+.data.matrix td.pm-self { background: var(--bg-2); }
+.heat-sw { display: inline-block; width: 18px; height: 10px; border-radius: 3px; vertical-align: -1px; background: color-mix(in srgb, var(--accent) var(--heat), var(--surface)); }
+.heat-legend { margin-top: 8px; }
+/* Partidos: nivel del rival vs. diferencia de goles */
+.rv-dot { stroke: var(--surface); stroke-width: 2; }
+.rv-dot.win { fill: var(--win); } .rv-dot.draw { fill: var(--draw); } .rv-dot.loss { fill: var(--loss); }
+.rv-dot.abandoned { fill: none !important; stroke-width: 2.5; }
+.rv-dot.abandoned.win { stroke: var(--win); } .rv-dot.abandoned.draw { stroke: var(--draw); } .rv-dot.abandoned.loss { stroke: var(--loss); }
+.sw.hollow { background: none; border: 2px solid var(--ink-3); width: 10px; height: 10px; }
+/* Detalle: su lugar en el equipo */
+.place-rows { display: grid; gap: 6px; }
+.place-row { display: grid; grid-template-columns: minmax(140px, 260px) 1fr 70px; gap: 10px; align-items: center; padding: 2px 4px; border-radius: 6px; }
+.place-row.exp { background-image: linear-gradient(var(--exp-tint), var(--exp-tint)); }
+.place-label { font-size: .85rem; color: var(--ink-2); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.place-track { position: relative; height: 12px; background: var(--grid); border-radius: 4px; }
+.place-track i { position: absolute; inset: 0 auto 0 0; background: var(--series); border-radius: 4px; }
+.place-track b { position: absolute; left: 50%; top: -3px; bottom: -3px; width: 2px; background: var(--ink-3); }
+.place-val { font-size: .8rem; color: var(--ink-2); text-align: right; font-variant-numeric: tabular-nums; }
+@media (max-width: 640px) {
+  .viz { padding: 0 8px 12px; }
+  .place-row { grid-template-columns: 96px 1fr 58px; gap: 6px; }
+}

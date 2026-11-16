@@ -57,7 +57,17 @@ Muestra las estadísticas de nuestro club de Clubes (Pro Clubs) de EA SPORTS FC,
   - **Oficiales:** los que publica EA.
   - **Experimentales\***.
 - **+ Añadir dato:** suma a la tabla datos menos importantes (tiros, pases completados, vallas invictas, forma, presencia, penales cometidos…). Se quitan con la **×** de su columna.
-- **En gráfica:** barras del dato ordenado, del mejor al peor.
+- **Gráficas:**
+  - **Dos datos a la vez:** eliges el dato de cada eje. Las líneas punteadas son la mediana del equipo y el tamaño del punto es la cantidad de partidos.
+  - **Mapa de calor:** cada dato coloreado según el puesto en el equipo (más intenso = mejor).
+  - **Carrera por el mejor:** la calificación media acumulada de cada jugador, partido a partido.
+- Otras secciones también tienen gráficas:
+  - **Por rol:** puntos alrededor del 100.
+  - **Comparar:** una línea por jugador entre los grupos.
+  - **Duplas:** matriz de % de victorias por pareja.
+  - **Partidos:** nivel del rival contra la diferencia de goles.
+  - **Detalle del jugador:** "Su lugar en el equipo", dato por dato.
+- Cada jugador tiene siempre el mismo color en todas las gráficas, con su nombre al lado.
 - En el celular, la tabla se ve como tarjetas con un selector "Ordenar por".
 
 ### Por rol
