@@ -70,6 +70,40 @@ Puntos, división actual y vallas invictas de la temporada de liga.
 
 Mejor resultado por temporada de play-off, con su división y posición final.
 
+## 2b. Investigación del 2026-11-16 (pedido: "que no se escape ningún dato")
+
+**Endpoints que conoce `proclubs-sdk` 0.3.4 (9).** Se capturan 6. **Faltan 3**, consultados en vivo con 100 D CILANTRO:
+
+| Endpoint | Qué trae | Estado |
+|---|---|---|
+| `clubs/info` | Nombre, región, uniformes, escudo (`crestAssetId`, `crestColor`) | ✅ Casi igual al `clubInfo` que ya llega en la foto del club. Falta guardarlo entero. |
+| `club/playoffAchievements` | Logros de play-off por temporada | ✅ Hoy vacío (`[]`): aún no hay play-off. Falta capturarlo a diario. |
+| `members/career/stats` | Por miembro: partidos, goles, asistencias, calificación, MVP, `proPos`, `prevGoals`, `favoritePosition`; además `positionCount` del club | ✅ Nuevo. Falta capturarlo a diario. |
+
+- La web oficial de Clubes no cargó los datos del club en el navegador de prueba, así que no se pudieron ver otros endpoints que use. ❓
+- **Datos del rival:** hoy solo se guarda su `skillRating`. Falta guardar su foto completa (`overallStats` y su fila del ranking de la temporada, que trae su **división**).
+
+**Contadores de eventos (`event_counts`).** En 29 registros llegaron **119 códigos distintos**. Se usan 32. Todos se guardan ya en la base, así que no se pierde ninguno.
+- La comunidad mapea casi todos: pases cortos, medios y largos, hacia atrás y hacia los lados, al primer toque y en fuera de juego; entradas perdidas, de pie, limpias y peligrosas; tiros dentro y fuera del área; conducciones; regates superando al rival; goles de pierna mala; centros intentados; "fuera de posición" por gravedad; avisos del juego.
+- **Sin significado conocido:** 114, 178, 8, 195 y 196.
+- **Contraste con datos oficiales (29 registros):**
+
+  | Código | Contra qué | Coinciden |
+  |---|---|---|
+  | 216, pases fallados | intentos − completados | 24 |
+  | 24 + 26 + 28, completados por distancia | 215 | 17 |
+  | 1, entradas perdidas | intentos − ganadas | 21 |
+  | 229, entradas de pie ganadas | entradas ganadas | **28** |
+  | 13 + 14 + 18 + 19, tiros por zona | tiros | 26 |
+
+**Campos de jugador guardados solo en el JSON crudo (`match_raw`):** `realtimeidle` (posible AFK), `realtimegame`, `vproattr`, `SCORE`, `cleansheetsany` y `vprohackreason`. También se guardan las estadísticas de los **jugadores rivales** y el `aggregate` del partido.
+
+**Pendiente:**
+1. Migración con tablas para carrera, play-off, `clubs/info` y la foto del rival (JSON completo más columnas clave).
+2. Capturar todo eso en el colector.
+3. En el dashboard, mostrar solo lo importante: atajadas por tipo, división del rival y algunos contadores nuevos.
+4. Agregar una sección visible de "datos guardados que no se muestran".
+
 ## 3. Lo que EA no expone (✅ verificado)
 
 - Distancia recorrida.
