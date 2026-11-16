@@ -17,10 +17,15 @@ const state = {
   view: 'ranking',
   sort: { key: 'avg_rating', dir: -1 },
   minMatches: 1,
-  // Experimentales activas y avanzadas apagadas por defecto (decisión del usuario);
-  // cada navegador recuerda lo que elija (prefs).
+  // Experimentales activas por defecto (decisión del usuario); cada navegador
+  // recuerda lo que elija (prefs).
   showExp: true,
-  showAdv: false,
+  // Qué datos importantes muestra el ranking: totales, proporciones y oficiales
+  // (los experimentales siguen a showExp). addedCols: datos que el usuario agregó a mano.
+  colKinds: { abs: true, rate: true, official: true },
+  addedCols: [],
+  positions: new Map(), // person_id -> [{ pos, pct, sec }] de más a menos minutos
+  pairsPerson: null, // Duplas: jugador elegido
   ranking: [],
   records: new Map(),
   members: null,
@@ -310,65 +315,191 @@ function streakText(recent) {
 // Ranking
 // ---------------------------------------------------------------------------
 
+/**
+ * Columnas del ranking. Cada dato dice qué es, para los filtros de "Datos":
+ *   kind: 'base' (siempre), 'abs' (total) o 'rate' (proporción: por partido, por 90 min, %);
+ *   exp: experimental (EA no lo documenta; lleva * y fondo teñido);
+ *   important: se muestra por defecto. Los demás se agregan a mano con "+ Añadir dato".
+ *   better: 'high' (por defecto), 'low' (menos es mejor) o null (no es mérito: sin podio).
+ * Van agrupadas por tema; los experimentales, junto a los oficiales de su tema.
+ * Los títulos están en lenguaje simple: sin códigos de EA (pedido del usuario).
+ */
+const EXP_NOTE = 'Experimental: dato que EA no documenta; es una aproximación';
 const RANKING_COLUMNS = [
-  { key: 'person_name', label: 'Jugador', text: true, render: (r) => playerCell(r.person_name, r.platforms ? r.platforms.split(', ').map(platformLabel).join(' · ') : null) },
-  { key: 'main_position', label: 'Pos.', text: true, title: 'Posición más jugada', render: (r) => posBadge(r.main_position) ?? '—' },
-  { key: 'pro_overall', label: 'Media (EA)', title: 'Media (overall) actual del Pro según EA (members/stats)' },
-  { key: 'matches', label: 'PJ', title: 'Partidos jugados (capturados)' },
-  { key: 'wins', label: 'V-E-D', title: 'Victorias, empates y derrotas (ordena por victorias)', render: (r) => `${r.wins}-${r.draws}-${r.losses}` },
-  { key: 'avg_rating', label: 'Calif.', title: 'Calificación media de EA', digits: 2 },
-  { key: 'mom_pct', label: 'MVP %', title: 'Porcentaje de partidos como mejor jugador', digits: 1 },
-  // Columnas agrupadas por tema. Las avanzadas (adv) y las experimentales (exp, con *
-  // y fondo teñido) van junto a los datos oficiales de su mismo tema (pedido del usuario).
+  { key: 'person_name', label: 'Jugador', text: true, kind: 'base', render: (r) => playerCell(r.person_name, r.platforms ? r.platforms.split(', ').map(platformLabel).join(' · ') : null) },
+  { key: 'main_position', label: 'Posiciones', text: true, kind: 'base', title: 'Posiciones que jugó, con el % de sus minutos en cada una', render: (r) => positionShares(r.person_id, r.main_position) },
+  { key: 'pro_overall', label: 'Media (EA)', kind: 'base', title: 'Media (overall) actual del Pro según EA' },
+  { key: 'matches', label: 'PJ', kind: 'base', title: 'Partidos jugados (capturados)' },
+  { key: 'wins', label: 'V-E-D', kind: 'base', title: 'Victorias, empates y derrotas (ordena por victorias)', render: (r) => `${r.wins}-${r.draws}-${r.losses}` },
+  // --- Rendimiento
+  { theme: 'Rendimiento', key: 'avg_rating', label: 'Calif.', kind: 'rate', important: true, title: 'Calificación media de EA', digits: 2 },
+  { theme: 'Rendimiento', key: 'mom_pct', label: 'MVP %', kind: 'rate', important: true, title: 'Porcentaje de partidos como mejor jugador', digits: 1 },
+  { theme: 'Rendimiento', key: 'mom_count', label: 'MVP', kind: 'abs', title: 'Partidos como mejor jugador' },
+  { theme: 'Rendimiento', key: 'win_pct', label: '% Vic.', kind: 'rate', important: true, title: 'Porcentaje de partidos ganados', digits: 1 },
   // --- Ataque
-  { key: 'goals', label: 'G', title: 'Goles' },
-  { key: 'assists', label: 'A', title: 'Asistencias' },
-  { key: 'goal_contributions', label: 'G+A', title: 'Goles + asistencias' },
-  { key: 'ga_per_match', label: 'G+A/PJ', title: 'Goles + asistencias por partido', digits: 2 },
-  { key: 'goals_per90', label: 'G/90', title: 'Goles por cada 90 minutos', digits: 2, adv: true },
-  { key: 'assists_per90', label: 'A/90', title: 'Asistencias por cada 90 minutos', digits: 2, adv: true },
-  { key: 'ga_per90', label: 'G+A/90', title: 'Goles + asistencias por cada 90 minutos', digits: 2, adv: true },
-  { key: 'shot_conversion_pct', label: 'Conv. %', title: 'Goles / tiros', digits: 1, adv: true },
-  { key: 'shot_accuracy_exp_pct', label: 'A puerta %*', title: 'Experimental: tiros a puerta / tiros (códigos EA 217 y 218)', digits: 1, exp: true },
-  { key: 'second_assists_exp', label: '2ª asist.*', title: 'Experimental: segundas asistencias (código EA 115)', exp: true },
-  { key: 'dribbles_exp', label: 'Regates*', title: 'Experimental: regates completados (código EA 174)', exp: true },
-  { key: 'goal_participation_pct', label: 'Part. goles %', title: '(Goles + asistencias) / goles del equipo en sus partidos', digits: 1, adv: true },
+  { theme: 'Ataque', key: 'goals', label: 'G', kind: 'abs', important: true, title: 'Goles' },
+  { theme: 'Ataque', key: 'goals_per90', label: 'G/90', kind: 'rate', important: true, title: 'Goles por cada 90 minutos', digits: 2 },
+  { theme: 'Ataque', key: 'assists', label: 'A', kind: 'abs', important: true, title: 'Asistencias' },
+  { theme: 'Ataque', key: 'assists_per90', label: 'A/90', kind: 'rate', important: true, title: 'Asistencias por cada 90 minutos', digits: 2 },
+  { theme: 'Ataque', key: 'goal_contributions', label: 'G+A', kind: 'abs', important: true, title: 'Goles + asistencias' },
+  { theme: 'Ataque', key: 'ga_per90', label: 'G+A/90', kind: 'rate', important: true, title: 'Goles + asistencias por cada 90 minutos', digits: 2 },
+  { theme: 'Ataque', key: 'ga_per_match', label: 'G+A/PJ', kind: 'rate', title: 'Goles + asistencias por partido', digits: 2 },
+  { theme: 'Ataque', key: 'shots', label: 'Tiros', kind: 'abs', title: 'Tiros' },
+  { theme: 'Ataque', key: 'shots_p90', label: 'Tiros/90', kind: 'rate', title: 'Tiros por cada 90 minutos', digits: 2 },
+  { theme: 'Ataque', key: 'shot_conversion_pct', label: 'Conv. %', kind: 'rate', important: true, title: 'Goles / tiros', digits: 1 },
+  { theme: 'Ataque', key: 'shot_accuracy_exp_pct', label: 'A puerta %*', kind: 'rate', important: true, title: 'Tiros a puerta / tiros', digits: 1, exp: true },
+  { theme: 'Ataque', key: 'second_assists_exp', label: '2ª asist.*', kind: 'abs', important: true, title: 'Segundas asistencias (el pase previo a la asistencia)', exp: true },
+  { theme: 'Ataque', key: 'second_assists_exp_p90', label: '2ª asist./90*', kind: 'rate', title: 'Segundas asistencias por cada 90 minutos', digits: 2, exp: true },
+  { theme: 'Ataque', key: 'dribbles_exp', label: 'Regates*', kind: 'abs', important: true, title: 'Regates completados', exp: true },
+  { theme: 'Ataque', key: 'dribbles_exp_p90', label: 'Regates/90*', kind: 'rate', important: true, title: 'Regates completados por cada 90 minutos', digits: 2, exp: true },
+  { theme: 'Ataque', key: 'goal_participation_pct', label: 'Part. goles %', kind: 'rate', title: '(Goles + asistencias) / goles del equipo en sus partidos', digits: 1 },
   // --- Pase
-  { key: 'pass_accuracy_pct', label: 'Pases %', title: 'Pases completados / intentados', digits: 1 },
-  { key: 'forward_pass_pct_exp', label: 'Pase adel. %*', title: 'Experimental: pases hacia adelante completados (códigos EA 30 y 31)', digits: 1, exp: true },
-  { key: 'through_passes_exp', label: 'Filtrados*', title: 'Experimental: pases filtrados (código EA 152)', exp: true },
-  { key: 'cross_pct_exp', label: 'Centros %*', title: 'Experimental: centros completados (códigos EA 36 y 37)', digits: 1, exp: true },
-  { key: 'best_option_pct_exp', label: 'Decisiones %*', title: 'Experimental: "tomó la mejor opción" / (mejor + "debió pasar a otro") (códigos EA 177 y 182)', digits: 1, exp: true },
-  { key: 'possession_lost_exp', label: 'Pérdidas*', title: 'Experimental: posesiones perdidas (códigos EA 105–107)', exp: true, better: 'low' },
+  { theme: 'Pase', key: 'pass_accuracy_pct', label: 'Pases %', kind: 'rate', important: true, title: 'Pases completados / intentados', digits: 1 },
+  { theme: 'Pase', key: 'passes_made', label: 'Pases', kind: 'abs', title: 'Pases completados' },
+  { theme: 'Pase', key: 'passes_made_p90', label: 'Pases/90', kind: 'rate', title: 'Pases completados por cada 90 minutos', digits: 1 },
+  { theme: 'Pase', key: 'forward_pass_pct_exp', label: 'Pase adel. %*', kind: 'rate', title: 'Pases hacia adelante completados', digits: 1, exp: true },
+  { theme: 'Pase', key: 'through_passes_exp', label: 'Filtrados*', kind: 'abs', important: true, title: 'Pases filtrados completados', exp: true },
+  { theme: 'Pase', key: 'through_passes_exp_p90', label: 'Filtrados/90*', kind: 'rate', title: 'Pases filtrados por cada 90 minutos', digits: 2, exp: true },
+  { theme: 'Pase', key: 'cross_pct_exp', label: 'Centros %*', kind: 'rate', title: 'Centros completados', digits: 1, exp: true },
+  { theme: 'Pase', key: 'best_option_pct_exp', label: 'Decisiones %*', kind: 'rate', title: 'Veces que el juego dijo "mejor opción" frente a "debió pasar a otro"', digits: 1, exp: true },
+  { theme: 'Pase', key: 'possession_lost_exp', label: 'Pérdidas*', kind: 'abs', title: 'Posesiones perdidas', exp: true, better: 'low' },
+  { theme: 'Pase', key: 'possession_lost_exp_p90', label: 'Pérdidas/90*', kind: 'rate', important: true, title: 'Posesiones perdidas por cada 90 minutos', digits: 2, exp: true, better: 'low' },
   // --- Defensa
-  { key: 'tackle_success_pct', label: 'Entradas %', title: 'Entradas ganadas / intentadas', digits: 1 },
-  { key: 'interceptions_exp', label: 'Intercep.*', title: 'Experimental: intercepciones (código EA 6)', exp: true },
-  { key: 'possession_won_exp', label: 'Recup.*', title: 'Experimental: posesiones ganadas (códigos EA 108–110)', exp: true },
-  { key: 'aerial_duels_won_exp', label: 'Aéreos*', title: 'Experimental: duelos aéreos ganados (códigos EA 265–266)', exp: true },
-  { key: 'in_position_pct_exp', label: 'En posición %*', title: 'Experimental: veces en posición / (en + fuera de posición) (códigos EA 111 y 219)', digits: 1, exp: true },
-  { key: 'clean_sheets', label: 'Vallas', title: 'Vallas invictas (defensa + portero)', adv: true },
-  { key: 'saves', label: 'Atajadas' },
-  { key: 'save_pct', label: '% Atajadas', title: 'Porteros: atajadas / (atajadas + goles recibidos)', digits: 1, adv: true },
+  { theme: 'Defensa', key: 'tackle_success_pct', label: 'Entradas %', kind: 'rate', important: true, title: 'Entradas ganadas / intentadas', digits: 1 },
+  { theme: 'Defensa', key: 'tackles_made', label: 'Entradas', kind: 'abs', important: true, title: 'Entradas ganadas' },
+  { theme: 'Defensa', key: 'tackles_made_p90', label: 'Entradas/90', kind: 'rate', important: true, title: 'Entradas ganadas por cada 90 minutos', digits: 2 },
+  { theme: 'Defensa', key: 'interceptions_exp', label: 'Intercep.*', kind: 'abs', important: true, title: 'Intercepciones', exp: true },
+  { theme: 'Defensa', key: 'interceptions_exp_p90', label: 'Intercep./90*', kind: 'rate', important: true, title: 'Intercepciones por cada 90 minutos', digits: 2, exp: true },
+  { theme: 'Defensa', key: 'possession_won_exp', label: 'Recup.*', kind: 'abs', title: 'Posesiones recuperadas', exp: true },
+  { theme: 'Defensa', key: 'possession_won_exp_p90', label: 'Recup./90*', kind: 'rate', important: true, title: 'Posesiones recuperadas por cada 90 minutos', digits: 2, exp: true },
+  { theme: 'Defensa', key: 'aerial_duels_won_exp', label: 'Aéreos*', kind: 'abs', title: 'Duelos aéreos ganados', exp: true },
+  { theme: 'Defensa', key: 'aerial_duels_won_exp_p90', label: 'Aéreos/90*', kind: 'rate', title: 'Duelos aéreos ganados por cada 90 minutos', digits: 2, exp: true },
+  { theme: 'Defensa', key: 'in_position_pct_exp', label: 'En posición %*', kind: 'rate', title: 'Veces bien ubicado frente a fuera de posición, según los avisos del juego', digits: 1, exp: true },
+  { theme: 'Defensa', key: 'clean_sheets', label: 'Vallas', kind: 'abs', title: 'Vallas invictas (defensa + portero)' },
+  { theme: 'Defensa', key: 'saves', label: 'Atajadas', kind: 'abs', important: true, title: 'Atajadas' },
+  { theme: 'Defensa', key: 'save_pct', label: '% Atajadas', kind: 'rate', important: true, title: 'Porteros: atajadas / (atajadas + goles recibidos)', digits: 1 },
   // --- Disciplina
-  { key: 'red_cards', label: 'Rojas', title: 'Tarjetas rojas', better: 'low' },
-  { key: 'yellow_cards_exp', label: 'Amarillas*', title: 'Experimental: tarjetas amarillas (códigos EA 95 y 213)', exp: true, better: 'low' },
-  { key: 'fouls_exp', label: 'Faltas*', title: 'Experimental: faltas cometidas (códigos EA 2 y 3)', exp: true, better: 'low' },
-  { key: 'penalties_conceded_exp', label: 'Penales*', title: 'Experimental: penales cometidos (código EA 94)', exp: true, better: 'low' },
-  { key: 'fouls_won_exp', label: 'F. recibidas*', title: 'Experimental: faltas recibidas (código EA 4)', exp: true },
-  { key: 'offsides_exp', label: 'Fuera lugar*', title: 'Experimental: fueras de juego (código EA 104; tiende a contar de menos)', exp: true, better: 'low' },
+  { theme: 'Disciplina', key: 'red_cards', label: 'Rojas', kind: 'abs', important: true, title: 'Tarjetas rojas', better: 'low' },
+  { theme: 'Disciplina', key: 'yellow_cards_exp', label: 'Amarillas*', kind: 'abs', important: true, title: 'Tarjetas amarillas', exp: true, better: 'low' },
+  { theme: 'Disciplina', key: 'fouls_exp', label: 'Faltas*', kind: 'abs', title: 'Faltas cometidas', exp: true, better: 'low' },
+  { theme: 'Disciplina', key: 'fouls_exp_p90', label: 'Faltas/90*', kind: 'rate', important: true, title: 'Faltas cometidas por cada 90 minutos', digits: 2, exp: true, better: 'low' },
+  { theme: 'Disciplina', key: 'penalties_conceded_exp', label: 'Penales cometidos*', kind: 'abs', title: 'Penales cometidos (faltas en el área propia). EA no dice cuántos goles fueron de penal.', exp: true, better: 'low' },
+  { theme: 'Disciplina', key: 'fouls_won_exp', label: 'Faltas recibidas*', kind: 'abs', title: 'Faltas que le hicieron', exp: true },
+  { theme: 'Disciplina', key: 'offsides_exp', label: 'Fuera de juego*', kind: 'abs', title: 'Veces en fuera de juego (tiende a contar de menos)', exp: true, better: 'low' },
   // --- Equipo y contexto
-  { key: 'minutes_played', label: 'Min.', title: 'Minutos jugados (tiempo de juego)', adv: true },
-  { key: 'goal_diff', label: 'Dif. goles', title: 'Goles a favor menos en contra en los partidos que jugó', adv: true, render: (r) => fmtSigned(r.goal_diff) },
-  { key: 'attendance_pct', label: 'Presencia %', title: 'Partidos jugados / partidos del club en el rango filtrado', digits: 1, adv: true },
-  { key: 'form_rating', label: 'Forma', title: 'Calificación media de sus últimos 5 partidos', digits: 2, adv: true },
-  { key: 'rating_stddev', label: 'Variación', title: 'Desviación de su calificación: más bajo = más regular', digits: 2, adv: true, better: 'low' },
-  { key: 'avg_opponent_skill', label: 'Nivel rival', title: 'Nivel medio (skillRating) de los rivales que enfrentó', adv: true, better: null },
-  { key: 'avg_team_size', label: 'Jug. prom.', title: 'Jugadores del club en cancha, en promedio', digits: 1, adv: true, better: null },
-  { key: 'incomplete_matches', label: 'Incompl.', title: 'Partidos incompletos (abandono o < 90 % del tiempo)', adv: true, better: null },
+  { theme: 'Equipo y contexto', key: 'minutes_played', label: 'Min.', kind: 'abs', title: 'Minutos jugados (tiempo de juego)' },
+  { theme: 'Equipo y contexto', key: 'goal_diff', label: 'Dif. goles', kind: 'abs', title: 'Goles a favor menos en contra en los partidos que jugó', render: (r) => fmtSigned(r.goal_diff) },
+  { theme: 'Equipo y contexto', key: 'attendance_pct', label: 'Presencia %', kind: 'rate', title: 'Partidos jugados / partidos del club en el rango filtrado', digits: 1 },
+  { theme: 'Equipo y contexto', key: 'form_rating', label: 'Forma', kind: 'rate', title: 'Calificación media de sus últimos 5 partidos', digits: 2 },
+  { theme: 'Equipo y contexto', key: 'rating_stddev', label: 'Variación', kind: 'rate', title: 'Desviación de su calificación: más bajo = más regular', digits: 2, better: 'low' },
+  { theme: 'Equipo y contexto', key: 'avg_opponent_skill', label: 'Nivel rival', kind: 'rate', title: 'Nivel medio (skillRating) de los rivales que enfrentó', better: null },
+  { theme: 'Equipo y contexto', key: 'avg_team_size', label: 'Jug. prom.', kind: 'rate', title: 'Jugadores del club en cancha, en promedio', digits: 1, better: null },
+  { theme: 'Equipo y contexto', key: 'incomplete_matches', label: 'Abandonos', kind: 'abs', title: 'Partidos abandonados o cortados antes de tiempo', better: null },
 ];
 
-const visibleColumns = () => RANKING_COLUMNS.filter((c) => (state.showExp || !c.exp) && (state.showAdv || !c.adv));
-const cellClass = (c, extra = '') => [c.text ? 'left' : '', c.exp ? 'exp' : '', c.adv ? 'adv' : '', extra].join(' ').trim() || null;
+/** Totales que se pasan a "por 90 min" en el navegador (clave + "_p90"). */
+const PER90_KEYS = ['shots', 'passes_made', 'second_assists_exp', 'dribbles_exp', 'through_passes_exp', 'possession_lost_exp', 'tackles_made',
+  'interceptions_exp', 'possession_won_exp', 'aerial_duels_won_exp', 'fouls_exp'];
+
+/** Agrega a cada fila de person_stats los datos derivados (por 90 min, % de victorias). */
+function deriveRow(r) {
+  const out = { ...r, win_pct: r.matches ? Math.round((1000 * r.wins) / r.matches) / 10 : null };
+  for (const k of PER90_KEYS) out[`${k}_p90`] = r[k] == null || !Number(r.minutes_played) ? null : (Number(r[k]) * 90) / Number(r.minutes_played);
+  return out;
+}
+
+const isAdded = (c) => state.addedCols.includes(c.key);
+/** Lo que se muestra: lo básico, los datos importantes según los filtros de "Datos" y lo agregado a mano. */
+function visibleColumns() {
+  const k = state.colKinds;
+  return RANKING_COLUMNS.filter((c) => c.kind === 'base' || isAdded(c) || (c.important
+    && (c.kind === 'abs' ? k.abs : k.rate) && (c.exp ? state.showExp : k.official)));
+}
+const cellClass = (c, extra = '') => [c.text ? 'left' : '', c.exp ? 'exp' : '', isAdded(c) ? 'added' : '', extra].join(' ').trim() || null;
+
+function setAddedCols(keys) {
+  state.addedCols = [...new Set(keys)].filter((k) => RANKING_COLUMNS.some((c) => c.key === k));
+  prefs.save({ addedCols: state.addedCols });
+  if (!visibleColumns().some((c) => c.key === state.sort.key)) state.sort = { key: 'avg_rating', dir: -1 };
+  renderRanking();
+}
+
+/**
+ * "+ Añadir dato": todos los datos que no están en la tabla, por tema, con su tipo
+ * (total o proporción; oficial o experimental). Lo agregado se recuerda en este navegador.
+ */
+function renderColumnPicker() {
+  const shown = new Set(visibleColumns().map((c) => c.key));
+  const rest = RANKING_COLUMNS.filter((c) => c.kind !== 'base' && !shown.has(c.key));
+  const themes = [...new Set(rest.map((c) => c.theme))];
+  $('#col-picker-count').textContent = state.addedCols.length ? `${state.addedCols.length} agregado${state.addedCols.length === 1 ? '' : 's'}` : '';
+  $('#col-picker-body').replaceChildren(
+    rest.length ? null : el('p', { class: 'muted small' }, 'Ya están todos los datos en la tabla.'),
+    ...themes.map((t) => el('div', { class: 'picker-group' }, el('p', { class: 'picker-title' }, t),
+      rest.filter((c) => c.theme === t).map((c) => el('button', {
+        type: 'button', class: `picker-item${c.exp ? ' exp' : ''}`, title: c.exp ? `${c.title.replace(/\.$/, '')}. ${EXP_NOTE}.` : c.title,
+        onclick: () => setAddedCols([...state.addedCols, c.key]),
+      }, el('span', {}, `+ ${c.title}`), el('span', { class: 'picker-tags' }, c.kind === 'abs' ? 'Total' : 'Proporción', c.exp ? ' · Experimental' : ' · Oficial'))))),
+    state.addedCols.length ? el('button', { type: 'button', class: 'link-btn', onclick: () => setAddedCols([]) }, 'Quitar todo lo agregado') : null);
+}
+
+/**
+ * Posiciones de cada persona según sus minutos en los partidos filtrados.
+ * Nadie queda definido por una sola posición: se muestran todas las que suman al
+ * menos el 10 % de sus minutos (las demás, en el texto de ayuda).
+ */
+function positionsByPerson(rows) {
+  const by = new Map();
+  for (const r of rows) {
+    if (!r.position) continue;
+    if (!by.has(r.person_id)) by.set(r.person_id, new Map());
+    const m = by.get(r.person_id);
+    m.set(r.position, (m.get(r.position) ?? 0) + Number(r.seconds_played ?? 0));
+  }
+  const out = new Map();
+  for (const [id, m] of by) {
+    const total = [...m.values()].reduce((a, b) => a + b, 0) || 1;
+    out.set(id, [...m].map(([pos, sec]) => ({ pos, sec, pct: (100 * sec) / total })).sort((a, b) => b.sec - a.sec));
+  }
+  return out;
+}
+
+function positionShares(personId, fallback, compact = false) {
+  const list = state.positions.get(personId);
+  if (!list?.length) return posBadge(fallback) ?? '—';
+  const main = list.filter((p) => p.pct >= 10);
+  const title = list.map((p) => `${POS_LABEL[p.pos] ?? p.pos} ${Math.round(p.pct)} %`).join(' · ');
+  return el('span', { class: 'pos-shares', title: `Minutos por posición: ${title}` },
+    (compact ? main.slice(0, 2) : main).map((p) => el('span', { class: `badge pos-${p.pos}` },
+      el('span', { class: list.length > 1 || compact ? 'pos-short-always' : 'pos-long' }, list.length > 1 || compact ? POS_SHORT[p.pos] : POS_LABEL[p.pos]),
+      list.length > 1 ? el('span', { class: 'pos-pct' }, ` ${Math.round(p.pct)}%`) : null,
+      list.length > 1 || compact ? null : el('span', { class: 'pos-short' }, POS_SHORT[p.pos]))));
+}
+
+/** Botones "Datos": totales, proporciones, oficiales y experimentales. */
+function bindDataKinds() {
+  const sync = () => {
+    for (const b of document.querySelectorAll('#data-kinds [data-kind]')) {
+      const k = b.dataset.kind;
+      b.setAttribute('aria-pressed', String(k === 'exp' ? state.showExp : state.colKinds[k]));
+    }
+  };
+  for (const b of document.querySelectorAll('#data-kinds [data-kind]')) {
+    b.addEventListener('click', () => {
+      const k = b.dataset.kind;
+      if (k === 'exp') { $('#show-exp').checked = !state.showExp; $('#show-exp').dispatchEvent(new Event('change')); }
+      else {
+        state.colKinds = { ...state.colKinds, [k]: !state.colKinds[k] };
+        prefs.save({ colKinds: state.colKinds });
+        if (!visibleColumns().some((c) => c.key === state.sort.key)) state.sort = { key: 'avg_rating', dir: -1 };
+        renderRanking();
+      }
+      sync();
+    });
+  }
+  sync();
+  return sync;
+}
 
 function sortRows(rows) {
   const { key, dir } = state.sort;
@@ -446,8 +577,11 @@ function renderRanking() {
         state.sort = active ? { key: c.key, dir: -state.sort.dir } : { key: c.key, dir: c.text ? 1 : -1 };
         renderRanking();
       },
-    }, c.label + (active ? (state.sort.dir === 1 ? ' ▲' : ' ▼') : '')));
+    }, c.label + (active ? (state.sort.dir === 1 ? ' ▲' : ' ▼') : '')),
+    // Los datos agregados a mano se pueden quitar desde su encabezado.
+    isAdded(c) ? el('button', { type: 'button', class: 'col-remove', title: `Quitar "${c.label}" de la tabla`, 'aria-label': `Quitar ${c.label}`, onclick: () => setAddedCols(state.addedCols.filter((k) => k !== c.key)) }, '×') : null);
   }));
+  renderColumnPicker();
 
   const rows = sortRows(state.ranking.filter((r) => r.matches >= state.minMatches));
   renderPodium(rows);
@@ -468,6 +602,8 @@ function renderRanking() {
   // La columna "#" va primero y es la fija; el nombre queda justo después.
   table.replaceChildren(el('thead', {}, head), el('tbody', {}, body));
 
+  renderRankingChart(rows, sortCol);
+
   // Selector "Ordenar por" (solo celular): mismas columnas que la tabla, sin las de texto.
   const sel = $('#sort-select');
   sel.replaceChildren(...columns.filter((c) => !c.text).map((c) => el('option', { value: c.key }, c.title ?? c.label)));
@@ -482,11 +618,34 @@ function renderRanking() {
       el('span', { class: 'place' }, place.has(r.person_id) ? String(place.get(r.person_id)) : '—'),
       avatar(r.person_name),
       el('span', { class: 'person' }, r.person_name),
-      posBadge(r.main_position),
+      positionShares(r.person_id, r.main_position, true),
       sparkline(state.trend.get(r.person_id))),
     el('div', { class: 'rank-card-stats' },
       cardKeys.map(([k, label, d]) => el('div', { class: k === state.sort.key ? 'sorted' : null }, el('div', { class: 'v' }, fmtNum(r[k], d)), el('div', { class: 'l' }, label))),
       extra ? el('div', { class: 'sorted' }, el('div', { class: 'v' }, extra.render ? extra.render(r) : fmtNum(r[extra.key], extra.digits ?? 0)), el('div', { class: 'l' }, extra.label)) : null))) : [el('p', { class: 'muted', style: 'padding: 12px' }, 'Sin datos para estos filtros.')]));
+}
+
+/**
+ * Gráfica del dato por el que se ordena la tabla: una barra por jugador, del mejor
+ * al peor en ese dato (si "menos es mejor", la barra más corta va arriba). Una sola
+ * serie: el título la nombra; el valor va al final de cada barra en color de texto.
+ */
+function renderRankingChart(rows, col) {
+  const box = $('#ranking-chart');
+  const title = $('#ranking-chart-title');
+  if (!col || col.text) { box.replaceChildren(el('p', { class: 'muted small' }, 'Ordena por un dato numérico para verlo en gráfica.')); title.textContent = 'En gráfica'; return; }
+  title.textContent = `En gráfica: ${col.title ?? col.label}${col.exp ? ' *' : ''}`;
+  const ordered = bestFirst(rows, col) ?? rows.filter((r) => r[col.key] != null).sort((a, b) => Number(b[col.key]) - Number(a[col.key]));
+  if (!ordered.length) { box.replaceChildren(el('p', { class: 'muted small' }, 'Sin datos de este dato con los filtros actuales.')); return; }
+  const max = Math.max(...ordered.map((r) => Math.abs(Number(r[col.key])))) || 1;
+  box.replaceChildren(el('div', { class: 'hbars', role: 'list' }, ordered.map((r) => {
+    const v = Number(r[col.key]);
+    const text = col.render ? col.render(r) : fmtNum(v, col.digits ?? 0);
+    return el('div', { class: `hbar${r.matches < PODIUM_MIN_MATCHES ? ' low-sample' : ''}`, role: 'listitem', title: `${r.person_name}: ${typeof text === 'string' ? text : fmtNum(v, col.digits ?? 0)} · ${r.matches} PJ`, ...onActivate(() => openPerson(r.person_id)) },
+      el('span', { class: 'hbar-name' }, r.person_name),
+      el('span', { class: 'hbar-track' }, el('i', { style: `width:${Math.max(1, (100 * Math.abs(v)) / max)}%` })),
+      el('span', { class: 'hbar-val' }, text));
+  })), betterOf(col) === 'low' ? el('p', { class: 'muted small' }, 'En este dato, menos es mejor: arriba va quien tiene menos.') : null);
 }
 
 /**
@@ -788,9 +947,10 @@ const H2H_GROUPS = [
   {
     title: 'Contexto (no se juzga)',
     rows: [
-      { label: 'Partidos', key: 'matches', better: null },
-      { label: 'Minutos', key: 'minutes_played', better: null },
-      { label: 'Presencia', key: 'attendance_pct', better: null, digits: 1, pct: true },
+      // Para el promedio del equipo no tienen sentido (serían sumas de todos): sin dato.
+      { label: 'Partidos', value: (r) => (r._team ? null : r.matches), better: null },
+      { label: 'Minutos', value: (r) => (r._team ? null : r.minutes_played), better: null },
+      { label: 'Presencia', value: (r) => (r._team ? null : r.attendance_pct), better: null, digits: 1, pct: true },
       { label: 'Nivel medio del rival', key: 'avg_opponent_skill', better: null },
       { label: 'Media del Pro (EA)', key: 'pro_overall', better: null },
     ],
@@ -810,29 +970,85 @@ function h2hWinner(va, vb, better, digits = 0) {
   return (ra > rb) === (better === 'high') ? 'a' : 'b';
 }
 
+/** Valor del selector para comparar contra el promedio del equipo. */
+const TEAM = 'team';
+
+/**
+ * "Promedio del equipo": un jugador ficticio que junta a todos los que cumplen el
+ * mínimo de partidos. Los totales se suman y las tasas se recalculan con esas sumas
+ * (pases %, por 90 min, % MVP…), así pesa cada partido y no cada jugador por igual.
+ * Lo que no se puede recalcular (calificación media, forma, experimentales en %) es
+ * el promedio de los jugadores ponderado por sus partidos.
+ */
+function teamAverageRow(people) {
+  const sum = (k) => people.reduce((a, r) => a + Number(r[k] ?? 0), 0);
+  const wmean = (k) => {
+    const list = people.filter((r) => r[k] != null);
+    const w = list.reduce((a, r) => a + r.matches, 0);
+    return w ? list.reduce((a, r) => a + Number(r[k]) * r.matches, 0) / w : null;
+  };
+  const pct = (n, d) => (d ? (100 * n) / d : null);
+  const row = {};
+  for (const k of Object.keys(people[0] ?? {})) {
+    if (people.some((r) => r[k] != null && typeof r[k] !== 'boolean' && !Number.isNaN(Number(r[k])))) row[k] = wmean(k);
+  }
+  Object.assign(row, { person_id: TEAM, person_name: 'Promedio del equipo', _team: true, _count: people.length, platforms: null });
+  for (const k of ['matches', 'wins', 'draws', 'losses', 'goals', 'assists', 'shots', 'passes_made', 'pass_attempts', 'tackles_made', 'tackle_attempts',
+    'mom_count', 'red_cards', 'seconds_played', 'minutes_played', 'goal_diff', 'team_goals', ...PER90_KEYS]) row[k] = sum(k);
+  const min = row.minutes_played || null;
+  Object.assign(row, {
+    pass_accuracy_pct: pct(row.passes_made, row.pass_attempts),
+    tackle_success_pct: pct(row.tackles_made, row.tackle_attempts),
+    mom_pct: pct(row.mom_count, row.matches),
+    shot_conversion_pct: pct(row.goals, row.shots),
+    goal_participation_pct: pct(row.goals + row.assists, row.team_goals),
+    goals_per90: min && (row.goals * 90) / min,
+    assists_per90: min && (row.assists * 90) / min,
+    ga_per90: min && ((row.goals + row.assists) * 90) / min,
+    main_position: null,
+  });
+  return deriveRow(row);
+}
+
+/** Índices relativos al rol del "equipo": promedio ponderado por partidos (≈100). */
+function teamRelative(people) {
+  const out = {};
+  for (const k of ['rating_idx', 'ga90_idx', 'pass_idx', 'tackles90_idx', 'save_idx', 'interceptions90_idx_exp']) {
+    const list = people.map((p) => [state.relative.get(p.person_id)?.[k], p.matches]).filter(([v]) => v != null);
+    const w = list.reduce((a, [, m]) => a + m, 0);
+    out[k] = w ? list.reduce((a, [v, m]) => a + Number(v) * m, 0) / w : null;
+  }
+  return out;
+}
+
 function fillH2hPickers() {
   const people = state.ranking.filter((r) => r.matches >= state.minMatches)
     .sort((x, y) => x.person_name.localeCompare(y.person_name, 'es'));
   const ids = people.map((p) => p.person_id);
   const byMatches = [...people].sort((x, y) => y.matches - x.matches);
   if (!ids.includes(state.h2h.a)) state.h2h.a = byMatches[0]?.person_id ?? null;
-  if (!ids.includes(state.h2h.b) || state.h2h.b === state.h2h.a) state.h2h.b = byMatches.find((p) => p.person_id !== state.h2h.a)?.person_id ?? null;
+  if (state.h2h.b !== TEAM && (!ids.includes(state.h2h.b) || state.h2h.b === state.h2h.a)) state.h2h.b = byMatches.find((p) => p.person_id !== state.h2h.a)?.person_id ?? null;
   for (const [sel, key] of [['#h2h-a', 'a'], ['#h2h-b', 'b']]) {
-    $(sel).replaceChildren(...people.map((p) => el('option', { value: p.person_id }, `${p.person_name} (${p.matches} PJ)`)));
+    $(sel).replaceChildren(
+      ...(key === 'b' && people.length ? [el('option', { value: TEAM }, `Promedio del equipo (${people.length} jugadores)`)] : []),
+      ...people.map((p) => el('option', { value: p.person_id }, `${p.person_name} (${p.matches} PJ)`)));
     $(sel).value = String(state.h2h[key] ?? '');
   }
 }
+const pickerValue = (v) => (v === TEAM ? TEAM : Number(v));
 
 function renderH2h() {
   fillH2hPickers();
   const box = $('#h2h-body');
+  const people = state.ranking.filter((r) => r.matches >= state.minMatches);
   const A = state.ranking.find((r) => r.person_id === state.h2h.a);
-  const B = state.ranking.find((r) => r.person_id === state.h2h.b);
+  const B = state.h2h.b === TEAM ? (people.length ? teamAverageRow(people) : null) : state.ranking.find((r) => r.person_id === state.h2h.b);
   if (!A || !B || A === B) {
     box.replaceChildren(el('p', { class: 'muted', style: 'padding: 0 18px 18px' }, 'Hacen falta al menos dos jugadores con el mínimo de partidos de los filtros.'));
     return;
   }
-  const relA = state.relative.get(A.person_id) ?? {}, relB = state.relative.get(B.person_id) ?? {};
+  const relA = state.relative.get(A.person_id) ?? {};
+  const relB = B._team ? teamRelative(people) : state.relative.get(B.person_id) ?? {};
   const score = { a: 0, b: 0, tie: 0 };
   const groups = H2H_GROUPS.filter((g) => state.showExp || !g.exp).map((g) => {
     const rows = g.rows.filter((m) => state.showExp || !m.exp).map((m) => {
@@ -864,12 +1080,15 @@ function renderH2h() {
   }).flat().filter(Boolean);
 
   const roles = (rel) => (rel.roles ?? '').split(', ').filter(Boolean);
-  const differentRoles = A.main_position !== B.main_position;
-  const lowSample = A.matches < MIN_FIT_MATCHES || B.matches < MIN_FIT_MATCHES;
-  const card = (r, rel, cls) => el('div', { class: `h2h-player ${cls}` }, avatar(r.person_name, true),
+  const differentRoles = !B._team && A.main_position !== B.main_position;
+  const lowSample = A.matches < MIN_FIT_MATCHES || (!B._team && B.matches < MIN_FIT_MATCHES);
+  const card = (r, rel, cls) => el('div', { class: `h2h-player ${cls}` },
+    r._team ? el('span', { class: 'avatar lg team-avatar', 'aria-hidden': 'true' }, 'EQ') : avatar(r.person_name, true),
     el('div', {}, el('div', { class: 'name' }, el('span', { class: 'swatch', 'aria-hidden': 'true' }), ' ', r.person_name),
-      el('div', { class: 'badges' }, roles(rel).length ? roles(rel).map(posBadge) : posBadge(r.main_position)),
-      el('div', { class: 'muted small' }, `${r.matches} PJ · ${fmtNum(r.minutes_played)} min`)));
+      r._team ? null : el('div', { class: 'badges' }, roles(rel).length ? roles(rel).map(posBadge) : posBadge(r.main_position)),
+      el('div', { class: 'muted small' }, r._team
+        ? `${r._count} jugadores · ${fmtNum(state.ranking[0]?.club_matches)} partidos del club`
+        : `${r.matches} PJ · ${fmtNum(r.minutes_played)} min`)));
   // Marcador visual: proporción de datos que gana cada uno (empates en gris al centro).
   const judged = score.a + score.b + score.tie;
   const seg = (n, cls, label) => (n ? el('span', { class: cls, style: `flex:${n}`, title: label }) : null);
@@ -967,52 +1186,149 @@ async function renderCompare(filters, requestId) {
 // Duplas
 // ---------------------------------------------------------------------------
 
-async function renderPairs(filters, requestId) {
-  const rows = filters.types.length ? await api.getPairStats(filters) : [];
-  if (requestId !== state.requestId) return;
-  const list = rows.filter((r) => r.matches >= state.minMatches)
-    .sort((a, b) => Number(b.win_pct) - Number(a.win_pct) || b.matches - a.matches);
-  const cols = ['Dupla', 'PJ juntos', 'V-E-D', '% Victorias', 'Goles a favor / PJ', 'Goles en contra / PJ', 'Dif. goles', 'G+A de la dupla'];
-  $('#pairs-table').replaceChildren(
-    el('thead', {}, el('tr', {}, cols.map((h, i) => el('th', { scope: 'col', class: i === 0 ? 'left' : null }, h)))),
-    el('tbody', {}, list.length ? list.map((r) => el('tr', {},
-      el('td', {}, el('span', { class: 'player-cell' }, avatar(r.person_a), el('span', { class: 'person' }, r.person_a), el('span', { class: 'muted' }, '+'), avatar(r.person_b), el('span', { class: 'person' }, r.person_b))),
-      el('td', {}, fmtNum(r.matches)),
-      el('td', {}, `${r.wins}-${r.draws}-${r.losses}`),
-      el('td', { class: 'sorted' }, fmtPct(r.win_pct)),
-      el('td', {}, fmtNum(r.goals_for_avg, 2)),
-      el('td', {}, fmtNum(r.goals_against_avg, 2)),
-      el('td', {}, fmtSigned(r.goal_diff)),
-      el('td', {}, fmtNum(r.combined_ga)))) : [emptyRow(cols.length, 'Sin duplas con ese mínimo de partidos.')]));
-  await renderWithWithout(filters, requestId);
+/**
+ * Partidos del club con quién jugó cada uno (de state.timeline, con los filtros).
+ * Map match_id -> { outcome, gf, ga, people: Map(person_id -> { name, rating }) }.
+ * Si alguien jugó con dos cuentas en el mismo partido, su calificación se promedia.
+ */
+function matchRoster(rows) {
+  const out = new Map();
+  for (const r of rows) {
+    if (!out.has(r.match_id)) out.set(r.match_id, { id: r.match_id, at: r.played_at, outcome: r.outcome, gf: r.goals_for, ga: r.goals_against, incomplete: r.incomplete, opp: r.opponent_skill_rating, people: new Map() });
+    const ppl = out.get(r.match_id).people;
+    if (!ppl.has(r.person_id)) ppl.set(r.person_id, { name: r.person_name, ratings: [] });
+    if (r.rating != null) ppl.get(r.person_id).ratings.push(Number(r.rating));
+  }
+  for (const m of out.values()) for (const p of m.people.values()) p.rating = p.ratings.length ? p.ratings.reduce((a, b) => a + b, 0) / p.ratings.length : null;
+  return out;
 }
 
-/** Diferencia con signo y color: positivo = rinde mejor con el compañero. */
+/** Resultados del equipo en una lista de partidos. rateOf(m): calificación a promediar (opcional). */
+function teamResults(list, rateOf = null) {
+  const n = list.length;
+  const c = (o) => list.filter((m) => m.outcome === o).length;
+  const ratings = rateOf ? list.map(rateOf).filter((v) => v != null) : [];
+  return {
+    n, w: c('win'), d: c('draw'), l: c('loss'),
+    winPct: n ? (100 * c('win')) / n : null,
+    gf: n ? list.reduce((a, m) => a + m.gf, 0) / n : null,
+    ga: n ? list.reduce((a, m) => a + m.ga, 0) / n : null,
+    rating: ratings.length ? ratings.reduce((a, b) => a + b, 0) / ratings.length : null,
+  };
+}
+
+/** Diferencia con signo y color: positivo = al equipo le va mejor. */
 function deltaCell(v, digits, suffix = '') {
-  if (v == null) return el('td', { class: 'muted' }, '—');
-  const n = Number(v);
-  const text = `${n > 0 ? '+' : ''}${fmtNum(n, digits)}${suffix}`;
-  return el('td', { class: n > 0 ? 'delta-up' : n < 0 ? 'delta-down' : null }, el('strong', {}, text));
+  if (v == null || Number.isNaN(v)) return el('td', { class: 'muted' }, '—');
+  const text = `${v > 0 ? '+' : ''}${fmtNum(v, digits)}${suffix}`;
+  return el('td', { class: v > 0 ? 'delta-up' : v < 0 ? 'delta-down' : null }, el('strong', {}, text));
 }
 
-async function renderWithWithout(filters, requestId) {
-  const rows = filters.types.length ? await api.getWithWithout(filters) : [];
-  if (requestId !== state.requestId) return;
-  const list = rows.filter((r) => r.matches_with >= state.minMatches && r.matches_without >= state.minMatches)
-    .sort((a, b) => a.person_name.localeCompare(b.person_name, 'es') || Number(b.rating_delta) - Number(a.rating_delta));
-  const cols = ['Jugador', 'Con…', 'PJ con / sin', 'Calif. con', 'Calif. sin', 'Δ Calif.', '% Vic. con', '% Vic. sin', 'Δ % Vic.', 'G+A/90 con / sin'];
-  $('#withwithout-table').replaceChildren(
-    el('thead', {}, el('tr', {}, cols.map((h, i) => el('th', { scope: 'col', class: i < 2 ? 'left' : null }, h)))),
-    el('tbody', {}, list.length ? list.map((r) => el('tr', { class: 'clickable', ...onActivate(() => openPerson(r.person_id)) },
-      el('td', {}, playerCell(r.person_name)),
-      el('td', { class: 'left' }, r.mate_name),
-      el('td', {}, `${r.matches_with} / ${r.matches_without}`),
-      el('td', {}, fmtNum(r.rating_with, 2)), el('td', {}, fmtNum(r.rating_without, 2)),
-      deltaCell(r.rating_delta, 2),
-      el('td', {}, fmtPct(r.win_pct_with, 0)), el('td', {}, fmtPct(r.win_pct_without, 0)),
-      deltaCell(r.win_pct_delta, 0, ' pts'),
-      el('td', {}, `${fmtNum(r.ga90_with, 2)} / ${fmtNum(r.ga90_without, 2)}`)))
-      : [emptyRow(cols.length, `Nadie tiene al menos ${state.minMatches} PJ con y sin cada compañero todavía. Baja el mínimo de partidos o espera más partidos.`)]));
+const vedText = (s) => `${s.w}-${s.d}-${s.l}`;
+/** Con menos de 3 partidos (o del mínimo elegido) la diferencia puede ser casualidad: fila atenuada. */
+const fewMatches = (n) => n < Math.max(state.minMatches, PODIUM_MIN_MATCHES);
+const lowNote = (n) => (fewMatches(n) ? ' low-sample' : '');
+
+/**
+ * Duplas (une las antiguas tablas "Duplas" y "Con y sin", pedido del usuario):
+ *  1. El equipo con y sin cada jugador (con gráfica de la diferencia en % de victorias).
+ *  2. Un jugador elegido: cómo le va al equipo CON él junto a cada compañero, y SIN él.
+ * Todo es correlación: también influyen el rival, la posición y la suerte.
+ */
+function renderPairs() {
+  const roster = matchRoster(state.timeline);
+  const all = [...roster.values()];
+  const people = state.ranking.filter((r) => r.matches >= 1).sort((a, b) => b.matches - a.matches);
+
+  // 1. Con y sin cada jugador
+  const impact = people.map((p) => {
+    const withP = all.filter((m) => m.people.has(p.person_id));
+    const withoutP = all.filter((m) => !m.people.has(p.person_id));
+    const a = teamResults(withP), b = teamResults(withoutP);
+    return { p, a, b, delta: a.winPct != null && b.winPct != null ? a.winPct - b.winPct : null };
+  }).filter((x) => x.a.n >= state.minMatches);
+  const cols = ['Jugador', 'PJ con / sin', '% Vic. con', '% Vic. sin', 'Δ % Vic.', 'Goles a favor / PJ (con / sin)', 'Goles en contra / PJ (con / sin)'];
+  $('#impact-table').replaceChildren(
+    el('thead', {}, el('tr', {}, cols.map((h, i) => el('th', { scope: 'col', class: i === 0 ? 'left' : null }, h)))),
+    el('tbody', {}, impact.length ? impact.map(({ p, a, b, delta }) => el('tr', { class: `clickable${lowNote(Math.min(a.n, b.n))}`, title: fewMatches(b.n) ? `Pocos partidos sin ${p.person_name}: la diferencia no es confiable` : null, ...onActivate(() => openPerson(p.person_id)) },
+      el('td', {}, playerCell(p.person_name)),
+      el('td', {}, `${a.n} / ${b.n}`),
+      el('td', {}, fmtPct(a.winPct, 0)), el('td', {}, fmtPct(b.winPct, 0)),
+      deltaCell(delta, 0, ' pts'),
+      el('td', {}, `${fmtNum(a.gf, 2)} / ${fmtNum(b.gf, 2)}`),
+      el('td', {}, `${fmtNum(a.ga, 2)} / ${fmtNum(b.ga, 2)}`)))
+      : [emptyRow(cols.length, 'Sin datos para estos filtros.')]));
+  renderImpactChart(impact.filter((x) => x.delta != null && x.b.n > 0));
+
+  // 2. Un jugador: con él (junto a cada compañero) y sin él
+  const sel = $('#pairs-person');
+  if (!people.some((p) => p.person_id === state.pairsPerson)) state.pairsPerson = people[0]?.person_id ?? null;
+  sel.replaceChildren(...people.map((p) => el('option', { value: p.person_id }, `${p.person_name} (${p.matches} PJ)`)));
+  sel.value = String(state.pairsPerson ?? '');
+  const X = people.find((p) => p.person_id === state.pairsPerson);
+  if (!X) { $('#pairs-with').replaceChildren(); $('#pairs-without').replaceChildren(); return; }
+  const withX = all.filter((m) => m.people.has(X.person_id));
+  const withoutX = all.filter((m) => !m.people.has(X.person_id));
+  const ratingOf = (id) => (m) => m.people.get(id)?.rating ?? null;
+  const mates = people.filter((p) => p.person_id !== X.person_id);
+  $('#pairs-with-title').textContent = `Con ${X.person_name}`;
+  $('#pairs-without-title').textContent = `Sin ${X.person_name}`;
+
+  const totalWith = teamResults(withX, ratingOf(X.person_id));
+  const withRows = mates.map((y) => {
+    const both = withX.filter((m) => m.people.has(y.person_id));
+    return { y, s: teamResults(both, ratingOf(X.person_id)), ry: teamResults(both, ratingOf(y.person_id)).rating };
+  }).filter((r) => r.s.n > 0).sort((a, b) => b.s.n - a.s.n);
+  const withCols = ['Junto a', 'PJ', 'V-E-D', '% Vic.', 'Dif. goles / PJ', `Calif. de ${X.person_name}`, 'Calif. del compañero'];
+  $('#pairs-with').replaceChildren(
+    el('thead', {}, el('tr', {}, withCols.map((h, i) => el('th', { scope: 'col', class: i === 0 ? 'left' : null }, h)))),
+    el('tbody', {},
+      el('tr', { class: 'total-row' }, el('td', { class: 'left' }, el('strong', {}, 'Total con él')), el('td', {}, String(totalWith.n)), el('td', {}, vedText(totalWith)),
+        el('td', {}, fmtPct(totalWith.winPct, 0)), deltaCell(totalWith.n ? totalWith.gf - totalWith.ga : null, 2), el('td', {}, fmtNum(totalWith.rating, 2)), el('td', { class: 'muted' }, '—')),
+      withRows.length ? withRows.map(({ y, s, ry }) => el('tr', { class: `clickable${lowNote(s.n)}`, ...onActivate(() => openPerson(y.person_id)) },
+        el('td', {}, playerCell(y.person_name)), el('td', {}, String(s.n)), el('td', {}, vedText(s)),
+        el('td', {}, fmtPct(s.winPct, 0)), deltaCell(s.gf - s.ga, 2), el('td', {}, fmtNum(s.rating, 2)), el('td', {}, fmtNum(ry, 2))))
+        : emptyRow(withCols.length, 'Nunca jugó con otro jugador del club en estos partidos.')));
+
+  const totalWithout = teamResults(withoutX);
+  const withoutRows = mates.map((y) => {
+    const onlyY = withoutX.filter((m) => m.people.has(y.person_id));
+    const s = teamResults(onlyY, ratingOf(y.person_id));
+    const together = teamResults(withX.filter((m) => m.people.has(y.person_id)), ratingOf(y.person_id));
+    return { y, s, delta: s.rating != null && together.rating != null ? together.rating - s.rating : null };
+  }).filter((r) => r.s.n > 0).sort((a, b) => b.s.n - a.s.n);
+  const withoutCols = ['Compañero', 'PJ', 'V-E-D', '% Vic.', 'Dif. goles / PJ', 'Calif. del compañero', `Δ calif. con ${X.person_name}`];
+  $('#pairs-without').replaceChildren(
+    el('thead', {}, el('tr', {}, withoutCols.map((h, i) => el('th', { scope: 'col', class: i === 0 ? 'left' : null, title: i === 6 ? `Calificación del compañero cuando juega con ${X.person_name} menos cuando juega sin él` : null }, h)))),
+    el('tbody', {},
+      el('tr', { class: 'total-row' }, el('td', { class: 'left' }, el('strong', {}, 'Total sin él')), el('td', {}, String(totalWithout.n)), el('td', {}, totalWithout.n ? vedText(totalWithout) : '—'),
+        el('td', {}, fmtPct(totalWithout.winPct, 0)), deltaCell(totalWithout.n ? totalWithout.gf - totalWithout.ga : null, 2), el('td', { class: 'muted' }, '—'), el('td', { class: 'muted' }, '—')),
+      withoutRows.length ? withoutRows.map(({ y, s, delta }) => el('tr', { class: `clickable${lowNote(s.n)}`, ...onActivate(() => openPerson(y.person_id)) },
+        el('td', {}, playerCell(y.person_name)), el('td', {}, String(s.n)), el('td', {}, vedText(s)),
+        el('td', {}, fmtPct(s.winPct, 0)), deltaCell(s.gf - s.ga, 2), el('td', {}, fmtNum(s.rating, 2)), deltaCell(delta, 2)))
+        : emptyRow(withoutCols.length, `${X.person_name} jugó todos los partidos de estos filtros.`)));
+}
+
+/**
+ * Gráfica divergente: % de victorias con el jugador menos sin él. Dos colores
+ * (azul = al equipo le va mejor con él; naranja = peor) y el número con signo al
+ * lado, para no depender solo del color. El cero es la línea gris del centro.
+ */
+function renderImpactChart(list) {
+  const box = $('#impact-chart');
+  if (!list.length) { box.replaceChildren(el('p', { class: 'muted small' }, 'Hace falta que cada jugador tenga partidos con y sin él.')); return; }
+  const sorted = [...list].sort((a, b) => b.delta - a.delta);
+  const max = Math.max(...sorted.map((x) => Math.abs(x.delta))) || 1;
+  box.replaceChildren(el('div', { class: 'dbars', role: 'list' }, sorted.map(({ p, a, b, delta }) => el('div', {
+    class: `dbar${fewMatches(Math.min(a.n, b.n)) ? ' low-sample' : ''}`, role: 'listitem',
+    title: `${p.person_name}: el equipo gana el ${fmtNum(a.winPct, 0)} % con él (${a.n} PJ) y el ${fmtNum(b.winPct, 0)} % sin él (${b.n} PJ)`,
+  },
+    el('span', { class: 'dbar-name' }, p.person_name),
+    el('span', { class: 'dbar-track' },
+      el('span', { class: 'dbar-neg' }, delta < 0 ? el('i', { style: `width:${(100 * -delta) / max}%` }) : null),
+      el('span', { class: 'dbar-pos' }, delta > 0 ? el('i', { style: `width:${(100 * delta) / max}%` }) : null)),
+    el('span', { class: 'dbar-val' }, `${delta > 0 ? '+' : ''}${fmtNum(delta, 0)} pts`)))),
+  el('p', { class: 'dbar-legend muted small' }, el('span', { class: 'sw pos' }), ' Al equipo le va mejor con él  ', el('span', { class: 'sw neg' }), ' Le va mejor sin él'));
 }
 
 // ---------------------------------------------------------------------------
@@ -1045,6 +1361,22 @@ async function renderPositions(filters, requestId) {
 // ---------------------------------------------------------------------------
 // Partidos
 // ---------------------------------------------------------------------------
+
+/**
+ * Cobertura de un dato que no se capturó desde el principio: en cuántas filas existe.
+ * show = false si falta en más de la mitad (se guarda, pero no se muestra: la
+ * comparación sería engañosa). partial = existe, pero no en todas.
+ */
+const COVERAGE_MIN = 0.5;
+function coverage(rows, get) {
+  const total = rows.length;
+  const have = rows.filter((r) => get(r) != null).length;
+  return { total, have, partial: have > 0 && have < total, show: total === 0 || have / total >= COVERAGE_MIN };
+}
+/** Etiqueta "Parcial": el dato falta en algunos partidos porque empezamos a guardarlo después. */
+const partialBadge = (cov) => (cov?.partial
+  ? el('span', { class: 'badge partial', title: `Dato parcial: existe en ${cov.have} de ${cov.total} partidos, porque se empezó a guardar después. Los promedios usan solo los partidos con dato.` }, 'Parcial')
+  : null);
 
 async function renderMatches(filters, requestId) {
   const [matches, flags] = filters.types.length
@@ -1081,7 +1413,11 @@ async function renderMatches(filters, requestId) {
       e.mvp.length ? el('span', {}, el('span', { class: 'hl-tag mvp' }, '★ MVP'), ` ${e.mvp.join(', ')}`) : null,
       moves.map(([name, f]) => el('span', { class: 'hl-move' }, `${name} `, timeBadges(f))));
   };
-  const cols = ['Fecha', 'Tipo', 'Rival', 'Nivel rival', 'Div.', 'Jug.', 'Marcador', 'Res.'];
+  // Datos que empezamos a guardar más tarde: etiqueta "Parcial" o, si faltan en más
+  // de la mitad de los partidos, la columna no se muestra (sigue en la base).
+  const covSkill = coverage(shown, (m) => m.opponent_skill_rating);
+  const covDiv = coverage(shown, (m) => flags.get(m.match_id)?.club_division);
+  const cols = ['Fecha', 'Tipo', 'Rival', covSkill.show && ['Nivel rival', covSkill], covDiv.show && ['Div.', covDiv], 'Jug.', 'Marcador', 'Res.'].filter(Boolean);
   const body = el('tbody');
   if (!shown.length) body.append(emptyRow(cols.length, 'Sin partidos para estos filtros.'));
   for (const m of shown) {
@@ -1090,8 +1426,8 @@ async function renderMatches(filters, requestId) {
       el('td', { class: 'left' }, fmtDate(m.played_at)),
       el('td', { class: 'left' }, el('span', { class: 'badge' }, TYPE_LABEL[m.match_type] ?? m.match_type)),
       el('td', { class: 'left' }, m.opponent_name ?? '—', f?.incomplete ? [' ', el('span', { class: 'badge warn', title: 'El partido se cortó antes del 90 % del tiempo o un equipo abandonó. El marcador es el que da EA.' }, 'Abandonado')] : null, highlights(m, f?.incomplete)),
-      el('td', {}, fmtNum(m.opponent_skill_rating)),
-      el('td', { title: f?.club_division != null ? `División del club ese día. ${divisionTitle(f.club_division)}` : 'Sin dato de división' }, gameDivision(f?.club_division) ?? '—'),
+      covSkill.show ? el('td', {}, fmtNum(m.opponent_skill_rating)) : null,
+      covDiv.show ? el('td', { title: f?.club_division != null ? `División del club ese día. ${divisionTitle(f.club_division)}` : 'Sin dato de división' }, gameDivision(f?.club_division) ?? '—') : null,
       el('td', { title: 'Jugadores del club en cancha' }, fmtNum(f?.team_size)),
       // Marcador tal cual EA (en un abandono es el que asigna EA; la etiqueta "Abandonado" lo avisa).
       el('td', {}, el('strong', {}, `${m.goals_for} – ${m.goals_against}`)),
@@ -1100,7 +1436,9 @@ async function renderMatches(filters, requestId) {
     Object.entries(onActivate(toggle)).forEach(([k, v]) => (k.startsWith('on') ? row.addEventListener(k.slice(2), v) : row.setAttribute(k, v)));
     body.append(row);
   }
-  $('#matches-table').replaceChildren(el('thead', {}, el('tr', {}, cols.map((h, i) => el('th', { scope: 'col', class: i < 3 ? 'left' : null }, h)))), body);
+  $('#matches-table').replaceChildren(el('thead', {}, el('tr', {}, cols.map((h, i) => (Array.isArray(h)
+    ? el('th', { scope: 'col' }, h[0], partialBadge(h[1]))
+    : el('th', { scope: 'col', class: i < 3 ? 'left' : null }, h))))), body);
 }
 
 async function toggleMatchPlayers(row, matchId, colspan) {
@@ -1231,6 +1569,9 @@ function renderClub() {
     min: 0, max: 10, pad: 0.5, emptyText: 'Sin partidos en este rango.',
     tooltip: (w) => [el('div', {}, el('strong', {}, fmtNum(w.avg, 2)), ` · ${w.n} PJ`), el('div', { class: 'muted' }, `Semana del ${fmtDate(`${w.week}T12:00:00`, false)}`)],
   });
+  const games = [...matchRoster(state.timeline).values()].sort((a, b) => a.at.localeCompare(b.at));
+  renderResultsByWeek($('#club-results'), games);
+  renderGoalsPerMatch($('#club-goals'), games);
   const last = snaps.at(-1);
   $('#club-season-card').replaceChildren(last
     // Sin lo que ya está en la cabecera (división, V-E-D y puntos de la temporada).
@@ -1242,6 +1583,58 @@ function renderClub() {
         tile('Ascensos', fmtNum(last.promotions)), tile('Descensos', fmtNum(last.relegations)),
         tile('Histórico V-E-D', last.wins != null ? `${last.wins}-${last.draws}-${last.losses}` : '—'))
     : el('p', { class: 'muted', style: 'padding: 0 18px 18px' }, 'Sin fotos del club todavía.'));
+}
+
+/** Lunes (hora local) de la semana de una fecha, como 'YYYY-MM-DD'. */
+function weekKey(iso) {
+  const d = new Date(iso);
+  d.setHours(0, 0, 0, 0);
+  d.setDate(d.getDate() - ((d.getDay() + 6) % 7));
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+}
+
+/**
+ * Resultados por semana: columnas apiladas de victorias, empates y derrotas. Los
+ * colores de resultado son los mismos de las fichas V/E/D y la leyenda lleva la letra,
+ * para no depender solo del color.
+ */
+function renderResultsByWeek(box, games) {
+  if (!games.length) { box.replaceChildren(el('p', { class: 'muted' }, 'Sin partidos en este rango.')); return; }
+  const weeks = new Map();
+  for (const g of games) {
+    const k = weekKey(g.at);
+    if (!weeks.has(k)) weeks.set(k, { win: 0, draw: 0, loss: 0 });
+    if (weeks.get(k)[g.outcome] != null) weeks.get(k)[g.outcome]++;
+  }
+  const list = [...weeks].sort((a, b) => a[0].localeCompare(b[0])).slice(-16);
+  const max = Math.max(...list.map(([, w]) => w.win + w.draw + w.loss));
+  box.replaceChildren(
+    el('div', { class: 'vcols', role: 'img', 'aria-label': list.map(([k, w]) => `Semana del ${fmtDate(`${k}T12:00:00`, false)}: ${w.win} V, ${w.draw} E, ${w.loss} D`).join('; ') },
+      list.map(([k, w]) => el('div', { class: 'vcol', title: `Semana del ${fmtDate(`${k}T12:00:00`, false)}: ${w.win} victorias, ${w.draw} empates, ${w.loss} derrotas` },
+        el('span', { class: 'vcol-total' }, String(w.win + w.draw + w.loss)),
+        el('div', { class: 'vcol-stack', style: `height:${(100 * (w.win + w.draw + w.loss)) / max}%` },
+          ['loss', 'draw', 'win'].map((o) => (w[o] ? el('i', { class: `seg-${o}`, style: `flex:${w[o]}` }) : null))),
+        el('span', { class: 'vcol-label' }, new Date(`${k}T12:00:00`).toLocaleDateString('es-CO', { day: 'numeric', month: 'short' }))))),
+    el('p', { class: 'chart-legend muted small' }, ['win', 'draw', 'loss'].map((o) => el('span', {}, el('span', { class: `sw seg-${o}` }), ` ${OUTCOME[o].letter} ${OUTCOME[o].label}  `))));
+}
+
+/**
+ * Goles a favor y en contra de cada partido (los últimos 20), en columnas pareadas.
+ * Mismo eje para las dos series (no hay doble eje). Los abandonados van atenuados
+ * y con su etiqueta en la ayuda: su marcador lo asigna EA.
+ */
+function renderGoalsPerMatch(box, games) {
+  if (!games.length) { box.replaceChildren(el('p', { class: 'muted' }, 'Sin partidos en este rango.')); return; }
+  const list = games.slice(-20);
+  const max = Math.max(1, ...list.map((g) => Math.max(g.gf, g.ga)));
+  box.replaceChildren(
+    el('div', { class: 'vpairs', role: 'img', 'aria-label': `Goles a favor y en contra de los últimos ${list.length} partidos` },
+      list.map((g) => el('div', { class: `vpair${g.incomplete ? ' abandoned' : ''}`, title: `${fmtDate(g.at)} · ${OUTCOME[g.outcome]?.label ?? ''} ${g.gf}–${g.ga}${g.incomplete ? ' · Abandonado: marcador asignado por EA' : ''}` },
+        el('div', { class: 'vpair-bars' },
+          el('i', { class: 'gf', style: `height:${(100 * g.gf) / max}%` }),
+          el('i', { class: 'ga', style: `height:${(100 * g.ga) / max}%` })),
+        el('span', { class: `result ${g.outcome} mini` }, OUTCOME[g.outcome]?.letter ?? '?')))),
+    el('p', { class: 'chart-legend muted small' }, el('span', { class: 'sw gf' }), ' A favor  ', el('span', { class: 'sw ga' }), ' En contra · más viejo a la izquierda'));
 }
 
 // ---------------------------------------------------------------------------
@@ -1614,7 +2007,7 @@ async function renderPerson(filters, requestId) {
     tile('Pases vs. su rol', fmtNum(rel.pass_idx, 0)),
     tile('Entradas/90 vs. su rol', fmtNum(rel.tackles90_idx, 0)),
     tile('Roles jugados', el('span', { class: 'badges' }, (rel.roles ?? '').split(', ').filter(Boolean).map(posBadge)))) : null;
-  const advanced = state.showAdv ? el('div', { class: 'tiles' },
+  const advanced = summary ? el('div', { class: 'tiles' },
     tile('G+A por 90 min', fmtNum(summary?.ga_per90, 2)),
     tile('Forma (últ. 5)', fmtNum(summary?.form_rating, 2)),
     tile('Presencia', fmtPct(summary?.attendance_pct)),
@@ -1870,7 +2263,8 @@ async function refresh() {
       const prev = ea.get(m.person_id);
       if (!prev || m.pro_overall > prev.pro_overall) ea.set(m.person_id, m);
     }
-    state.ranking = ranking.map((r) => ({ ...r, pro_overall: ea.get(r.person_id)?.pro_overall ?? null, pro_name: ea.get(r.person_id)?.pro_name ?? null }));
+    state.ranking = ranking.map((r) => deriveRow({ ...r, pro_overall: ea.get(r.person_id)?.pro_overall ?? null, pro_name: ea.get(r.person_id)?.pro_name ?? null }));
+    state.positions = positionsByPerson(timeline);
     syncPhotoNames();
     state.records = new Map(records.map((r) => [r.person_id, r]));
     renderReconAlert().catch(() => {});
@@ -1887,7 +2281,7 @@ async function refresh() {
     }
     if (state.view === 'h2h') renderH2h();
     if (state.view === 'compare') tasks.push(renderCompare(filters, requestId));
-    if (state.view === 'pairs') tasks.push(renderPairs(filters, requestId));
+    if (state.view === 'pairs') renderPairs();
     if (state.view === 'matches') tasks.push(renderMatches(filters, requestId));
     if (state.view === 'members') tasks.push(renderMembers());
     if (state.view === 'club') renderClub();
@@ -1976,7 +2370,6 @@ function updateFiltersSummary() {
   if (state.minMatches > 1) opts.push(`mín. ${state.minMatches} PJ`);
   // Por defecto se muestra todo tal cual EA; solo se avisa si se excluyen abandonos.
   if ($('#exclude-incomplete').checked) opts.push('sin abandonos');
-  if ($('#show-adv').checked) opts.push('avanzadas');
   $('#view-value').textContent = opts.join(' · ');
 }
 
@@ -2028,7 +2421,8 @@ async function init() {
   // Un menú abierto se cierra al abrir el otro o al tocar fuera.
   const pops = document.querySelectorAll('details.pop');
   for (const p of pops) p.addEventListener('toggle', () => { if (p.open) for (const o of pops) if (o !== p) o.open = false; });
-  document.addEventListener('click', (e) => { for (const p of pops) if (p.open && !p.contains(e.target)) p.open = false; });
+  // (Un clic en algo que se acaba de redibujar, como "+ Añadir dato", no cierra el menú.)
+  document.addEventListener('click', (e) => { if (!e.target.isConnected) return; for (const p of pops) if (p.open && !p.contains(e.target)) p.open = false; });
   for (const input of document.querySelectorAll('input[name="type"], #from, #to, #exclude-incomplete')) {
     input.addEventListener('change', refresh);
   }
@@ -2064,21 +2458,27 @@ async function init() {
 
   const saved = prefs.load();
   if (typeof saved.showExp === 'boolean') state.showExp = saved.showExp;
-  if (typeof saved.showAdv === 'boolean') state.showAdv = saved.showAdv;
+  if (saved.colKinds && typeof saved.colKinds === 'object') state.colKinds = { ...state.colKinds, ...saved.colKinds };
+  if (Array.isArray(saved.addedCols)) state.addedCols = saved.addedCols.filter((k) => RANKING_COLUMNS.some((c) => c.key === k));
   $('#show-exp').checked = state.showExp;
-  $('#show-adv').checked = state.showAdv;
   updateFiltersSummary();
-  $('#show-exp').addEventListener('change', (e) => { state.showExp = e.target.checked; prefs.save({ showExp: state.showExp }); if (!state.showExp) resetSortIf('exp'); refresh(); });
-  $('#show-adv').addEventListener('change', (e) => { state.showAdv = e.target.checked; prefs.save({ showAdv: state.showAdv }); if (!state.showAdv) resetSortIf('adv'); refresh(); });
+  const syncKinds = bindDataKinds();
+  $('#show-exp').addEventListener('change', (e) => {
+    state.showExp = e.target.checked; prefs.save({ showExp: state.showExp });
+    if (!visibleColumns().some((c) => c.key === state.sort.key)) resetSortIf('exp');
+    syncKinds(); refresh();
+  });
   bindSegmented('#role-group-buttons', 'group', (v) => { state.roleGroup = v; refresh(); });
   bindSegmented('#role-mode-buttons', 'mode', (v) => { state.roleMode = v; refresh(); });
   $('#h2h-a').addEventListener('change', (e) => { state.h2h.a = Number(e.target.value); renderH2h(); });
-  $('#h2h-b').addEventListener('change', (e) => { state.h2h.b = Number(e.target.value); renderH2h(); });
-  $('#h2h-swap').addEventListener('click', () => { state.h2h = { a: state.h2h.b, b: state.h2h.a }; renderH2h(); });
-  // Enlace compartido de Cara a cara: …/?a=ID&b=ID
+  $('#h2h-b').addEventListener('change', (e) => { state.h2h.b = pickerValue(e.target.value); renderH2h(); });
+  // El promedio del equipo solo va en el lado B: al intercambiar, se queda ahí.
+  $('#h2h-swap').addEventListener('click', () => { if (state.h2h.b !== TEAM) state.h2h = { a: state.h2h.b, b: state.h2h.a }; renderH2h(); });
+  // Enlace compartido de Cara a cara: …/?a=ID&b=ID (b=team: promedio del equipo)
   const qs = new URLSearchParams(location.search);
   const startH2h = qs.has('a') && qs.has('b');
-  if (startH2h) state.h2h = { a: Number(qs.get('a')), b: Number(qs.get('b')) };
+  if (startH2h) state.h2h = { a: Number(qs.get('a')), b: pickerValue(qs.get('b')) };
+  $('#pairs-person').addEventListener('change', (e) => { state.pairsPerson = Number(e.target.value); renderPairs(); });
   bindSegmented('#split-buttons', 'split', (v) => { state.split = v; refresh(); });
   bindSegmented('#split-metric', 'metric', (v) => { state.splitMetric = v; refresh(); });
   bindSegmented('#position-buttons', 'pos', (v) => { state.position = v; refresh(); });

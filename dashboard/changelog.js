@@ -1,9 +1,25 @@
 // Versiones del dashboard (la primera es la actual). Al publicar un cambio visible
 // para el equipo, agregar una entrada arriba: versión, fecha y cambios en lenguaje simple.
+// La fecha es la de Colombia (UTC−5), no la UTC: de noche ya es "mañana" en UTC.
 export const CHANGELOG = [
   {
-    version: '2.6',
+    version: '2.7',
     date: '2026-11-16',
+    title: 'Datos a elección, duplas y más gráficas',
+    changes: [
+      'Ranking: botones "Datos" para ver totales, proporciones (por 90 min, %), oficiales y experimentales; y "+ Añadir dato" para sumar a la tabla datos menos importantes (se quitan con la ×).',
+      'Ranking: cada jugador muestra todas las posiciones que jugó, con el % de sus minutos en cada una.',
+      'Ranking: gráfica del dato por el que se ordena la tabla.',
+      'Cara a cara: se puede comparar a un jugador con el promedio del equipo.',
+      'Duplas: una sola pestaña con el equipo con y sin cada jugador (con gráfica) y, para el jugador elegido, cómo le va al equipo con él junto a cada compañero y sin él.',
+      'Club: resultados por semana y goles a favor y en contra de cada partido.',
+      'Los datos que se empezaron a guardar más tarde llevan la etiqueta "Parcial"; si faltan en más de la mitad de los partidos, no se muestran.',
+      'Textos más simples: los datos experimentales ya no mencionan los códigos internos de EA. "Penales" pasa a "Penales cometidos".',
+    ],
+  },
+  {
+    version: '2.6',
+    date: '2026-11-15',
     title: 'División como en el juego',
     changes: [
       'La división se muestra como en el juego: EA la envía con un número más (la 4ª del juego llega como 5).',
@@ -12,7 +28,7 @@ export const CHANGELOG = [
   },
   {
     version: '2.5',
-    date: '2026-11-16',
+    date: '2026-11-15',
     title: 'Datos tal cual EA',
     changes: [
       'La calificación media y el % MVP vuelven a ser exactamente los de EA (sin ajustes por minutos).',
@@ -22,7 +38,7 @@ export const CHANGELOG = [
   },
   {
     version: '2.4',
-    date: '2026-11-16',
+    date: '2026-11-15',
     title: 'Banca, abandonos e IA',
     changes: [
       'La calificación media y el % MVP pesan cada partido según los minutos jugados.',

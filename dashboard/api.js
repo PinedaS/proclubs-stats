@@ -43,13 +43,11 @@ const rpc = (name, body) => request(`rpc/${name}`, { method: 'POST', body });
 
 export const getPersonStats = (f) => rpc('person_stats', rpcFilters(f));
 export const getSplitStats = (split, f) => rpc('person_split_stats', { p_split: split, ...rpcFilters(f) });
-export const getPairStats = (f) => rpc('pair_stats', rpcFilters(f));
 export const getPositionStats = (f) => rpc('position_stats', rpcFilters(f));
 export const getPersonRecords = (f) => rpc('person_records', rpcFilters(f));
 export const getRelativeStats = (group, f) => rpc('relative_stats', { p_group: group, ...rpcFilters(f) });
 export const getRelativeDetail = (group, f) => rpc('relative_stats_detail', { p_group: group, ...rpcFilters(f) });
 export const getPositionFit = (f) => rpc('position_fit', rpcFilters(f));
-export const getWithWithout = (f) => rpc('with_without_stats', rpcFilters(f));
 
 // ---------------------------------------------------------------------------
 // Fotos de los jugadores (Supabase Storage, bucket público "player-photos").
@@ -113,10 +111,13 @@ export function getRecentMatches(clubId, limit = 30) {
   return request(`matches?${p}`);
 }
 
-/** Calificación de cada jugador en cada partido (para tendencias y evolución semanal). */
+/**
+ * Cada jugador en cada partido, con el resultado del equipo: tendencias, evolución
+ * semanal, posiciones por minutos, "con y sin" y duplas se calculan con esto.
+ */
 export function getRatingsTimeline(f) {
   const p = filterParams(f);
-  p.set('select', 'match_id,played_at,person_id,rating,incomplete,goals,goals_for');
+  p.set('select', 'match_id,played_at,person_id,person_name,rating,incomplete,goals,assists,goals_for,goals_against,outcome,position,seconds_played,opponent_skill_rating');
   p.set('order', 'played_at.asc');
   if (f.excludeIncomplete) p.set('incomplete', 'is.false');
   return request(`v_player_match_stats?${p}`);

@@ -82,9 +82,6 @@
           <label class="switch" title="Excluye abandonos y partidos donde nadie del club llegó al 90 % del tiempo">
             <input type="checkbox" id="exclude-incomplete"><span class="track" aria-hidden="true"></span>Excluir partidos abandonados
           </label>
-          <label class="switch" title="Métricas calculadas con datos oficiales: por 90 min, conversión, forma, presencia…">
-            <input type="checkbox" id="show-adv"><span class="track" aria-hidden="true"></span>Métricas avanzadas
-          </label>
           <label class="switch" title="Datos que EA no documenta; ver nota al pie">
             <input type="checkbox" id="show-exp" checked><span class="track" aria-hidden="true"></span>Experimentales*
           </label>
@@ -101,9 +98,26 @@
       <div id="podium" class="podium" aria-label="Los tres primeros según la columna ordenada"></div>
       <div class="card table-card">
         <div class="card-head"><h2>Jugadores <span class="tag">partidos capturados</span></h2><p class="muted small">Ordena con un clic en cualquier columna. Toca un jugador para ver su detalle.</p>
+          <div class="data-toolbar">
+            <div class="chips-btn" role="group" aria-label="Qué datos mostrar" id="data-kinds">
+              <span class="muted small">Datos:</span>
+              <button type="button" data-kind="abs" title="Totales: goles, asistencias, entradas…">Totales</button>
+              <button type="button" data-kind="rate" title="Proporciones: por 90 minutos, por partido y porcentajes">Proporciones</button>
+              <button type="button" data-kind="official" title="Datos que EA publica tal cual">Oficiales</button>
+              <button type="button" data-kind="exp" title="Datos que EA no documenta: aproximaciones, marcadas con *">Experimentales*</button>
+            </div>
+            <details class="pop" id="col-picker">
+              <summary><span>+ Añadir dato</span><span class="pop-value" id="col-picker-count"></span></summary>
+              <div class="pop-panel picker-panel"><p class="muted small">Datos menos importantes que no están en la tabla. Se recuerdan en este navegador; para quitarlos, usa la × de su columna.</p><div id="col-picker-body"></div></div>
+            </details>
+          </div>
           <label class="sort-mobile">Ordenar por <select id="sort-select"></select></label></div>
         <div class="table-wrap ranking-table-wrap"><table id="ranking-table" class="data"></table></div>
         <div id="ranking-cards" class="ranking-cards"></div>
+      </div>
+      <div class="card">
+        <div class="card-head"><h2 id="ranking-chart-title">En gráfica</h2><p class="muted small">El dato por el que está ordenada la tabla, del mejor al peor. Toca una barra para ver al jugador.</p></div>
+        <div id="ranking-chart" class="ranking-chart"></div>
       </div>
     </section>
 
@@ -179,15 +193,23 @@
 
     <section id="view-pairs" class="view" hidden>
       <div class="card table-card">
-        <div class="card-head"><h2>Duplas</h2><p class="muted small">Resultados de cada pareja cuando juegan juntos en el mismo partido.</p></div>
-        <div class="table-wrap"><table id="pairs-table" class="data"></table></div>
+        <div class="card-head">
+          <h2>El equipo con y sin cada jugador</h2>
+          <p class="muted small">Cómo le va al equipo en los partidos <strong>con</strong> cada jugador frente a los partidos <strong>sin</strong> él. Es una correlación, no una causa: también influyen el rival, la posición y la suerte. Con pocos partidos la diferencia no es confiable (filas atenuadas).</p>
+        </div>
+        <div id="impact-chart" class="impact-chart"></div>
+        <div class="table-wrap"><table id="impact-table" class="data"></table></div>
       </div>
       <div class="card table-card">
         <div class="card-head">
-          <h2>Con y sin</h2>
-          <p class="muted small">Cómo rinde cada jugador en los partidos <strong>con</strong> un compañero frente a los partidos <strong>sin</strong> él. Es una correlación: también influyen el rival, la posición y la suerte. Se muestra solo si hay al menos el mínimo de partidos en los dos casos; con pocos partidos, la diferencia no es confiable.</p>
+          <h2>Duplas</h2>
+          <label class="field pairs-pick">Jugador <select id="pairs-person"></select></label>
+          <p class="muted small">Elige un jugador: a la izquierda, cómo le va al equipo <strong>con él</strong> y junto a cada compañero; a la derecha, cómo le va <strong>sin él</strong>, y cómo cambia la calificación de cada compañero con y sin él.</p>
         </div>
-        <div class="table-wrap"><table id="withwithout-table" class="data"></table></div>
+        <div class="grid-2 pairs-grid">
+          <div><p class="section-title" id="pairs-with-title">Con él</p><div class="table-wrap"><table id="pairs-with" class="data"></table></div></div>
+          <div><p class="section-title" id="pairs-without-title">Sin él</p><div class="table-wrap"><table id="pairs-without" class="data"></table></div></div>
+        </div>
       </div>
     </section>
 
@@ -221,6 +243,10 @@
         <div class="card"><div class="card-head"><h2>Temporada actual</h2></div><div id="club-season-card"></div></div>
         <div class="card"><div class="card-head"><h2>Nivel del club</h2><p class="muted small">skillRating según EA, una foto por día.</p></div><div id="club-chart" class="chart"></div></div>
       </div>
+      <div class="grid-2">
+        <div class="card"><div class="card-head"><h2>Resultados por semana</h2><p class="muted small">Victorias, empates y derrotas de cada semana (lunes a domingo), con los filtros actuales.</p></div><div id="club-results" class="chart"></div></div>
+        <div class="card"><div class="card-head"><h2>Goles por partido</h2><p class="muted small">A favor y en contra en los últimos 20 partidos. Los abandonados se ven atenuados.</p></div><div id="club-goals" class="chart"></div></div>
+      </div>
       <div class="card"><div class="card-head"><h2>Evolución semanal del equipo</h2><p class="muted small">Calificación media de todos los jugadores, semana a semana (lunes a domingo), con los filtros actuales.</p></div><div id="club-weekly" class="chart"></div></div>
     </section>
 
@@ -237,7 +263,8 @@
       <p>De la web pública de Clubes de EA, que se consulta sola cada 15 minutos. Nadie carga nada a mano. EA solo guarda los <strong>últimos 10 partidos</strong> de cada tipo, por eso hay que capturarlos seguido. Cuentan liga, play-off y amistosos; arriba puedes filtrar por tipo, fechas y un mínimo de partidos.</p>
 
       <h3>Ranking</h3>
-      <p>Totales y promedios de cada jugador. Toca un encabezado para ordenar y un jugador para ver su detalle. <strong>Métricas avanzadas</strong> agrega columnas calculadas (por 90 minutos, forma de los últimos 5, presencia…). <strong>Experimentales</strong> agrega datos marcados con <strong>*</strong> (ver abajo). Las dos opciones se recuerdan en este navegador.</p>
+      <p>Totales y promedios de cada jugador. Toca un encabezado para ordenar y un jugador para ver su detalle. Con los botones <strong>Datos</strong> eliges qué datos importantes ver: <strong>Totales</strong> (goles, entradas…), <strong>Proporciones</strong> (por 90 minutos y porcentajes, que no favorecen a quien jugó más), <strong>Oficiales</strong> (los que publica EA) y <strong>Experimentales</strong> (marcados con <strong>*</strong>, ver abajo). Con <strong>+ Añadir dato</strong> sumas a la tabla otros datos menos importantes; se quitan con la <strong>×</strong> de su columna. Todo se recuerda en este navegador. Debajo de la tabla, la gráfica muestra el dato por el que está ordenada.</p>
+      <p><strong>Posiciones:</strong> cada jugador muestra todas las posiciones que jugó y el % de sus minutos en cada una (las de menos del 10 % se ven al pasar el cursor).</p>
 
       <h3>Índice 100 (Por rol)</h3>
       <p>Compara a cada uno con el <strong>promedio del club en su misma posición</strong> o arquetipo. <strong>100 = promedio</strong>; 120 = 20 % mejor; 80 = 20 % peor. Así un defensa no queda abajo por marcar pocos goles. Si alguien jugó varias posiciones, cuenta cada una según los minutos. Con el selector <em>Valores reales por posición</em> ves los números sin comparar.</p>
@@ -246,7 +273,7 @@
       <p>EA solo da un número por arquetipo; los nombres (Maestro, Boss, Target Man…) vienen de una investigación de la comunidad. Los que llevan <strong>?</strong> fueron deducidos por estadísticas y no están confirmados.</p>
 
       <h3>Cara a cara</h3>
-      <p>Elige dos jugadores (azul y naranja) y ves, dato por dato, quién es mejor: su barra sale en color fuerte y la del otro, atenuada. Arriba, un marcador muestra cuántos datos gana cada uno. Primero va el rendimiento por partido o por 90 minutos (no los totales, para no favorecer a quien jugó más); después, los índices relativos a su rol, que son justos aunque jueguen en posiciones distintas. Solo es empate si los dos valores son iguales tal como se muestran. Los datos experimentales (*) van junto a los demás de su tema, con fondo teñido. El enlace de la página sirve para compartir esa comparación.</p>
+      <p>Elige dos jugadores (azul y naranja) y ves, dato por dato, quién es mejor: su barra sale en color fuerte y la del otro, atenuada. Arriba, un marcador muestra cuántos datos gana cada uno. Primero va el rendimiento por partido o por 90 minutos (no los totales, para no favorecer a quien jugó más); después, los índices relativos a su rol, que son justos aunque jueguen en posiciones distintas. Solo es empate si los dos valores son iguales tal como se muestran. Los datos experimentales (*) van junto a los demás de su tema, con fondo teñido. En el jugador B puedes elegir <strong>Promedio del equipo</strong>: junta los números de todos los jugadores que cumplen el mínimo de partidos. El enlace de la página sirve para compartir esa comparación.</p>
 
       <h3>Posición recomendada (detalle del jugador)</h3>
       <p><strong>Índice:</strong> su calificación en cada posición que jugó frente al promedio del club ahí (solo con 3 o más partidos). <strong>Perfil:</strong> cuánto de su forma de jugar (goles, asistencias, tiros, pases, entradas…) se parece a cada posición, comparado con los demás jugadores; suma 100 %. Es una pista, no una orden.</p>
@@ -254,8 +281,11 @@
       <h3>Comparar</h3>
       <p>El mismo jugador en distintas situaciones: rival fuerte o débil, liga o amistoso, cuántos estábamos en cancha y en qué división. Fíjate en los <strong>PJ</strong> de cada celda: 2 partidos no se comparan con 30.</p>
 
-      <h3>Duplas y "Con y sin"</h3>
-      <p><strong>Duplas:</strong> cómo le va al equipo cuando dos juegan juntos. <strong>Con y sin:</strong> cómo rinde cada uno con un compañero en cancha y sin él. Muestra que van juntos, no que uno cause el rendimiento del otro: también influyen el rival, la posición y la suerte.</p>
+      <h3>Duplas</h3>
+      <p>Arriba, cómo le va al equipo <strong>con y sin</strong> cada jugador (% de victorias y goles). Abajo eliges un jugador: a un lado, los partidos <strong>con él</strong>, junto a cada compañero; al otro, los partidos <strong>sin él</strong>, y cuánto cambia la calificación de cada compañero con y sin él. Muestra que las cosas van juntas, no que uno cause el rendimiento del otro: también influyen el rival, la posición y la suerte.</p>
+
+      <h3>Datos parciales</h3>
+      <p>Algunos datos se empezaron a guardar después que otros. Cuando un dato falta en parte de los partidos, lleva la etiqueta <strong>Parcial</strong>; si falta en más de la mitad, no se muestra (queda guardado para usarlo cuando haya suficiente).</p>
 
       <h3>* Experimentales</h3>
       <p>Regates, intercepciones, posesión y otros salen de contadores que EA no documenta. Son aproximaciones: frente a datos oficiales coinciden entre el 65 % y el 98 %.</p>
