@@ -890,3 +890,6 @@ body.no-charts #person-detail .chart, body.no-charts #person-detail .pchart, bod
 
 /* v2.14 · Media del Pro por arquetipo */
 .arch-levels { display: inline-flex; flex-direction: column; align-items: flex-end; line-height: 1.25; font-size: .85rem; white-space: nowrap; }
+
+/* Aviso cuando una gráfica no tiene qué mostrar (en vez de un espacio vacío) */
+.chart-empty { margin: 0 0 6px; padding: 10px 12px; border: 1px dashed var(--border); border-radius: 10px; }

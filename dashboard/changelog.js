@@ -9,6 +9,7 @@ export const CHANGELOG = [
     changes: [
       'Cada arquetipo tiene su propia media: desde hoy se guarda la media de cada jugador en cada partido (la del arquetipo con que jugó). "Media (EA)" muestra una por arquetipo cuando hay datos, y el mejor jugador la usa para el factor de nivel.',
       'Mejor jugador: los minutos de arquero se miden con una defensa de arquero (atajadas, goles recibidos, vallas invictas) y no cuentan en el ataque; quien juega de arquero y de campo combina las dos.',
+      'Las gráficas que no tienen qué mostrar (por ejemplo, en Comparar cuando todos los partidos caen en un solo grupo) ahora explican por qué, en vez de quedar en blanco.',
     ],
   },
   {

@@ -2448,7 +2448,7 @@ function renderRoleDots(rows) {
   const cols = ROLE_COLUMNS.filter((c) => state.showExp || !c.exp);
   const people = rows.filter((r) => r.matches >= state.minMatches);
   const vals = people.flatMap((r) => cols.map((c) => r[c.key]).filter((v) => v != null).map(Number));
-  if (!vals.length) { box.replaceChildren(); return; }
+  if (!vals.length) { box.replaceChildren(el('p', { class: 'muted small chart-empty' }, 'Sin índices para estos filtros.')); return; }
   // Si todos dan 100, nadie comparte rol con otro (p. ej. cada uno con un arquetipo
   // distinto): cada uno ES el promedio de su rol y no hay con quién compararlo.
   if (vals.every((v) => Math.abs(v - 100) < 0.5)) {
@@ -2491,7 +2491,13 @@ function renderRoleDots(rows) {
 /** 5. Comparar: una línea por jugador entre los grupos (p. ej. rival débil → fuerte). */
 function renderSlope(list, buckets, metric, bucketLabel) {
   const box = $('#compare-chart');
-  if (buckets.length < 2) { box.replaceChildren(); return; }
+  // La gráfica compara grupos: con uno solo (p. ej. todos los partidos de liga) no hay nada que unir.
+  if (buckets.length < 2) {
+    box.replaceChildren(el('p', { class: 'muted small chart-empty' }, buckets.length
+      ? `Todos los partidos con estos filtros caen en un solo grupo (${bucketLabel(buckets[0]).text}): la gráfica aparece cuando haya partidos en al menos dos grupos. Mientras tanto, la tabla de abajo muestra ese grupo.`
+      : 'Sin partidos para estos filtros.'));
+    return;
+  }
   const series = list.map(([id, p]) => ({ id, name: p.name, pts: buckets.map((b, i) => ({ i, b, v: p.cells[b]?.[metric] == null ? null : Number(p.cells[b][metric]), n: p.cells[b]?.matches })) }))
     .filter((s) => s.pts.filter((p) => p.v != null).length >= 2);
   if (!series.length) { box.replaceChildren(el('p', { class: 'muted small' }, 'Nadie tiene datos en al menos dos grupos todavía.')); return; }
@@ -2522,7 +2528,7 @@ function renderSlope(list, buckets, metric, bucketLabel) {
 function renderPairMatrix(all, people) {
   const box = $('#pairs-matrix');
   const ppl = people.slice(0, 10);
-  if (ppl.length < 2) { box.replaceChildren(); return; }
+  if (ppl.length < 2) { box.replaceChildren(el('p', { class: 'muted small chart-empty' }, 'La matriz aparece cuando haya al menos 2 jugadores con el mínimo de partidos.')); return; }
   const head = el('tr', {}, el('th', { scope: 'col' }), ppl.map((p) => el('th', { scope: 'col', title: p.person_name }, p.person_name)));
   const body = ppl.map((a) => el('tr', {}, el('th', { scope: 'row', class: 'left' }, a.person_name), ppl.map((b) => {
     if (a.person_id === b.person_id) return el('td', { class: 'pm-self' }, '');
