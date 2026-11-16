@@ -12,13 +12,21 @@ function int(v: unknown): number | null {
 
 /**
  * Escudo del club en la fila del ranking de la temporada: clubInfo.teamId (escudo
- * real) y clubInfo.customKit.crestAssetId (escudo propio). null si no vienen.
+ * de un equipo real) y clubInfo.customKit.crestAssetId (escudo propio).
+ *
+ * Hipótesis (2026-11-16, 2 clubes, no documentada por EA): customKit.dCustomKit
+ * dice si el club USA su escudo propio. 100 D CILANTRO trae "3" y su escudo es el
+ * propio (confirmado por el usuario); FC Aston Huila trae "0" y su escudo correcto
+ * no es el propio (el usuario lo descartó), sino el del teamId. Por eso, con
+ * dCustomKit "0", crestAssetId queda en null y el dashboard usa el teamId.
+ * El valor crudo sigue en club_snapshots.raw.
  */
 export function crestOf(season: unknown): { teamId: number | null; crestAssetId: number | null } {
   const info = ((season ?? null) as Dict | null)?.clubInfo as Dict | undefined;
   const kit = info?.customKit as Dict | undefined;
   const pos = (v: unknown) => { const n = int(v); return n !== null && n > 0 ? n : null; };
-  return { teamId: pos(info?.teamId), crestAssetId: pos(kit?.crestAssetId) };
+  const usesCustom = kit?.dCustomKit == null || int(kit.dCustomKit) !== 0;
+  return { teamId: pos(info?.teamId), crestAssetId: usesCustom ? pos(kit?.crestAssetId) : null };
 }
 
 /**

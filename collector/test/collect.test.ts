@@ -283,6 +283,15 @@ describe('collect: foto del club', () => {
     assert.deepEqual(repo.crest, { teamId: 243, crestAssetId: 99020510 }, 'escudo del club');
   });
 
+  test('escudo: con dCustomKit "0" no se usa el propio, sino el del equipo real (teamId)', async () => {
+    const repo = new FakeRepo();
+    const source = new FakeSource({ leagueMatch: fixture });
+    const ov = source.overview as { overall: unknown; season: Record<string, unknown> };
+    source.overview = { overall: ov.overall, season: { ...ov.season, clubInfo: { teamId: 101100, customKit: { crestAssetId: '99160313', dCustomKit: '0' } } } };
+    await collect(deps(source, repo));
+    assert.deepEqual(repo.crest, { teamId: 101100, crestAssetId: null });
+  });
+
   test('si EA falla con el resumen del club, marca error pero conserva los partidos', async () => {
     const repo = new FakeRepo();
     const source = new FakeSource({ leagueMatch: fixture });
