@@ -122,11 +122,23 @@ export function getRatingsTimeline(f) {
   return request(`v_player_match_stats?${p}`);
 }
 
-/** Jugadores de una lista de partidos: goleadores, MVP, minutos (parciales) y goles humanos. */
+const inList = (ids) => `in.(${ids.map((id) => `"${String(id).replaceAll('"', '')}"`).join(',')})`;
+
+/** Jugadores de una lista de partidos: goleadores, MVP y goles humanos. */
 export function getMatchHighlights(matchIds) {
   if (!matchIds.length) return Promise.resolve([]);
-  const p = new URLSearchParams({ select: 'match_id,person_name,goals,is_mom,seconds_played', match_id: `in.(${matchIds.map((id) => `"${String(id).replaceAll('"', '')}"`).join(',')})` });
+  const p = new URLSearchParams({ select: 'match_id,player_id,person_name,goals,is_mom', match_id: inList(matchIds) });
   return request(`v_player_match_stats?${p}`);
+}
+
+/**
+ * Tiempos tal cual EA de cada jugador en esos partidos: secondsPlayed (tiempo
+ * jugado) y gameTime (reloj del partido al terminar su participación).
+ */
+export function getPlayerTimes(matchIds) {
+  if (!matchIds.length) return Promise.resolve([]);
+  const p = new URLSearchParams({ select: 'match_id,player_id,seconds_played,game_time', match_id: inList(matchIds) });
+  return request(`player_match_stats?${p}`);
 }
 
 export function getMatches(f) {
@@ -147,7 +159,7 @@ export async function getMatchFlags(f) {
 
 export function getPersonMatches(personId, f) {
   const p = filterParams(f);
-  p.set('select', 'match_id,played_at,match_type,opponent_name,opponent_skill_rating,goals_for,goals_against,outcome,playername,position,platform,rating,goals,assists,is_mom,shots,passes_made,pass_attempts,tackles_made,saves,team_size,incomplete,club_division,seconds_played,dribbles_exp,interceptions_exp,possession_won_exp,possession_lost_exp');
+  p.set('select', 'match_id,player_id,played_at,match_type,opponent_name,opponent_skill_rating,goals_for,goals_against,outcome,playername,position,platform,rating,goals,assists,is_mom,shots,passes_made,pass_attempts,tackles_made,saves,team_size,incomplete,club_division,seconds_played,dribbles_exp,interceptions_exp,possession_won_exp,possession_lost_exp');
   p.set('person_id', `eq.${Number(personId)}`);
   p.set('order', 'played_at.asc');
   if (f.excludeIncomplete) p.set('incomplete', 'is.false');
@@ -156,7 +168,7 @@ export function getPersonMatches(personId, f) {
 
 export function getMatchPlayers(matchId) {
   const p = new URLSearchParams({
-    select: 'person_id,person_name,playername,position,platform,rating,goals,assists,is_mom,shots,passes_made,pass_attempts,tackles_made,saves,dribbles_exp,interceptions_exp',
+    select: 'person_id,player_id,person_name,playername,position,platform,rating,goals,assists,is_mom,shots,passes_made,pass_attempts,tackles_made,saves,dribbles_exp,interceptions_exp',
     match_id: `eq.${matchId}`,
     order: 'rating.desc.nullslast',
   });

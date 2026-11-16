@@ -80,7 +80,7 @@
             <input type="number" id="min-matches" min="1" value="1" inputmode="numeric">
           </label>
           <label class="switch" title="Excluye abandonos y partidos donde nadie del club llegó al 90 % del tiempo">
-            <input type="checkbox" id="exclude-incomplete" checked><span class="track" aria-hidden="true"></span>Excluir incompletos (abandonos)
+            <input type="checkbox" id="exclude-incomplete"><span class="track" aria-hidden="true"></span>Excluir partidos abandonados
           </label>
           <label class="switch" title="Métricas calculadas con datos oficiales: por 90 min, conversión, forma, presencia…">
             <input type="checkbox" id="show-adv"><span class="track" aria-hidden="true"></span>Métricas avanzadas
@@ -261,10 +261,10 @@
       <p>Regates, intercepciones, posesión y otros salen de contadores que EA no documenta. Son aproximaciones: frente a datos oficiales coinciden entre el 65 % y el 98 %.</p>
 
       <h3>Partidos incompletos</h3>
-      <p>Abandonos o partidos donde nadie del club llegó al 90 % del tiempo. Su marcador lo asigna EA (por ejemplo, 0-3), no es el que se jugó. Por eso <strong>no cuentan por defecto</strong>; puedes incluirlos en "Vista".</p>
+      <p>Los datos se muestran tal cual los da EA. Un partido que se cortó o que un equipo abandonó lleva la etiqueta <strong>Abandonado</strong>; su marcador es el que asigna EA (por ejemplo, 0-3). Si prefieres no contarlos, actívalo en "Vista".</p>
 
-      <h3>Banca y minutos</h3>
-      <p>La calificación media y el % MVP pesan cada partido según los minutos jugados: entrar 20 minutos desde la banca no pesa igual que jugar 90. En Partidos, "Parcial" marca a quien jugó menos del 75 % del tiempo. EA no dice si entró tarde o salió antes.</p>
+      <h3>Banca y salidas</h3>
+      <p>Los números no cambian: son los de EA. Solo se marca quién <strong>↑ entró</strong> desde la banca y en qué minuto, y quién <strong>↓ salió</strong> antes de tiempo. Se deduce de los tiempos que da EA (minutos jugados y minuto en que terminó su participación).</p>
 
       <h3>Goles de la IA</h3>
       <p>EA solo da los datos de los jugadores humanos, pero el marcador incluye los goles de los jugadores que maneja la IA. En Partidos se muestran como "IA", y en Club está el total de goles de jugadores y de la IA.</p>

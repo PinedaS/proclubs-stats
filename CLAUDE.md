@@ -127,6 +127,13 @@ API no oficial de EA ──► Colector (GitHub Actions, cada 30 min) ──► 
        - **Contexto:** dónde juega (minutos por posición) y calendario (días coloreados por calificación).
        - Las de ejes se dibujan al ancho real al mostrarse la pestaña, para que el texto no se encoja en el celular.
        - **El usuario autorizó usar los datos experimentales** en comparaciones y gráficas, siempre marcados con *.
+     - **⚠️ REGLA DEL USUARIO (2026-11-16, v2.5, migración 018): guardar y mostrar los datos TAL CUAL los da EA. No ajustarlos.** Lo especial se señala con etiquetas, sin tocar los números.
+       - 018 deshace la ponderación por minutos de 017: la calificación media y el % MVP vuelven a ser los de EA.
+       - Los partidos abandonados vuelven a contar por defecto ("Excluir partidos abandonados" está apagado). Muestran el marcador de EA con la etiqueta "Abandonado".
+       - **Etiquetas "↑ Entró X'" y "↓ Salió Y'"**, en Partidos, en el detalle del jugador y al desplegar los jugadores de un partido. Se deducen de `secondsPlayed` y `gameTime` (columna `player_match_stats.game_time`):
+         - `gameTime` parece ser el reloj del partido cuando terminó la participación del jugador. Entró tarde si `gameTime − secondsPlayed > 60 s`; salió antes si su `gameTime` está más de 60 s por debajo del mayor del partido.
+         - **Verificado en 2 casos reales:** AlxCampu, 2.845 s con `gameTime` 5.545 (entró al 45'); Andresjimene, 1.120 s con `gameTime` 1.120 cuando el partido llegó a 5.487 (salió al 19'). **No está documentado por EA.**
+       - Lo que sigue de abajo sobre la ponderación y la exclusión por defecto quedó **reemplazado** por esta regla.
      - **Banca, abandonos e IA (v2.4, migración 017, 2026-11-16; verificado con datos reales de 100 D CILANTRO):**
        - **Banca:** un jugador jugó 47 de 92 min. `person_stats` pondera la calificación media y el % MVP por segundos jugados; los PJ siguen contando enteros.
          - Partidos y el detalle del jugador marcan "Parcial" con menos del 75 % del tiempo.

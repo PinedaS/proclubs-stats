@@ -662,3 +662,7 @@ dialog.guide::backdrop { background: rgb(0 0 0 / .55); }
 .h2h-row.exp { background-image: linear-gradient(var(--exp-tint), var(--exp-tint)); }
 /* Resultado asignado por abandono: atenuado para no confundirlo con un marcador jugado */
 .forfeit { color: var(--ink-3); white-space: nowrap; }
+/* Entró desde la banca / salió antes (deducido de los tiempos de EA) */
+.badge.sub-in { border-color: color-mix(in srgb, var(--accent) 60%, var(--border)); color: var(--accent); }
+.badge.sub-out { border-color: color-mix(in srgb, var(--warning) 60%, var(--border)); color: var(--warning); }
+.hl-move { white-space: nowrap; }

@@ -2,6 +2,16 @@
 // para el equipo, agregar una entrada arriba: versión, fecha y cambios en lenguaje simple.
 export const CHANGELOG = [
   {
+    version: '2.5',
+    date: '2026-11-16',
+    title: 'Datos tal cual EA',
+    changes: [
+      'La calificación media y el % MVP vuelven a ser exactamente los de EA (sin ajustes por minutos).',
+      'Los partidos abandonados vuelven a contar por defecto, con su marcador tal cual EA y la etiqueta "Abandonado".',
+      'Etiquetas "↑ Entró 45\'" y "↓ Salió 19\'" para quien entra desde la banca o sale antes, en Partidos y en el detalle de cada jugador.',
+    ],
+  },
+  {
     version: '2.4',
     date: '2026-11-16',
     title: 'Banca, abandonos e IA',
