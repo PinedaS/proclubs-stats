@@ -163,7 +163,7 @@ API no oficial de EA ──► Colector (GitHub Actions, cada 30 min) ──► 
        - **IA:** EA solo da las estadísticas de los humanos, pero `goals_for` incluye los goles de la IA (por ejemplo, en un 5-2, 3 fueron de la IA). Goles de la IA = `goals_for` − goles humanos, sin abandonos.
          - Se muestran en Partidos y en Club ("Goles: jugadores / IA").
          - **No se cambió el denominador de "Participación en goles"**, que sigue usando todos los goles del equipo. Con solo los goles humanos podría pasar del 100 %, porque una asistencia a un gol de la IA cuenta como G+A pero ese gol no estaría en el denominador. EA no dice qué gol asistió cada uno.
-     - **Escudo real:** EA manda `details.customKit.crestAssetId` (99020510 para 100 D CILANTRO) y `crestColor`. No se usó: no se pudo verificar desde qué dirección carga EA la imagen, y no se quiere enlazar a imágenes de EA sin confirmarlo.
+     - **Escudo real:** EA manda `details.customKit.crestAssetId` (99020510 para 100 D CILANTRO) y `crestColor`. **Desde la v2.8 (020) sí se usa:** la dirección de la imagen sale de la investigación de la comunidad, se verificó (HTTP 200) y el usuario confirmó que es su escudo.
      - **Nombres de arquetipos:** mapeo de la comunidad (Interactive-63, issue #5, nov. 2026), no oficial.
        - Los deducidos sin confirmar llevan "?": 1 y 2 (porteros), 4 (Boss), 7 y 9.
        - Contrastado con nuestros datos: 4, 5 y 8 cuadran con las posiciones jugadas. El 13 (Target Man) aparece sobre todo en el medio, aunque la comunidad lo ve un 95 % de las veces como delantero.
@@ -410,7 +410,7 @@ No hay API oficial. Se usan los endpoints públicos que lee la web de Clubes de 
      - Escudo real: `clubs.crest_asset_id` y `team_id`.
      - Íconos de división de EA: `divisioncrest{n}.png` con n = número de EA. Verificado: el 1 es la Élite (león morado) y el 5 muestra un "4".
      - 35 contadores más en la vista (pases por distancia, tiros por zona, barridas, tipos de atajada…), que se suman en el navegador para "+ Añadir dato".
-   - **Pendiente del usuario:** confirmar que el escudo (balón con aros de colores) es el de 100 D CILANTRO.
+   - **Escudo confirmado por el usuario (2026-11-16):** el de `crestAssetId` 99020510 (balón con aros de colores) es el de 100 D CILANTRO.
 10. ~~Capturar todos los datos de EA.~~ **Hecho el 2026-11-16 (migración 019):**
     - `ea_snapshots` guarda crudos `clubs/info`, play-off, carrera y la foto de cada rival.
     - `matches.opponent_division` guarda la división del rival.
