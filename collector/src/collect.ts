@@ -2,7 +2,7 @@
 // (inyección de dependencias), así que se prueba sin red ni base de datos.
 import { ProClubsError } from 'proclubs-sdk';
 import type { Config } from './config.ts';
-import { EXTRA_ENDPOINTS, type EaSnapshotRow, type RunResult } from './domain.ts';
+import { EXTRA_ENDPOINTS, type EaSnapshotRow, type MemberSnapshotRow, type RunResult } from './domain.ts';
 import { divisionOf, skillRatingOf, type FoundClub, type MatchSource } from './ea-source.ts';
 import { isSeasonOverdue, isSeasonReset, type SeasonCounters } from './seasons.ts';
 import type { StatsRepository } from './repository.ts';
@@ -67,7 +67,8 @@ export async function collect(deps: CollectDeps): Promise<RunResult> {
   let matchesSeen = 0;
   let matchesNew = 0;
   const opponents: Opponent[] = [];
-  let firstPlayedAt: string | null = null; // partido más viejo visto (inicio de la 1.ª temporada de un club nuevo)
+  let firstPlayedAt: string | null = null;
+  const latestByPlayer = new Map<string, { matchId: string; playedAt: string; playername: string }>(); // partido más viejo visto (inicio de la 1.ª temporada de un club nuevo)
   const recentNew: string[] = [];
 
   const finish = async (fatal?: unknown): Promise<RunResult> => {
@@ -132,7 +133,16 @@ export async function collect(deps: CollectDeps): Promise<RunResult> {
         const recent = !existing.has(row.match_id) && now().getTime() - Date.parse(normalized.match.played_at) <= DIVISION_MAX_AGE_MS;
         if (!existing.has(row.match_id)) {
           newHere++;
-          if (recent) recentNew.push(row.match_id);
+          if (recent) {
+            recentNew.push(row.match_id);
+            // Media del Pro (022): se anota solo en el partido nuevo más reciente de cada jugador.
+            for (const s of normalized.stats) {
+              const prev = latestByPlayer.get(s.player_id);
+              if (!prev || normalized.match.played_at > prev.playedAt) {
+                latestByPlayer.set(s.player_id, { matchId: row.match_id, playedAt: normalized.match.played_at, playername: s.playername });
+              }
+            }
+          }
         }
         if (normalized.match.opponent_club_id !== null) {
           opponents.push({ matchId: row.match_id, opponentId: String(normalized.match.opponent_club_id), opponentName: normalized.match.opponent_name ?? '', recent });
@@ -144,7 +154,8 @@ export async function collect(deps: CollectDeps): Promise<RunResult> {
     }
 
     await fillOpponentInfo(deps, clubId, opponents, now());
-    await captureMembers(deps, club.clubId, now(), failures);
+    const members = await captureMembers(deps, club.clubId, now(), failures);
+    await notePlayerOverall(deps, members, latestByPlayer);
     const division = await captureClub(deps, club, now(), failures, firstPlayedAt);
     await captureExtras(deps, clubId, now());
     if (division != null && recentNew.length) {
@@ -291,8 +302,8 @@ async function trackSeason(deps: CollectDeps, clubId: number, prev: SeasonCounte
   }
 }
 
-/** Foto de members/stats. Si EA falla, se registra como falla (dato oficial). */
-async function captureMembers(deps: CollectDeps, clubId: string, at: Date, failures: SoftFailure[]): Promise<void> {
+/** Foto de members/stats. Si EA falla, se registra como falla (dato oficial). Devuelve las filas (o null). */
+async function captureMembers(deps: CollectDeps, clubId: string, at: Date, failures: SoftFailure[]): Promise<MemberSnapshotRow[] | null> {
   let response: unknown;
   try {
     response = await deps.source.getMemberStats(clubId);
@@ -300,9 +311,28 @@ async function captureMembers(deps: CollectDeps, clubId: string, at: Date, failu
     if (!(err instanceof ProClubsError)) throw err;
     failures.push({ code: errorCodeOf(err), message: `members/stats: ${messageOf(err)}` });
     deps.log.error(`EA falló en members/stats: ${messageOf(err)}`);
-    return;
+    return null;
   }
   const rows = toMemberSnapshotRows(response, clubId, at);
   await deps.repo.saveMemberSnapshots(rows);
   deps.log.info(`Miembros: ${rows.length} guardados en la foto del ${rows[0]?.snapshot_date ?? '—'}`);
+  return rows;
+}
+
+/**
+ * Media del Pro por partido (022). EA da una sola media por miembro y no dice de
+ * qué arquetipo es; hipótesis: es la del arquetipo de su último partido. Se anota
+ * en el partido nuevo y reciente más nuevo de cada jugador (por nombre de cuenta),
+ * justo después de capturarlo. Nunca pisa un valor ya guardado.
+ */
+async function notePlayerOverall(deps: CollectDeps, members: MemberSnapshotRow[] | null, latest: Map<string, { matchId: string; playername: string }>): Promise<void> {
+  if (!members?.length || latest.size === 0) return;
+  const byName = new Map(members.filter((m) => m.pro_overall != null).map((m) => [m.member_name, m.pro_overall as number]));
+  const rows = [...latest].flatMap(([playerId, l]) => {
+    const ovr = byName.get(l.playername);
+    return ovr == null ? [] : [{ match_id: l.matchId, player_id: playerId, pro_overall: ovr }];
+  });
+  if (!rows.length) return;
+  await deps.repo.setPlayerOverall(rows);
+  deps.log.info(`Media del Pro anotada en ${rows.length} jugador(es) de partidos nuevos`);
 }

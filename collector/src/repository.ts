@@ -24,6 +24,8 @@ export interface StatsRepository {
   getGameSeasonNo(game: string): Promise<number | null>;
   /** Cierra la temporada abierta (si hay) en `row.started_at` y abre la nueva. */
   startSeason(row: ClubSeasonRow): Promise<void>;
+  /** Media del Pro observada después de cada partido (022). Solo llena donde está vacía. */
+  setPlayerOverall(rows: { match_id: string; player_id: string; pro_overall: number }[]): Promise<void>;
   /** Escudo del club según EA (teamId y crestAssetId). */
   setClubCrest(clubId: number, teamId: number | null, crestAssetId: number | null): Promise<void>;
   /** División del club al capturar. Solo llena partidos que aún no la tienen (nunca la pisa). */
@@ -157,6 +159,18 @@ export class SupabaseStatsRepository implements StatsRepository {
       .from('ea_snapshots')
       .upsert(rows, { onConflict: 'for_club_id,club_id,endpoint,snapshot_date' });
     check('saveEaSnapshots', error);
+  }
+
+  async setPlayerOverall(rows: { match_id: string; player_id: string; pro_overall: number }[]): Promise<void> {
+    for (const r of rows) {
+      const { error } = await this.#db
+        .from('player_match_stats')
+        .update({ pro_overall: r.pro_overall })
+        .eq('match_id', r.match_id)
+        .eq('player_id', r.player_id)
+        .is('pro_overall', null);
+      check('setPlayerOverall', error);
+    }
   }
 
   async setClubCrest(clubId: number, teamId: number | null, crestAssetId: number | null): Promise<void> {

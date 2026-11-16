@@ -73,6 +73,10 @@ class FakeRepo implements StatsRepository {
   async getLatestClubSnapshot(): Promise<ClubSnapshotRow | null> {
     return this.clubSnapshots.at(-1) ?? null;
   }
+  overall = new Map<string, number>();
+  async setPlayerOverall(rows: { match_id: string; player_id: string; pro_overall: number }[]): Promise<void> {
+    for (const r of rows) { const k = `${r.match_id}|${r.player_id}`; if (!this.overall.has(k)) this.overall.set(k, r.pro_overall); }
+  }
   crest: { teamId: number | null; crestAssetId: number | null } | null = null;
   async setClubCrest(_clubId: number, teamId: number | null, crestAssetId: number | null): Promise<void> {
     this.crest = { teamId, crestAssetId };
@@ -223,6 +227,32 @@ describe('collect: miembros y fuerza del rival', () => {
     assert.equal(r.status, 'error');
     assert.match(r.errorMessage ?? '', /members\/stats/);
     assert.equal(repo.matches.size, 10);
+  });
+});
+
+describe('collect: media del Pro por partido (022)', () => {
+  test('se anota solo en el partido nuevo y reciente más nuevo de cada jugador', async () => {
+    const repo = new FakeRepo();
+    const source = new FakeSource({ leagueMatch: fixture });
+    // Un miembro por cada cuenta del fixture, con media 80.
+    const names = new Set<string>();
+    for (const m of fixture) for (const p of Object.values((m.players as Record<string, Record<string, { playername: string }>>)['1330384'] ?? {})) names.add(p.playername);
+    source.members = { members: [...names].map((name) => ({ name, proOverall: '80', gamesPlayed: '10' })) };
+    const last = Math.max(...fixture.map((m) => Number(m.timestamp) * 1000));
+    const d = deps(source, repo);
+    d.now = () => new Date(last + 30 * 60 * 1000);
+    await collect(d);
+    assert.ok(repo.overall.size >= 1, 'hay medias anotadas');
+    // Cada jugador tiene a lo sumo una media anotada (la de su partido más nuevo).
+    const players = [...repo.overall.keys()].map((k) => k.split('|')[1]);
+    assert.equal(new Set(players).size, players.length);
+    for (const v of repo.overall.values()) assert.equal(v, 80);
+  });
+
+  test('partidos viejos (más de 6 h): no se anota nada', async () => {
+    const repo = new FakeRepo();
+    await collect(deps(new FakeSource({ leagueMatch: fixture }), repo));
+    assert.equal(repo.overall.size, 0);
   });
 });
 
