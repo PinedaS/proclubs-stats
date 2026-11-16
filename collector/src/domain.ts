@@ -135,6 +135,22 @@ export interface MemberSnapshotRow {
   raw: unknown;
 }
 
+/** Endpoints de EA que se guardan crudos en ea_snapshots (migración 019). */
+export const EXTRA_ENDPOINTS = ['clubs/info', 'club/playoffAchievements', 'members/career/stats'] as const;
+export type ExtraEndpoint = (typeof EXTRA_ENDPOINTS)[number];
+export type SnapshotEndpoint = ExtraEndpoint | 'clubs/overallStats' | 'currentSeasonLeaderboard';
+
+/** JSON completo de un endpoint de EA, por club consultado y día (tabla ea_snapshots). */
+export interface EaSnapshotRow {
+  for_club_id: number;
+  club_id: number;
+  endpoint: SnapshotEndpoint;
+  snapshot_date: string; // YYYY-MM-DD (UTC)
+  captured_at: string;
+  is_opponent: boolean;
+  payload: unknown;
+}
+
 export type RunStatus = 'success' | 'error';
 
 export interface RunResult {

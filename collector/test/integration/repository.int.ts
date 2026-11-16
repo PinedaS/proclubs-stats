@@ -41,11 +41,14 @@ const source: MatchSource = {
   getMemberStats: async () => ({
     members: [{ name: 'Jugador_01', proOverall: '78', gamesPlayed: '102', goals: '130', ratingAve: '6.9', proNationality: '56' }],
   }),
-  getClubSkillRating: async (clubId: string) => 1500 + Number(clubId.slice(-2)),
-  getClubOverview: async () => ({
-    overall: { skillRating: '1595', bestDivision: '4', gamesPlayed: '104', wins: '48', ties: '10', losses: '46' },
-    season: { clubId: '1330384', points: '47', currentDivision: '3', gamesPlayed: '63' },
-  }),
+  // Nuestro club y los rivales (los rivales con nivel derivado de su id: > 1500).
+  getClubOverview: async (clubId: string) => (clubId === '1330384'
+    ? {
+        overall: { skillRating: '1595', bestDivision: '4', gamesPlayed: '104', wins: '48', ties: '10', losses: '46' },
+        season: { clubId: '1330384', points: '47', currentDivision: '3', gamesPlayed: '63' },
+      }
+    : { overall: { skillRating: String(1500 + Number(clubId.slice(-2))) }, season: { clubId, currentDivision: '5' } }),
+  getExtra: async (_clubId: string, endpoint: string) => (endpoint === 'club/playoffAchievements' ? [] : { endpoint }),
 };
 
 const config = {
@@ -195,6 +198,16 @@ describe('SupabaseStatsRepository contra Postgres + PostgREST', () => {
     const { data, error } = await service.from('matches').select('match_id, opponent_skill_rating');
     assert.equal(error, null);
     assert.ok((data as { opponent_skill_rating: number | null }[]).every((m) => m.opponent_skill_rating! > 1500));
+  });
+
+  test('019: fotos crudas de EA (propias y de rivales) guardadas; anon no las lee', async () => {
+    const { data, error } = await service.from('ea_snapshots').select('endpoint, is_opponent');
+    assert.equal(error, null);
+    const rows = data as { endpoint: string; is_opponent: boolean }[];
+    assert.deepEqual([...new Set(rows.filter((r) => !r.is_opponent).map((r) => r.endpoint))].sort(), ['club/playoffAchievements', 'clubs/info', 'members/career/stats']);
+    assert.ok(rows.some((r) => r.is_opponent && r.endpoint === 'clubs/overallStats'));
+    const asAnon = await anon.from('ea_snapshots').select('endpoint');
+    assert.ok(asAnon.error || (asAnon.data ?? []).length === 0, 'anon no ve ea_snapshots');
   });
 
   test('respaldo: exporta todas las tablas y genera el SQL de restauración', async () => {

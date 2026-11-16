@@ -1,7 +1,7 @@
 // Patrón Repository: el colector solo conoce esta interfaz. Cambiar de
 // proveedor (o usar un doble en los tests) no toca la lógica.
 import { createClient, type SupabaseClient } from '@supabase/supabase-js';
-import type { ClubRow, ClubSnapshotRow, MemberSnapshotRow, NormalizedMatch, RawMatchRow, RunResult } from './domain.ts';
+import type { ClubRow, ClubSnapshotRow, EaSnapshotRow, MemberSnapshotRow, NormalizedMatch, RawMatchRow, RunResult } from './domain.ts';
 
 export interface StatsRepository {
   /** Foto diaria del club (upsert por club y día). */
@@ -11,6 +11,10 @@ export interface StatsRepository {
   /** De estos partidos, cuáles aún no tienen la fuerza del rival. */
   findMatchesMissingOpponentSkill(matchIds: string[]): Promise<Set<string>>;
   setOpponentSkill(matchId: string, skillRating: number): Promise<void>;
+  /** División del rival al capturar. Solo llena si aún no la tiene (nunca la pisa). */
+  setOpponentDivision(matchId: string, division: number): Promise<void>;
+  /** JSON completo de endpoints de EA (upsert por club de captura, club consultado, endpoint y día). */
+  saveEaSnapshots(rows: EaSnapshotRow[]): Promise<void>;
   /** División del club al capturar. Solo llena partidos que aún no la tienen (nunca la pisa). */
   setClubDivision(matchIds: string[], division: number): Promise<void>;
   startRun(runner: string): Promise<number>;
@@ -125,6 +129,23 @@ export class SupabaseStatsRepository implements StatsRepository {
       .update({ opponent_skill_rating: skillRating })
       .eq('match_id', matchId);
     check('setOpponentSkill', error);
+  }
+
+  async setOpponentDivision(matchId: string, division: number): Promise<void> {
+    const { error } = await this.#db
+      .from('matches')
+      .update({ opponent_division: division })
+      .eq('match_id', matchId)
+      .is('opponent_division', null);
+    check('setOpponentDivision', error);
+  }
+
+  async saveEaSnapshots(rows: EaSnapshotRow[]): Promise<void> {
+    if (rows.length === 0) return;
+    const { error } = await this.#db
+      .from('ea_snapshots')
+      .upsert(rows, { onConflict: 'for_club_id,club_id,endpoint,snapshot_date' });
+    check('saveEaSnapshots', error);
   }
 
   async setClubDivision(matchIds: string[], division: number): Promise<void> {

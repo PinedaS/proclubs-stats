@@ -15,6 +15,7 @@ export const CHANGELOG = [
       'Club: resultados por semana y goles a favor y en contra de cada partido.',
       'Los datos que se empezaron a guardar más tarde llevan la etiqueta "Parcial"; si faltan en más de la mitad de los partidos, no se muestran.',
       'Textos más simples: los datos experimentales ya no mencionan los códigos internos de EA. "Penales" pasa a "Penales cometidos".',
+      'Se guarda todo lo que da EA (también la división de cada rival, la carrera de cada miembro y los logros de play-off). En "Cómo leer esto" se explica qué se guarda aunque no se muestre.',
     ],
   },
   {

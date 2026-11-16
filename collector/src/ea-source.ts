@@ -1,7 +1,7 @@
 // Acceso a la API de EA a través de proclubs-sdk, detrás de una interfaz
 // (MatchSource) para poder probar el colector sin red.
 import { ProClubsClient, type ClubMatch } from 'proclubs-sdk';
-import type { MatchType } from './domain.ts';
+import type { ExtraEndpoint, MatchType } from './domain.ts';
 
 export interface FoundClub {
   clubId: string;
@@ -13,10 +13,22 @@ export interface MatchSource {
   listMatches(clubId: string, type: MatchType): Promise<ClubMatch[]>;
   /** members/stats tal cual: { members: [...] }. */
   getMemberStats(clubId: string): Promise<unknown>;
-  /** skillRating del club (clubs/overallStats), o null si EA no lo da. */
-  getClubSkillRating(clubId: string): Promise<number | null>;
-  /** clubs/overallStats y la fila de nuestro club en el ranking de la temporada. */
+  /** clubs/overallStats y la fila del club en el ranking de la temporada (sirve para el nuestro y para rivales). */
   getClubOverview(clubId: string, clubName: string): Promise<{ overall: unknown; season: unknown }>;
+  /** JSON tal cual de clubs/info, club/playoffAchievements o members/career/stats. */
+  getExtra(clubId: string, endpoint: ExtraEndpoint): Promise<unknown>;
+}
+
+/** skillRating de una respuesta de clubs/overallStats, o null si EA no lo da. */
+export function skillRatingOf(overall: unknown): number | null {
+  const value = Number((overall as { skillRating?: unknown } | null)?.skillRating);
+  return Number.isInteger(value) && value > 0 ? value : null;
+}
+
+/** División actual (número de EA) de una fila del ranking de la temporada, o null. */
+export function divisionOf(season: unknown): number | null {
+  const value = Number((season as { currentDivision?: unknown } | null)?.currentDivision);
+  return Number.isInteger(value) && value >= 1 && value <= 20 ? value : null;
 }
 
 export class ClubNotFoundError extends Error {
@@ -68,9 +80,12 @@ export class EaMatchSource implements MatchSource {
     return { overall, season };
   }
 
-  async getClubSkillRating(clubId: string): Promise<number | null> {
-    const stats = await this.#client.clubs.overallStats({ clubId, platform: this.#platform });
-    const value = Number((stats as { skillRating?: unknown } | null)?.skillRating);
-    return Number.isInteger(value) && value > 0 ? value : null;
+  getExtra(clubId: string, endpoint: ExtraEndpoint): Promise<unknown> {
+    const args = { clubId, platform: this.#platform };
+    switch (endpoint) {
+      case 'clubs/info': return this.#client.clubs.get(args);
+      case 'club/playoffAchievements': return this.#client.clubs.playoffAchievements(args);
+      case 'members/career/stats': return this.#client.members.careerStats(args);
+    }
   }
 }

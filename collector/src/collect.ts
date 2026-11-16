@@ -2,8 +2,8 @@
 // (inyección de dependencias), así que se prueba sin red ni base de datos.
 import { ProClubsError } from 'proclubs-sdk';
 import type { Config } from './config.ts';
-import type { RunResult } from './domain.ts';
-import type { FoundClub, MatchSource } from './ea-source.ts';
+import { EXTRA_ENDPOINTS, type EaSnapshotRow, type RunResult } from './domain.ts';
+import { divisionOf, skillRatingOf, type FoundClub, type MatchSource } from './ea-source.ts';
 import type { StatsRepository } from './repository.ts';
 import { toClubSnapshotRow } from './club.ts';
 import { toMemberSnapshotRows } from './members.ts';
@@ -65,7 +65,7 @@ export async function collect(deps: CollectDeps): Promise<RunResult> {
   let clubId: number | null = null;
   let matchesSeen = 0;
   let matchesNew = 0;
-  const opponents: { matchId: string; opponentId: string }[] = [];
+  const opponents: Opponent[] = [];
   const recentNew: string[] = [];
 
   const finish = async (fatal?: unknown): Promise<RunResult> => {
@@ -126,12 +126,13 @@ export async function collect(deps: CollectDeps): Promise<RunResult> {
           log.error(err.message);
           continue;
         }
-        if (normalized.match.opponent_club_id !== null) {
-          opponents.push({ matchId: row.match_id, opponentId: String(normalized.match.opponent_club_id) });
-        }
+        const recent = !existing.has(row.match_id) && now().getTime() - Date.parse(normalized.match.played_at) <= DIVISION_MAX_AGE_MS;
         if (!existing.has(row.match_id)) {
           newHere++;
-          if (now().getTime() - Date.parse(normalized.match.played_at) <= DIVISION_MAX_AGE_MS) recentNew.push(row.match_id);
+          if (recent) recentNew.push(row.match_id);
+        }
+        if (normalized.match.opponent_club_id !== null) {
+          opponents.push({ matchId: row.match_id, opponentId: String(normalized.match.opponent_club_id), opponentName: normalized.match.opponent_name ?? '', recent });
         }
       }
 
@@ -139,9 +140,10 @@ export async function collect(deps: CollectDeps): Promise<RunResult> {
       log.info(`${matchType}: ${matches.length} recibidos, ${newHere} nuevos`);
     }
 
-    await fillOpponentSkill(deps, opponents);
+    await fillOpponentInfo(deps, clubId, opponents, now());
     await captureMembers(deps, club.clubId, now(), failures);
     const division = await captureClub(deps, club, now(), failures);
+    await captureExtras(deps, clubId, now());
     if (division != null && recentNew.length) {
       await deps.repo.setClubDivision(recentNew, division);
       log.info(`División ${division} guardada en ${recentNew.length} partidos nuevos`);
@@ -159,33 +161,74 @@ export async function collect(deps: CollectDeps): Promise<RunResult> {
   return finish();
 }
 
+interface Opponent {
+  matchId: string;
+  opponentId: string;
+  opponentName: string;
+  /** Partido nuevo de menos de 6 h: su división actual sirve para ese partido. */
+  recent: boolean;
+}
+
+const dayOf = (at: Date) => at.toISOString().slice(0, 10);
+
 /**
- * Fuerza del rival: skillRating del club rival para los partidos que aún no lo
- * tienen. Es un dato complementario: si EA falla aquí NO se marca la ejecución
- * como error (se reintenta solo en la próxima, mientras el partido siga entre
- * los últimos 10).
+ * Rival de cada partido: su foto completa (clubs/overallStats y su fila del ranking
+ * de la temporada) se guarda cruda en ea_snapshots; de ahí salen su nivel
+ * (skillRating, si el partido aún no lo tiene) y su división (solo en partidos
+ * recientes, como la nuestra). Es un dato complementario: si EA falla aquí NO se
+ * marca la ejecución como error (se reintenta en la próxima, mientras el partido
+ * siga entre los últimos 10). Cada rival se consulta una vez por ejecución.
  */
-async function fillOpponentSkill(deps: CollectDeps, opponents: { matchId: string; opponentId: string }[]): Promise<void> {
+async function fillOpponentInfo(deps: CollectDeps, forClubId: number, opponents: Opponent[], at: Date): Promise<void> {
   if (opponents.length === 0) return;
-  const missing = await deps.repo.findMatchesMissingOpponentSkill(opponents.map((o) => o.matchId));
-  const cache = new Map<string, number | null>();
-  let filled = 0;
-  for (const { matchId, opponentId } of opponents) {
-    if (!missing.has(matchId)) continue;
+  const missingSkill = await deps.repo.findMatchesMissingOpponentSkill(opponents.map((o) => o.matchId));
+  const todo = opponents.filter((o) => missingSkill.has(o.matchId) || o.recent);
+  const cache = new Map<string, { overall: unknown; season: unknown } | null>();
+  const snapshots: EaSnapshotRow[] = [];
+  let skills = 0, divisions = 0;
+  for (const o of todo) {
+    if (!cache.has(o.opponentId)) {
+      try {
+        const view = await deps.source.getClubOverview(o.opponentId, o.opponentName);
+        cache.set(o.opponentId, view);
+        const base = { for_club_id: forClubId, club_id: Number(o.opponentId), snapshot_date: dayOf(at), captured_at: at.toISOString(), is_opponent: true };
+        if (view.overall != null) snapshots.push({ ...base, endpoint: 'clubs/overallStats', payload: view.overall });
+        if (view.season != null) snapshots.push({ ...base, endpoint: 'currentSeasonLeaderboard', payload: view.season });
+      } catch (err) {
+        if (!(err instanceof ProClubsError)) throw err;
+        deps.log.error(`No se pudo leer al rival ${o.opponentId}: ${messageOf(err)}`);
+        cache.set(o.opponentId, null);
+      }
+    }
+    const view = cache.get(o.opponentId);
+    if (!view) continue;
+    const skill = skillRatingOf(view.overall);
+    if (skill != null && missingSkill.has(o.matchId)) { await deps.repo.setOpponentSkill(o.matchId, skill); skills++; }
+    const division = divisionOf(view.season);
+    if (division != null && o.recent) { await deps.repo.setOpponentDivision(o.matchId, division); divisions++; }
+  }
+  await deps.repo.saveEaSnapshots(snapshots);
+  if (skills || divisions) deps.log.info(`Rivales: nivel en ${skills} partidos, división en ${divisions}`);
+}
+
+/**
+ * Endpoints de EA que no se procesan todavía: clubs/info, club/playoffAchievements
+ * y members/career/stats. Se guardan crudos (ea_snapshots), una foto por día, para
+ * que no se pierda ningún dato. Complementarios: una falla de EA solo se registra.
+ */
+async function captureExtras(deps: CollectDeps, clubId: number, at: Date): Promise<void> {
+  const rows: EaSnapshotRow[] = [];
+  for (const endpoint of EXTRA_ENDPOINTS) {
     try {
-      if (!cache.has(opponentId)) cache.set(opponentId, await deps.source.getClubSkillRating(opponentId));
+      const payload = await deps.source.getExtra(String(clubId), endpoint);
+      if (payload != null) rows.push({ for_club_id: clubId, club_id: clubId, endpoint, snapshot_date: dayOf(at), captured_at: at.toISOString(), is_opponent: false, payload });
     } catch (err) {
       if (!(err instanceof ProClubsError)) throw err;
-      deps.log.error(`No se pudo leer el nivel del rival ${opponentId}: ${messageOf(err)}`);
-      cache.set(opponentId, null);
-    }
-    const skill = cache.get(opponentId);
-    if (skill != null) {
-      await deps.repo.setOpponentSkill(matchId, skill);
-      filled++;
+      deps.log.error(`EA falló en ${endpoint}: ${messageOf(err)}`);
     }
   }
-  if (filled) deps.log.info(`Nivel del rival guardado en ${filled} partidos`);
+  await deps.repo.saveEaSnapshots(rows);
+  if (rows.length) deps.log.info(`Guardados crudos: ${rows.map((r) => r.endpoint).join(', ')}`);
 }
 
 /**

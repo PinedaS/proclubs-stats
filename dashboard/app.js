@@ -1417,7 +1417,9 @@ async function renderMatches(filters, requestId) {
   // de la mitad de los partidos, la columna no se muestra (sigue en la base).
   const covSkill = coverage(shown, (m) => m.opponent_skill_rating);
   const covDiv = coverage(shown, (m) => flags.get(m.match_id)?.club_division);
-  const cols = ['Fecha', 'Tipo', 'Rival', covSkill.show && ['Nivel rival', covSkill], covDiv.show && ['Div.', covDiv], 'Jug.', 'Marcador', 'Res.'].filter(Boolean);
+  // División del rival: se guarda desde el 2026-11-16 (migración 019), solo en partidos nuevos.
+  const covOppDiv = coverage(shown, (m) => m.opponent_division);
+  const cols = ['Fecha', 'Tipo', 'Rival', covSkill.show && ['Nivel rival', covSkill], covOppDiv.show && ['Div. rival', covOppDiv], covDiv.show && ['Div.', covDiv], 'Jug.', 'Marcador', 'Res.'].filter(Boolean);
   const body = el('tbody');
   if (!shown.length) body.append(emptyRow(cols.length, 'Sin partidos para estos filtros.'));
   for (const m of shown) {
@@ -1427,6 +1429,7 @@ async function renderMatches(filters, requestId) {
       el('td', { class: 'left' }, el('span', { class: 'badge' }, TYPE_LABEL[m.match_type] ?? m.match_type)),
       el('td', { class: 'left' }, m.opponent_name ?? '—', f?.incomplete ? [' ', el('span', { class: 'badge warn', title: 'El partido se cortó antes del 90 % del tiempo o un equipo abandonó. El marcador es el que da EA.' }, 'Abandonado')] : null, highlights(m, f?.incomplete)),
       covSkill.show ? el('td', {}, fmtNum(m.opponent_skill_rating)) : null,
+      covOppDiv.show ? el('td', { title: m.opponent_division != null ? `División del rival al jugar. ${divisionTitle(m.opponent_division)}` : 'Sin dato: se empezó a guardar después' }, gameDivision(m.opponent_division) ?? '—') : null,
       covDiv.show ? el('td', { title: f?.club_division != null ? `División del club ese día. ${divisionTitle(f.club_division)}` : 'Sin dato de división' }, gameDivision(f?.club_division) ?? '—') : null,
       el('td', { title: 'Jugadores del club en cancha' }, fmtNum(f?.team_size)),
       // Marcador tal cual EA (en un abandono es el que asigna EA; la etiqueta "Abandonado" lo avisa).

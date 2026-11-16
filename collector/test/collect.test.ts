@@ -3,7 +3,7 @@ import { readFileSync } from 'node:fs';
 import { describe, test } from 'node:test';
 import { ProClubsError, type ClubMatch } from 'proclubs-sdk';
 import { collect, type CollectDeps } from '../src/collect.ts';
-import type { ClubRow, ClubSnapshotRow, MatchType, MemberSnapshotRow, NormalizedMatch, RawMatchRow, RunResult } from '../src/domain.ts';
+import type { ClubRow, ClubSnapshotRow, EaSnapshotRow, MatchType, MemberSnapshotRow, NormalizedMatch, RawMatchRow, RunResult } from '../src/domain.ts';
 import { ClubNotFoundError, type FoundClub, type MatchSource } from '../src/ea-source.ts';
 import { RepositoryError, type StatsRepository } from '../src/repository.ts';
 
@@ -54,6 +54,14 @@ class FakeRepo implements StatsRepository {
   async setOpponentSkill(id: string, skill: number): Promise<void> {
     this.opponentSkill.set(id, skill);
   }
+  opponentDivision = new Map<string, number>();
+  async setOpponentDivision(id: string, division: number): Promise<void> {
+    if (!this.opponentDivision.has(id)) this.opponentDivision.set(id, division);
+  }
+  eaSnapshots = new Map<string, EaSnapshotRow>();
+  async saveEaSnapshots(rows: EaSnapshotRow[]): Promise<void> {
+    for (const r of rows) this.eaSnapshots.set(`${r.for_club_id}|${r.club_id}|${r.endpoint}|${r.snapshot_date}`, r);
+  }
   division = new Map<string, number>();
   async setClubDivision(ids: string[], division: number): Promise<void> {
     for (const id of ids) if (!this.division.has(id)) this.division.set(id, division);
@@ -87,18 +95,25 @@ class FakeSource implements MatchSource {
     if (this.members instanceof Error) throw this.members;
     return this.members;
   }
-  async getClubSkillRating(clubId: string): Promise<number | null> {
-    this.skillCalls++;
-    if (this.skillError) throw this.skillError;
-    return 1000 + Number(clubId.slice(-3));
-  }
   overview: { overall: unknown; season: unknown } | Error = {
     overall: { skillRating: '1595', bestDivision: '4', gamesPlayed: '104', wins: '48', ties: '10', losses: '46', wstreak: '0', unbeatenstreak: '2' },
     season: { clubId: '1330384', points: '47', currentDivision: '3', gamesPlayed: '63', wins: '30', ties: '7', losses: '26', goals: '157', goalsAgainst: '127' },
   };
-  async getClubOverview(): Promise<{ overall: unknown; season: unknown }> {
+  async getClubOverview(clubId: string): Promise<{ overall: unknown; season: unknown }> {
+    if (clubId !== '1330384') {
+      // Rival: nivel y división derivados de su id, para poder comprobarlos.
+      this.skillCalls++;
+      if (this.skillError) throw this.skillError;
+      return { overall: { skillRating: String(1000 + Number(clubId.slice(-3))) }, season: { clubId, currentDivision: '5' } };
+    }
     if (this.overview instanceof Error) throw this.overview;
     return this.overview;
+  }
+  extras: Partial<Record<string, unknown>> = { 'clubs/info': { name: 'Aston Huila' }, 'club/playoffAchievements': [], 'members/career/stats': { members: [] } };
+  async getExtra(_clubId: string, endpoint: string): Promise<unknown> {
+    const v = this.extras[endpoint];
+    if (v instanceof Error) throw v;
+    return v;
   }
 }
 
@@ -140,6 +155,34 @@ describe('collect: miembros y fuerza del rival', () => {
 
     await collect(deps(source, repo));
     assert.equal(source.skillCalls, callsFirstRun, 'la segunda ejecución no vuelve a consultar rivales');
+
+    // La foto completa de cada rival queda cruda en ea_snapshots.
+    const rivals = [...repo.eaSnapshots.values()].filter((s) => s.is_opponent);
+    assert.equal(rivals.length, callsFirstRun * 2, 'overallStats y fila del ranking de cada rival');
+    // Partidos viejos (más de 6 h): la división actual del rival no se les asigna.
+    assert.equal(repo.opponentDivision.size, 0);
+  });
+
+  test('la división del rival se guarda solo en partidos nuevos y recientes', async () => {
+    const repo = new FakeRepo();
+    const source = new FakeSource({ leagueMatch: fixture });
+    const last = Math.max(...fixture.map((m) => Number(m.timestamp) * 1000));
+    const d = deps(source, repo);
+    d.now = () => new Date(last + 60 * 60 * 1000); // 1 h después del último partido
+    await collect(d);
+    assert.ok(repo.opponentDivision.size >= 1);
+    assert.ok(repo.opponentDivision.size < 10, 'los partidos de más de 6 h quedan sin división');
+    for (const v of repo.opponentDivision.values()) assert.equal(v, 5);
+  });
+
+  test('guarda crudos clubs/info, play-off y carrera; si EA falla en uno, no es error', async () => {
+    const repo = new FakeRepo();
+    const source = new FakeSource({ leagueMatch: fixture });
+    source.extras['members/career/stats'] = new ProClubsError('HTTP 503', 'HTTP');
+    const r = await collect(deps(source, repo));
+    assert.equal(r.status, 'success');
+    const own = [...repo.eaSnapshots.values()].filter((s) => !s.is_opponent).map((s) => s.endpoint).sort();
+    assert.deepEqual(own, ['club/playoffAchievements', 'clubs/info']);
   });
 
   test('si EA falla con el nivel del rival, NO marca la ejecución como error', async () => {
