@@ -82,6 +82,10 @@ class FakeRepo implements StatsRepository {
     const s = this.seasons.find((x) => x.club_id === clubId && x.ended_at === null);
     return s ? { season_no: s.season_no, started_at: s.started_at, expected_end_at: s.expected_end_at ?? null } : null;
   }
+  gameSeasonNo: number | null = null;
+  async getGameSeasonNo(): Promise<number | null> {
+    return this.gameSeasonNo;
+  }
   async startSeason(row: ClubSeasonRow): Promise<void> {
     for (const s of this.seasons) if (s.club_id === row.club_id && s.ended_at === null) s.ended_at = row.started_at;
     this.seasons.push({ ...row, ended_at: null });
@@ -223,6 +227,13 @@ describe('collect: miembros y fuerza del rival', () => {
 });
 
 describe('collect: temporadas', () => {
+  test('un club nuevo entra en la temporada en curso del juego', async () => {
+    const repo = new FakeRepo();
+    repo.gameSeasonNo = 2; // otro club del mismo juego ya va en la 2
+    await collect(deps(new FakeSource({ leagueMatch: fixture }), repo));
+    assert.equal(repo.seasons[0]?.season_no, 2);
+  });
+
   test('abre la temporada 1 con el primer partido y la siguiente cuando EA reinicia', async () => {
     const repo = new FakeRepo();
     const source = new FakeSource({ leagueMatch: fixture });

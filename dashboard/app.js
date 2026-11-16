@@ -166,6 +166,21 @@ function divisionIcon(apiDiv, size = 'sm') {
 }
 
 /**
+ * Ficha grande de división: ícono + texto. Cuando el ícono carga, el texto del
+ * número se oculta a la vista (el ícono ya lo muestra) pero sigue para lectores
+ * de pantalla. La División Élite no tiene número en el ícono: su nombre se ve siempre.
+ */
+function divisionBadge(apiDiv) {
+  const text = gameDivision(apiDiv);
+  if (text == null) return '—';
+  const box = el('span', { class: `div-value${Number(apiDiv) === 1 ? ' elite' : ''}` });
+  const icon = divisionIcon(apiDiv, 'lg');
+  if (icon) icon.addEventListener('load', () => box.classList.add('icon-ok'));
+  box.append(...[icon, el('span', { class: 'div-text' }, Number(apiDiv) === 1 ? 'Élite' : `${text} división`)].filter(Boolean));
+  return box;
+}
+
+/**
  * Escudo del club: el propio (crestAssetId) o el real (teamId), desde la dirección
  * pública de EA que documenta la comunidad. Si ninguno carga, queda el escudo
  * dibujado con las iniciales.
@@ -333,7 +348,7 @@ async function renderHeader() {
   const capturedMatches = state.ranking[0]?.club_matches;
   if (club) {
     $('#club-season').textContent = [game, seasonText, `${fmtNum(capturedMatches ?? 0)} partido${capturedMatches === 1 ? '' : 's'}`].filter(Boolean).join(' · ');
-    $('#club-season').title = 'Juego, temporada y partidos capturados con los filtros actuales. Las temporadas se cuentan desde que empezamos a registrar al club.';
+    $('#club-season').title = 'Juego, temporada y partidos capturados con los filtros actuales. Las temporadas se numeran como el juego, según su calendario (EA no da el número en la API).';
   }
   const form = el('div', { class: 'form-chips', role: 'img', 'aria-label': `Últimos resultados: ${recent.slice(0, 5).map((m) => OUTCOME[m.outcome]?.label ?? '—').join(', ')}` },
     recent.length ? [...recent.slice(0, 5)].reverse().map((m) => el('span', {
@@ -343,8 +358,11 @@ async function renderHeader() {
     kpi('Nivel del club', fmtNum(last?.skill_rating),
       delta == null || snaps.length < 2 ? 'skillRating de EA' : `${fmtSigned(delta)} desde ${fmtDate(`${first.snapshot_date}T12:00:00Z`, false)}`,
       delta > 0 ? 'up' : delta < 0 ? 'down' : null),
-    Object.assign(kpi('División', el('span', { class: 'div-value' }, divisionIcon(last?.current_division), gameDivision(last?.current_division) ?? '—'),
-      last?.best_division != null ? `Mejor: ${gameDivision(last.best_division)}` : null), { title: divisionTitle(last?.current_division) ?? '' }),
+    // Sin repetir: el ícono ya trae el número (el texto queda para lectores de pantalla
+    // y por si el ícono no carga). "Mejor" solo si es distinta de la actual.
+    Object.assign(kpi('División', divisionBadge(last?.current_division),
+      last?.best_division != null && last.best_division !== last.current_division ? `Mejor: ${gameDivision(last.best_division)}`
+        : last?.current_division != null ? 'Su mejor división hasta ahora' : null), { title: divisionTitle(last?.current_division) ?? '' }),
     // EA da los números de la temporada EN CURSO (no de la elegida en el filtro).
     Object.assign(kpi(current ? `Temporada ${current.season_no} (en curso)` : 'Temporada', last?.season_wins != null ? `${last.season_wins}-${last.season_draws}-${last.season_losses}` : '—',
       [last?.season_points != null ? `${fmtNum(last.season_points)} pts · goles ${last.season_goals ?? '—'} : ${last.season_goals_against ?? '—'}` : 'V-E-D',

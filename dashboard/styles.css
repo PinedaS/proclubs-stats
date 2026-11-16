@@ -763,6 +763,8 @@ dialog.guide::backdrop { background: rgb(0 0 0 / .55); }
 .div-value { display: inline-flex; align-items: center; gap: 6px; }
 .div-icon { flex: none; object-fit: contain; }
 .div-icon.sm { width: 22px; height: 22px; }
-.kpi .div-icon.sm { width: 30px; height: 30px; }
+.div-icon.lg { width: 44px; height: 44px; margin: -6px 0; }
+/* El ícono ya muestra el número: el texto queda solo para lectores de pantalla (salvo Élite). */
+.div-value.icon-ok:not(.elite) .div-text { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
 #season-select { font: inherit; text-transform: none; letter-spacing: normal; font-weight: 500; color: var(--ink); background: var(--bg); border: 1px solid var(--border); border-radius: 10px; padding: 6px 8px; }
 .pop-panel input:disabled { opacity: .45; }

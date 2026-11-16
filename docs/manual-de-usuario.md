@@ -34,7 +34,7 @@ Muestra las estadísticas de nuestro club de Clubes (Pro Clubs) de EA SPORTS FC,
 - **Liga, Play-off, Amistoso:** qué tipos de partido cuentan. En los amistosos el rival puede ser más débil.
 - **Fechas:** una **temporada** (o todas las del juego), o un rango desde y hasta.
   - Cada juego (FC 27) tiene varias temporadas de liga, que terminan con una semana de Play-offs.
-  - EA no da el número de temporada: se cuentan desde que empezamos a registrar al club.
+  - Se numeran como el juego, según su calendario (la temporada 2 de FC 27 va del 22-oct al 3-dic-2026), porque EA no da el número en sus datos.
   - Una temporada nueva se detecta sola cuando EA reinicia los partidos y puntos de la temporada.
 - **Vista:**
   - mínimo de partidos para aparecer;

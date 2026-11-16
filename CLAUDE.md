@@ -58,7 +58,7 @@ API no oficial de EA ──► Colector (GitHub Actions, cada 30 min) ──► 
    - Filtros: tipo de partido, fechas, mínimo de partidos y excluir incompletos.
    - Los archivos se versionan con el commit en `pages.yml` (`__V__`), para no mezclar versiones viejas desde la caché de Pages.
    - Probado en Chrome con los datos del club de prueba.
-   - **Migraciones aplicadas en Supabase:** 001–020, cada una verificada después de aplicarla.
+   - **Migraciones aplicadas en Supabase:** 001–021, cada una verificada después de aplicarla.
    - **Documentación (2026-11-16):** `README.md`, `docs/manual-de-usuario.md` (para el equipo) y `docs/arquitectura.md` (técnica, con diagramas Mermaid). Actualizarlas al cambiar funciones.
    - **v2.7 (2026-11-16, pedidos del usuario):**
      - **Ranking:**
@@ -393,7 +393,7 @@ No hay API oficial. Se usan los endpoints públicos que lee la web de Clubes de 
 9. ~~Separar JUEGO y TEMPORADA.~~ **Hecho el 2026-11-16 (migración 020, v2.8).**
    - **Modelo:**
      - `clubs.season` es el **juego** (FC27).
-     - `club_seasons` guarda las temporadas dentro del juego: `season_no` propio desde que empezamos a registrar, `started_at`/`ended_at`, `detected_by` y `expected_end_at`.
+     - `club_seasons` guarda las temporadas dentro del juego: `season_no` **con el número del juego** (migración 021, corrección del usuario: la actual es la 2 de FC 27, desde el 22-oct, según el calendario de PRO11; un club nuevo hereda la temporada en curso de los demás clubes del mismo juego), `started_at`/`ended_at`, `detected_by` y `expected_end_at`.
    - **Investigado:**
      - EA (glosario oficial): los Play-offs son la última semana de cada temporada.
      - PRO11 (guía no oficial): las temporadas van por fecha y son iguales para todos. La temporada 2 de FC 27 va del 22-oct al 3-dic-2026.

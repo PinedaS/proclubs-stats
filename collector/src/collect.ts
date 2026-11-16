@@ -262,7 +262,8 @@ async function captureClub(deps: CollectDeps, club: FoundClub, at: Date, failure
 
 /**
  * Temporadas (migración 020):
- *  - club sin temporada: abre la 1, desde su partido más viejo visto;
+ *  - club sin temporada: abre la del juego en curso (la de los demás clubes del
+ *    mismo juego, o la 1), desde su partido más viejo visto;
  *  - EA reinició los contadores (isSeasonReset): cierra la actual y abre la
  *    siguiente desde la captura anterior (la última que veía la temporada vieja);
  *  - pasó un día del fin esperado sin reinicio: solo lo avisa en el log.
@@ -270,8 +271,11 @@ async function captureClub(deps: CollectDeps, club: FoundClub, at: Date, failure
 async function trackSeason(deps: CollectDeps, clubId: number, prev: SeasonCounters | null, curr: SeasonCounters, at: Date, firstPlayedAt: string | null): Promise<void> {
   const open = await deps.repo.getOpenSeason(clubId);
   if (!open) {
-    await deps.repo.startSeason({ club_id: clubId, season_no: 1, started_at: firstPlayedAt ?? at.toISOString(), detected_by: 'inicio del registro' });
-    deps.log.info('Temporada 1 abierta (inicio del registro)');
+    // Las temporadas son del juego (iguales para todos): un club nuevo entra en la
+    // que tienen abierta los demás clubes del mismo juego; si no hay ninguno, la 1.
+    const seasonNo = (await deps.repo.getGameSeasonNo(deps.config.season)) ?? 1;
+    await deps.repo.startSeason({ club_id: clubId, season_no: seasonNo, started_at: firstPlayedAt ?? at.toISOString(), detected_by: 'inicio del registro' });
+    deps.log.info(`Temporada ${seasonNo} abierta (inicio del registro)`);
     return;
   }
   if (isSeasonReset(prev, curr)) {

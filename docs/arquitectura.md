@@ -303,4 +303,4 @@ npm run test:integration
 - `run_tests.sh`: migraciones y pruebas SQL en un Postgres desechable (Docker).
 - `test:integration`: el colector contra Postgres y PostgREST reales en Docker.
 
-**Para aplicar una migración nueva:** súbela al repo, ábrela en el SQL Editor de Supabase, ejecútala y verifica el resultado con consultas al catálogo. Todas las migraciones aplicadas están en `supabase/migrations` (001–020).
+**Para aplicar una migración nueva:** súbela al repo, ábrela en el SQL Editor de Supabase, ejecútala y verifica el resultado con consultas al catálogo. Todas las migraciones aplicadas están en `supabase/migrations` (001–021).

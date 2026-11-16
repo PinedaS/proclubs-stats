@@ -7,7 +7,8 @@ export const CHANGELOG = [
     date: '2026-11-16',
     title: 'Temporadas, escudo y más datos',
     changes: [
-      'Juego y temporada por separado: la cabecera dice "FC 27 · Temporada 1". En "Fechas" se puede elegir una temporada; la nueva se detecta sola cuando EA reinicia la temporada.',
+      'Juego y temporada por separado: la cabecera dice "FC 27 · Temporada 2", con el número de temporada del juego. En "Fechas" se puede elegir una temporada; la nueva se detecta sola cuando EA reinicia la temporada.',
+      'La ficha de División ya no repite el número: lo muestra el escudo, y "Mejor" aparece solo si es distinta de la actual.',
       'Escudo real del club y escudos de cada división (los del juego), en la cabecera, en Partidos y en el detalle del jugador.',
       'Correcciones: ya no aparece "null" debajo de la gráfica del ranking, y el menú "+ Añadir dato" se ve completo.',
       '"+ Añadir dato" suma más de 30 datos: pases cortos, medios y largos; al primer toque; tiros dentro y fuera del área; goles con la pierna mala; regates superando al rival; barridas; balones quitados; tipos de atajada del portero, y más.',

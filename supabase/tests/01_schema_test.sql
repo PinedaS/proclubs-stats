@@ -496,7 +496,7 @@ reset role;
 -- 4h. 020: temporadas, escudo y contadores nuevos
 -- =============================================================================
 insert into public.club_seasons (club_id, season_no, started_at, ended_at, detected_by) values
-  (1330384, 1, '2026-10-22T07:00Z', '2026-12-03T07:00Z', 'inicio del registro'),
+  (1330384, 1, '2026-10-22T07:00Z', '2026-12-03T07:00Z', 'calendario del juego'),
   (1330384, 2, '2026-12-03T07:00Z', null, 'reinicio de EA');
 do $$
 begin

@@ -20,6 +20,8 @@ export interface StatsRepository {
   getLatestClubSnapshot(clubId: number): Promise<SeasonCounters | null>;
   /** Temporada en curso del club, o null si todavía no tiene ninguna. */
   getOpenSeason(clubId: number): Promise<{ season_no: number; started_at: string; expected_end_at: string | null } | null>;
+  /** Temporada en curso del juego según los otros clubes del mismo juego (las temporadas son globales), o null. */
+  getGameSeasonNo(game: string): Promise<number | null>;
   /** Cierra la temporada abierta (si hay) en `row.started_at` y abre la nueva. */
   startSeason(row: ClubSeasonRow): Promise<void>;
   /** Escudo del club según EA (teamId y crestAssetId). */
@@ -182,6 +184,18 @@ export class SupabaseStatsRepository implements StatsRepository {
       .limit(1);
     check('getOpenSeason', error);
     return ((data ?? []) as { season_no: number; started_at: string; expected_end_at: string | null }[])[0] ?? null;
+  }
+
+  async getGameSeasonNo(game: string): Promise<number | null> {
+    const { data, error } = await this.#db
+      .from('club_seasons')
+      .select('season_no, clubs!inner(season)')
+      .eq('clubs.season', game)
+      .is('ended_at', null)
+      .order('season_no', { ascending: false })
+      .limit(1);
+    check('getGameSeasonNo', error);
+    return ((data ?? []) as { season_no: number }[])[0]?.season_no ?? null;
   }
 
   async startSeason(row: ClubSeasonRow): Promise<void> {
