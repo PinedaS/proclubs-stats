@@ -375,6 +375,13 @@ No hay API oficial. Se usan los endpoints públicos que lee la web de Clubes de 
      - El token **vence** (fecha elegida por el usuario). Al vencer, GitHub responde 401 y el dashboard muestra en rojo "Disparo falló…" (`dispatch_status()`). Para renovarlo: crear otro token igual y reemplazar el valor en Vault con el mismo nombre.
 7. **Catálogo de datos de EA:** ver `docs/datos-ea.md`. Recoge los endpoints y campos verificados, los no usados y los que EA no expone.
 
+9. **PENDIENTE (pedido del usuario, 2026-11-16): separar JUEGO y TEMPORADA.**
+   - Hoy `clubs.season` = "FC27" mezcla el juego con la temporada. Dentro de cada FC hay **varias temporadas de liga de Clubes**.
+   - Hay que modelar dos niveles: **juego** (FC 27, FC 28) y **temporada dentro del juego**.
+   - Idea a verificar: EA reinicia `currentSeason` (partidos, puntos, V-E-D) al empezar cada temporada; detectar ese reinicio en `club_snapshots`.
+   - El dashboard debería poder filtrar por temporada y mostrar "FC 27 · Temporada N".
+10. **PENDIENTE: capturar todos los datos de EA** (plan en `docs/datos-ea.md`, sección 2b): carrera, play-off, `clubs/info`, foto completa del rival y sección "datos guardados que no se muestran".
+
 ## 8. Orden sugerido de trabajo
 
 1. Crear el proyecto de Supabase (lo hace el usuario) y el esquema SQL: migraciones, RLS de solo lectura para `anon`, vistas de totales y de stats por persona.
