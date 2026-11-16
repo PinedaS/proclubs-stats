@@ -38,7 +38,7 @@
           <span class="icon" aria-hidden="true">?</span><span>Cómo leer esto</span>
         </button>
         <button type="button" class="status guide-btn version-btn" id="open-changelog" aria-haspopup="dialog" title="Ver qué cambió en cada versión">
-          <span id="version-label">v—</span><span class="muted">Novedades</span>
+          <span id="version-label">v—</span><span class="beta-tag" title="Beta: las pestañas, gráficas y cálculos del dashboard todavía cambian y pueden moverse o desaparecer. Los datos de EA no: se guardan completos y tal cual, y no se pierden con estos cambios.">Beta</span><span class="muted">Novedades</span>
         </button>
       </div>
     </div>
@@ -48,6 +48,7 @@
   <nav class="tabs" aria-label="Vistas">
     <div class="tabs-inner">
       <button type="button" class="tab" data-view="ranking" aria-pressed="true">Ranking</button>
+      <button type="button" class="tab" data-view="best" aria-pressed="false">Mejor jugador <span class="tab-tag">exp.</span></button>
       <button type="button" class="tab" data-view="roles" aria-pressed="false">Por rol</button>
       <button type="button" class="tab" data-view="h2h" aria-pressed="false">Cara a cara</button>
       <button type="button" class="tab" data-view="compare" aria-pressed="false">Comparar</button>
@@ -128,6 +129,28 @@
       <div class="card">
         <div class="card-head"><h2>Carrera por el mejor</h2><p class="muted small">Calificación media acumulada de cada jugador, partido a partido: quién sube y quién se estanca.</p></div>
         <div id="rk-race" class="viz"></div>
+      </div>
+    </section>
+
+    <section id="view-best" class="view" hidden>
+      <div class="card">
+        <div class="card-head">
+          <h2>Mejor jugador <span class="tag tag-exp">experimental</span></h2>
+          <p class="muted small">Un puntaje de 0 a 100 que combina varios criterios con pesos fijos, iguales para todos. Cada criterio compara a cada uno con el promedio de <strong>su rol</strong>, así nadie pierde por jugar de defensa o por rotar. No cambia ningún dato de EA: es un cálculo encima. Toca un jugador para ver cuánto aporta cada criterio. Respeta los filtros de arriba (tipo de partido, fechas y temporada).</p>
+        </div>
+        <div id="best-body"></div>
+        <details class="best-how">
+          <summary>¿Cómo se calcula?</summary>
+          <ol>
+            <li>Cada criterio es un índice: <strong>100 = promedio</strong> (del rol de cada partido, ponderado por minutos, cuando aplica).</li>
+            <li><strong>Corrección por pocos partidos:</strong> con pocos partidos el índice se acerca al promedio, para que nadie gane por dos buenos partidos. Índice corregido = 100 + (índice − 100) × PJ ÷ (PJ + 5). Con 2 PJ cuenta el 29 % de la diferencia; con 20 PJ, el 80 %.</li>
+            <li><strong>Nota de 0 a 100:</strong> 50 + (índice corregido − 100). Un índice de 120 da 70; uno de 80 da 30.</li>
+            <li><strong>Puntaje</strong> = promedio de las notas según el peso de cada criterio. Si a alguien le falta un criterio (por ejemplo, el ataque de un portero), su peso se reparte entre los demás.</li>
+            <li><strong>Para entrar:</strong> <span id="best-min">—</span>.</li>
+          </ol>
+          <div class="table-wrap"><table class="data"><thead><tr><th scope="col" class="left">Criterio</th><th scope="col">Peso</th><th scope="col" class="left">Qué mide</th></tr></thead><tbody id="best-weights"></tbody></table></div>
+          <p class="muted small">Criterios y pesos aprobados el 16/11/2026. * = dato experimental.</p>
+        </details>
       </div>
     </section>
 
@@ -276,6 +299,12 @@
       <button type="button" class="close" id="close-guide">Cerrar</button>
     </div>
     <div class="guide-body">
+      <h3>Versión beta</h3>
+      <p>Las pestañas, gráficas y cálculos del dashboard todavía cambian: pueden aparecer, moverse o desaparecer. Los <strong>datos de EA no son beta</strong>: se guardan completos y tal cual, y no se pierden con estos cambios. Deja de ser beta cuando la detección de temporadas funcione en un cambio de temporada real, haya al menos 50 partidos capturados y pasen dos semanas sin cambios de estructura (pestañas o fórmula).</p>
+
+      <h3>Mejor jugador (experimental)</h3>
+      <p>Un puntaje de 0 a 100 con 8 criterios y pesos fijos: calificación frente a su rol (30 %), ataque (15 %) y defensa (15 %) frente a su rol, pase frente a su rol (10 %), impacto en el equipo (10 %), MVP (10 %), rendimiento ante rivales fuertes (5 %) y regularidad (5 %). Todo se compara con el promedio del rol, y con pocos partidos el resultado se acerca al promedio. Para entrar hace falta jugar al menos el 30 % de los partidos del club. La explicación completa está en la misma pestaña.</p>
+
       <h3>De dónde salen los datos</h3>
       <p>De la web pública de Clubes de EA, que se consulta sola cada 15 minutos. Nadie carga nada a mano. EA solo guarda los <strong>últimos 10 partidos</strong> de cada tipo, por eso hay que capturarlos seguido. Cuentan liga, play-off y amistosos; arriba puedes filtrar por tipo, fechas y un mínimo de partidos.</p>
 
@@ -331,7 +360,7 @@
       <p>EA <strong>no</strong> da: goles de penal, porcentaje de regates exitosos (solo los completados), distancia recorrida, posesión en % ni quién le pasa a quién.</p>
 
       <h3>¿Y el mejor jugador?</h3>
-      <p>Todavía no hay fórmula: por ahora solo juntamos los datos. Se definirá más adelante, de forma transparente y sin castigar a quien rota de posición.</p>
+      <p>Hay una fórmula experimental en la pestaña "Mejor jugador" (ver arriba). Puede ajustarse cuando haya más partidos.</p>
     </div>
   </dialog>
 

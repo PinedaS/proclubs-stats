@@ -4,6 +4,15 @@ Dashboard: **https://pinedas.github.io/proclubs-stats/**
 
 Muestra las estadísticas de nuestro club de Clubes (Pro Clubs) de EA SPORTS FC, capturadas solas desde la web de EA. Nadie carga datos a mano y nadie necesita cuenta: solo se consulta.
 
+## 0. Versión beta
+
+El dashboard está en **beta**: las pestañas, gráficas y cálculos todavía cambian y pueden moverse o desaparecer. Los **datos de EA no son beta**: se guardan completos y tal cual.
+
+Deja de ser beta cuando se cumplan tres condiciones:
+- la detección de temporadas funciona en un cambio de temporada real, alrededor del 3-dic-2026;
+- hay al menos 50 partidos capturados;
+- pasan dos semanas sin cambios de estructura (pestañas o fórmula).
+
 ## 1. De dónde salen los datos
 
 - Cada 15 minutos un proceso automático consulta la web pública de Clubes de EA y guarda los partidos nuevos.
@@ -69,6 +78,27 @@ Muestra las estadísticas de nuestro club de Clubes (Pro Clubs) de EA SPORTS FC,
   - **Detalle del jugador:** "Su lugar en el equipo", dato por dato.
 - Cada jugador tiene siempre el mismo color en todas las gráficas, con su nombre al lado.
 - En el celular, la tabla se ve como tarjetas con un selector "Ordenar por".
+
+### Mejor jugador (experimental)
+
+- **Puntaje de 0 a 100** con 8 criterios y pesos fijos, iguales para todos:
+
+  | Criterio | Peso |
+  |---|---|
+  | Calificación frente a su rol | 30 % |
+  | Ataque frente a su rol | 15 % |
+  | Defensa frente a su rol | 15 % |
+  | Pase frente a su rol | 10 % |
+  | Impacto en el equipo | 10 % |
+  | MVP | 10 % |
+  | Ante rivales fuertes | 5 % |
+  | Regularidad | 5 % |
+
+- **Justo para quien rota:** todo se compara con el promedio de su rol. El portero se mide por % de atajadas en vez de por ataque.
+- **Pocos partidos:** con pocos partidos, el resultado se acerca al promedio.
+- **Para entrar:** jugar al menos el 30 % de los partidos del club.
+- **Desglose:** al tocar un jugador se ve cuánto aporta cada criterio. "¿Cómo se calcula?" explica la fórmula.
+- **No cambia ningún dato de EA:** es un cálculo encima.
 
 ### Por rol
 
@@ -139,7 +169,7 @@ EA **no** da:
 
 ## 6. El mejor jugador
 
-Todavía no hay fórmula: por ahora solo se juntan y muestran los datos. Se definirá más adelante, de forma transparente y sin castigar a quien rota de posición, juega de portero, entró con un nivel bajo o jugó en divisiones distintas. Para eso ya se guarda:
+Desde la v2.10 hay una fórmula **experimental**, en la pestaña "Mejor jugador" (ver arriba). Es transparente y no castiga a quien rota de posición ni a quien juega de portero. También se guarda, para poder afinarla después:
 - la posición y el arquetipo de cada partido;
 - la división de cada partido;
 - el nivel del rival;

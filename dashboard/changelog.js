@@ -3,6 +3,16 @@
 // La fecha es la de Colombia (UTC−5), no la UTC: de noche ya es "mañana" en UTC.
 export const CHANGELOG = [
   {
+    version: '2.10',
+    date: '2026-11-16',
+    title: 'Mejor jugador (experimental) y versión beta',
+    changes: [
+      'Pestaña nueva "Mejor jugador" (experimental): un puntaje de 0 a 100 con 8 criterios y pesos fijos, comparando a cada uno con el promedio de su rol. Toca un jugador para ver cuánto aporta cada criterio; "¿Cómo se calcula?" explica la fórmula.',
+      'Para entrar al ranking del mejor jugador hay que jugar al menos el 30 % de los partidos del club.',
+      'El dashboard se marca como beta: las pestañas, gráficas y cálculos todavía cambian. Los datos de EA no: se guardan completos y tal cual.',
+    ],
+  },
+  {
     version: '2.9',
     date: '2026-11-16',
     title: 'Gráficas nuevas',

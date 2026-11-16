@@ -59,6 +59,13 @@ API no oficial de EA ──► Colector (GitHub Actions, cada 30 min) ──► 
    - Los archivos se versionan con el commit en `pages.yml` (`__V__`), para no mezclar versiones viejas desde la caché de Pages.
    - Probado en Chrome con los datos del club de prueba.
    - **Migraciones aplicadas en Supabase:** 001–021, cada una verificada después de aplicarla.
+   - **BETA (decidido con el usuario el 2026-11-16, v2.10):** etiqueta "Beta" junto a la versión.
+     - **Qué es beta:** solo la forma de mostrar y analizar (pestañas, gráficas y fórmula). **Los datos de EA no.** El texto lo aclara.
+     - **Criterios de salida (las tres condiciones):**
+       1. La detección de temporadas funciona en un reinicio real, alrededor del 3-dic-2026.
+       2. Hay al menos 50 partidos capturados.
+       3. Pasan dos semanas sin cambios de estructura: pestañas nuevas o quitadas, o cambios en la fórmula. Las correcciones no cuentan.
+     - **Revisar a mediados de diciembre de 2026.** Para quitarla: borrar el `.beta-tag` de `index.html` y la nota de `renderChangelog`.
    - **Documentación (2026-11-16):** `README.md`, `docs/manual-de-usuario.md` (para el equipo) y `docs/arquitectura.md` (técnica, con diagramas Mermaid). Actualizarlas al cambiar funciones.
    - **v2.7 (2026-11-16, pedidos del usuario):**
      - **Ranking:**

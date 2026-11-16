@@ -2540,6 +2540,142 @@ function teamPlaceSection(personId) {
 }
 
 // ---------------------------------------------------------------------------
+// Mejor jugador (EXPERIMENTAL, v2.10). Fórmula aprobada por el usuario el
+// 2026-11-16: criterios y pesos FIJOS (todos ven el mismo ranking) y mínimo del
+// 30 % de los partidos del club. No cambia ningún dato de EA: es un cálculo encima.
+//
+//   1. Cada criterio es un índice: 100 = promedio (del rol, cuando aplica).
+//   2. Corrección por pocos partidos: 100 + (índice − 100) × PJ / (PJ + 5).
+//   3. Nota 0–100: 50 + (índice − 100), recortada a [0, 100].
+//   4. Puntaje = promedio ponderado de las notas. Si a alguien le falta un
+//      criterio, su peso se reparte entre los demás (se avisa).
+// ---------------------------------------------------------------------------
+
+const BEST_MIN_SHARE = 0.3; // 30 % de los partidos del club en el rango filtrado
+const BEST_SHRINK_K = 5;
+const BEST_CRITERIA = [
+  { key: 'rating', label: 'Calificación frente a su rol', weight: 30, help: 'Su calificación de EA comparada con el promedio del club en las posiciones que jugó (por minutos).' },
+  { key: 'attack', label: 'Ataque frente a su rol', weight: 15, help: 'Goles + asistencias por 90 min frente al promedio de su rol.' },
+  { key: 'defense', label: 'Defensa frente a su rol', weight: 15, help: 'Entradas e intercepciones* por 90 min frente a su rol. Si jugó sobre todo de portero: % de atajadas frente a otros porteros.' },
+  { key: 'passing', label: 'Pase frente a su rol', weight: 10, help: 'Precisión de pase frente al promedio de su rol.' },
+  { key: 'impact', label: 'Impacto en el equipo', weight: 10, help: '% de victorias del equipo con él menos % sin él (cada punto de diferencia suma o resta un punto al índice).' },
+  { key: 'mvp', label: 'MVP', weight: 10, help: 'Su % de MVP frente al promedio de los jugadores que entran al ranking.' },
+  { key: 'strong', label: 'Ante rivales fuertes', weight: 5, help: 'Su calificación frente a su rol, solo en partidos contra rivales de nivel igual o mayor a la mediana.' },
+  { key: 'regularity', label: 'Regularidad', weight: 5, help: 'Qué tan estable es su calificación: menos variación que el promedio = índice mayor.' },
+];
+
+/** Índices de cada criterio por persona (sin corregir). */
+function bestIndices(people, timeline) {
+  const out = new Map(people.map((p) => [p.person_id, {}]));
+  const avg = (a) => (a.length ? a.reduce((x, y) => x + y, 0) / a.length : null);
+  // Rol: índices de relative_stats (posición, ponderados por minutos).
+  for (const p of people) {
+    const rel = state.relative.get(p.person_id) ?? {};
+    const o = out.get(p.person_id);
+    const gk = (state.positions.get(p.person_id) ?? [])[0]?.pos === 'goalkeeper';
+    o.rating = rel.rating_idx;
+    o.attack = gk ? null : rel.ga90_idx;
+    const def = gk ? [rel.save_idx] : [rel.tackles90_idx, rel.interceptions90_idx_exp];
+    o.defense = avg(def.filter((v) => v != null).map(Number));
+    o.passing = rel.pass_idx;
+  }
+  // Impacto: % de victorias con él menos sin él.
+  const roster = [...matchRoster(timeline).values()];
+  for (const p of people) {
+    const w = teamResults(roster.filter((m) => m.people.has(p.person_id)));
+    const wo = teamResults(roster.filter((m) => !m.people.has(p.person_id)));
+    out.get(p.person_id).impact = w.n && wo.n ? 100 + (w.winPct - wo.winPct) : null;
+  }
+  // MVP frente al promedio de los que entran.
+  const mvpMean = avg(people.map((p) => Number(p.mom_pct ?? 0)));
+  for (const p of people) out.get(p.person_id).mvp = mvpMean ? (100 * Number(p.mom_pct ?? 0)) / mvpMean : null;
+  // Rivales fuertes: calificación frente al promedio del club en esa posición, solo vs. rivales ≥ mediana.
+  const posAvg = new Map();
+  for (const t of timeline) {
+    if (t.rating == null || !t.position) continue;
+    const e = posAvg.get(t.position) ?? { s: 0, n: 0 }; e.s += Number(t.rating); e.n++; posAvg.set(t.position, e);
+  }
+  const skills = roster.map((m) => m.opp).filter((v) => v != null).map(Number);
+  const cut = median(skills);
+  for (const p of people) {
+    let num = 0, den = 0;
+    for (const t of timeline) {
+      if (t.person_id !== p.person_id || t.rating == null || t.opponent_skill_rating == null || cut == null || Number(t.opponent_skill_rating) < cut) continue;
+      const pa = posAvg.get(t.position);
+      if (!pa?.n) continue;
+      const w = Number(t.seconds_played ?? 0) || 1;
+      num += w * (Number(t.rating) / (pa.s / pa.n)); den += w;
+    }
+    out.get(p.person_id).strong = den ? 100 * (num / den) : null;
+  }
+  // Regularidad: variación media del grupo / la suya (menos variación = más de 100).
+  const stdMean = avg(people.map((p) => p.rating_stddev).filter((v) => v != null).map(Number));
+  for (const p of people) out.get(p.person_id).regularity = p.rating_stddev != null && Number(p.rating_stddev) > 0 && stdMean ? (100 * stdMean) / Number(p.rating_stddev) : null;
+  return out;
+}
+
+/** Ranking del mejor jugador con el desglose de cada criterio. */
+function computeBest() {
+  const clubMatches = state.ranking[0]?.club_matches ?? 0;
+  const min = Math.max(1, Math.ceil(BEST_MIN_SHARE * clubMatches));
+  const eligible = state.ranking.filter((r) => r.matches >= min);
+  const others = state.ranking.filter((r) => r.matches < min);
+  const idx = bestIndices(eligible, state.timeline);
+  const rows = eligible.map((p) => {
+    const raw = idx.get(p.person_id);
+    const parts = BEST_CRITERIA.map((c) => {
+      const v = raw[c.key];
+      if (v == null || !Number.isFinite(v)) return { c, idx: null, adj: null, score: null };
+      const adj = 100 + (v - 100) * (p.matches / (p.matches + BEST_SHRINK_K));
+      return { c, idx: v, adj, score: Math.max(0, Math.min(100, 50 + (adj - 100))) };
+    });
+    const used = parts.filter((x) => x.score != null);
+    const wsum = used.reduce((a, x) => a + x.c.weight, 0);
+    for (const x of parts) x.points = x.score == null || !wsum ? null : (x.score * x.c.weight) / wsum;
+    return { p, parts, total: wsum ? used.reduce((a, x) => a + x.points, 0) : null, missing: parts.filter((x) => x.score == null).map((x) => x.c.label) };
+  }).sort((a, b) => (b.total ?? -1) - (a.total ?? -1));
+  return { rows, others, min, clubMatches };
+}
+
+function renderBest() {
+  const { rows, others, min, clubMatches } = computeBest();
+  const box = $('#best-body');
+  $('#best-weights').replaceChildren(...BEST_CRITERIA.map((c) => el('tr', {}, el('td', { class: 'left' }, c.label), el('td', {}, `${c.weight} %`), el('td', { class: 'left muted small' }, c.help))));
+  $('#best-min').textContent = `${min} partidos (30 % de los ${clubMatches} del club con los filtros actuales)`;
+  if (!rows.length) {
+    box.replaceChildren(el('p', { class: 'muted', style: 'padding: 0 18px 18px' }, `Nadie tiene todavía el mínimo de ${min} partidos (30 % de los ${clubMatches} del club con estos filtros).`));
+    return;
+  }
+  const list = el('div', { class: 'best-list' }, rows.map((r, i) => {
+    const detail = el('div', { class: 'best-detail', hidden: true },
+      el('div', { class: 'table-wrap' }, el('table', { class: 'data' },
+        el('thead', {}, el('tr', {}, ['Criterio', 'Índice', 'Con corrección', 'Nota', 'Peso', 'Aporta'].map((h, k) => el('th', { scope: 'col', class: k === 0 ? 'left' : null }, h)))),
+        el('tbody', {}, r.parts.map((x) => el('tr', { title: x.c.help },
+          el('td', { class: 'left' }, x.c.label),
+          el('td', {}, x.idx == null ? '—' : fmtNum(x.idx, 0)),
+          el('td', {}, x.adj == null ? '—' : fmtNum(x.adj, 0)),
+          el('td', {}, x.score == null ? '—' : fmtNum(x.score, 0)),
+          el('td', {}, `${x.c.weight} %`),
+          el('td', {}, el('strong', {}, x.points == null ? '—' : fmtNum(x.points, 1)))))))),
+      r.missing.length ? el('p', { class: 'muted small' }, `Sin dato en: ${r.missing.join(', ')}. Su peso se repartió entre los demás criterios.`) : null);
+    const head = el('button', { type: 'button', class: 'best-row', 'aria-expanded': 'false', onclick: () => {
+      detail.hidden = !detail.hidden; head.setAttribute('aria-expanded', String(!detail.hidden));
+    } },
+      el('span', { class: `best-place m${i + 1}` }, String(i + 1)),
+      avatar(r.p.person_name),
+      el('span', { class: 'best-name' }, r.p.person_name, el('span', { class: 'muted small' }, ` ${r.p.matches} PJ`)),
+      el('span', { class: 'best-bar' }, el('i', { style: `width:${Math.max(2, r.total ?? 0)}%` })),
+      el('span', { class: 'best-score' }, r.total == null ? '—' : fmtNum(r.total, 1)));
+    return el('div', { class: 'best-item' }, head, detail);
+  }));
+  box.replaceChildren(...[
+    list,
+    others.length ? el('p', { class: 'muted small best-others' }, `Todavía sin el mínimo de ${min} partidos: ${others.map((o) => `${o.person_name} (${o.matches} PJ)`).join(', ')}.`) : null,
+    clubMatches < FEW_MATCHES ? el('p', { class: 'few-data' }, `Con ${clubMatches} partidos del club, este ranking todavía puede cambiar mucho.`) : null,
+  ].filter(Boolean));
+}
+
+// ---------------------------------------------------------------------------
 // Gráfico de línea (una sola serie: sin leyenda, el título la nombra)
 // ---------------------------------------------------------------------------
 
@@ -2665,6 +2801,7 @@ async function refresh() {
       tasks.push(real ? renderPositions(filters, requestId) : renderRoles(filters, requestId));
     }
     if (state.view === 'h2h') renderH2h();
+    if (state.view === 'best') renderBest();
     if (state.view === 'compare') tasks.push(renderCompare(filters, requestId));
     if (state.view === 'pairs') renderPairs();
     if (state.view === 'matches') tasks.push(renderMatches(filters, requestId));
@@ -2688,7 +2825,7 @@ function setView(view) {
       history.replaceState(null, '', url);
     }
   }
-  for (const v of ['ranking', 'roles', 'h2h', 'compare', 'pairs', 'matches', 'members', 'club']) $(`#view-${v}`).hidden = v !== view;
+  for (const v of ['ranking', 'best', 'roles', 'h2h', 'compare', 'pairs', 'matches', 'members', 'club']) $(`#view-${v}`).hidden = v !== view;
   refresh();
 }
 
@@ -2736,6 +2873,7 @@ function renderChangelog() {
   // aquí se reconoce el commit por su forma (hexadecimal), no comparando con el marcador.
   const commit = new URL(import.meta.url).searchParams.get('v');
   $('#changelog-body').replaceChildren(...[
+    el('p', { class: 'beta-note' }, el('span', { class: 'beta-tag' }, 'Beta'), ' Las pestañas, gráficas y cálculos todavía cambian y pueden moverse o desaparecer. Los datos de EA no: se guardan completos y tal cual, y no se pierden con estos cambios.'),
     ...CHANGELOG.map((v, i) => el('details', { class: 'release', open: i === 0 },
       el('summary', {},
         el('span', { class: 'release-version' }, `v${v.version}`),
