@@ -14,10 +14,10 @@ function int(v: unknown): number | null {
  * Escudo del club en la fila del ranking de la temporada: clubInfo.teamId (escudo
  * de un equipo real) y clubInfo.customKit.crestAssetId (escudo propio).
  *
- * Hipótesis (2026-11-16, 2 clubes, no documentada por EA): customKit.dCustomKit
+ * Regla confirmada por el usuario (2026-11-16, 2 clubes; EA no la documenta): customKit.dCustomKit
  * dice si el club USA su escudo propio. 100 D CILANTRO trae "3" y su escudo es el
  * propio (confirmado por el usuario); FC Aston Huila trae "0" y su escudo correcto
- * no es el propio (el usuario lo descartó), sino el del teamId. Por eso, con
+ * no es el propio, sino el del teamId (Atlético Nacional, confirmado). Por eso, con
  * dCustomKit "0", crestAssetId queda en null y el dashboard usa el teamId.
  * El valor crudo sigue en club_snapshots.raw.
  */

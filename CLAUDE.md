@@ -301,8 +301,8 @@ No hay API oficial. Se usan los endpoints públicos que lee la web de Clubes de 
     - partido, jugadores y foto del club guardados;
     - división API 6 (5ª del juego) y división del rival API 4;
     - **escudo:** el propio (`crestAssetId` 99160313, flor de lis) **no es** el del club, según el usuario. Trae `customKit.dCustomKit` "0", y 100 D CILANTRO trae "3".
-      - **Hipótesis:** `dCustomKit` 0 = no usa escudo propio, sino el de `teamId` (101100, Atlético Nacional).
-      - `crestOf()` en `club.ts` deja `crest_asset_id` en null en ese caso, y el dashboard usa el `teamId`. Falta que el usuario confirme;
+      - **Regla:** `dCustomKit` 0 = no usa escudo propio, sino el de `teamId`. **Confirmada por el usuario el 2026-11-16** en los dos clubes: con 0, el de Atlético Nacional (101100) es el correcto; con 3, el propio de 100 D CILANTRO.
+      - `crestOf()` en `club.ts` deja `crest_asset_id` en null en ese caso, y el dashboard usa el `teamId`;
     - temporada 2 heredada de 100 D CILANTRO;
     - PinedaDS es la misma persona (`person_id` 9) en los dos clubes.
   - El dashboard muestra el selector de club.
