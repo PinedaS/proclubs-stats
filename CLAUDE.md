@@ -293,9 +293,17 @@ No hay API oficial. Se usan los endpoints públicos que lee la web de Clubes de 
   - Verificado después: 0 partidos, 0 JSON crudo y 0 fotos de ese club.
   - Quedaron 3 cuentas y 3 personas, todas de 100 D CILANTRO. El registro `collector_runs` se conservó.
   - Lo de abajo sobre el club de prueba queda como historia.
-- **FC Aston Huila todavía no aparece en EA** (búsqueda del 2026-11-15: 0 resultados; sigue sin partidos).
-  - **No** se agregó a `EA_CLUB_NAMES`: cada captura fallaría y llegaría un correo cada 15 min.
-  - **Agregarlo apenas jueguen el primer partido:** `FC Aston Huila;100 D CILANTRO`. Ver `docs/cambio-de-temporada.md`, parte A.
+- **FC Aston Huila se sigue desde el 2026-11-16** (`clubId` **2171706**, `common-gen5`).
+  - **Primer partido:** liga, 2026-11-16 20:52 UTC, derrota 3-6 contra Miralys FC. Jugaron PinedaDS y Henoxerwtf.
+  - **Confirmado:** la búsqueda de EA solo lista clubes con partidos jugados. Antes del primer partido daba 0 resultados; después, 1 con coincidencia exacta.
+  - **`EA_CLUB_NAMES` = `FC Aston Huila;100 D CILANTRO`.** El usuario la cambió el 2026-11-16 desde su Chrome; GitHub pidió confirmar con su passkey.
+  - **Verificado en la captura de las 21:02 UTC:**
+    - partido, jugadores y foto del club guardados;
+    - división API 6 (5ª del juego) y división del rival API 4;
+    - escudo `crestAssetId` 99160313, que el usuario aún no confirmó;
+    - temporada 2 heredada de 100 D CILANTRO;
+    - PinedaDS es la misma persona (`person_id` 9) en los dos clubes.
+  - El dashboard muestra el selector de club.
 
 
 **Club del equipo: "FC Aston Huila"** (creado el 2026-11-10; todavía sin partidos jugados).
