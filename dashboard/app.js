@@ -411,7 +411,7 @@ const EXP_NOTE = 'Experimental: dato que EA no documenta; es una aproximación';
 const RANKING_COLUMNS = [
   { key: 'person_name', label: 'Jugador', text: true, kind: 'base', render: (r) => playerCell(r.person_name, r.platforms ? r.platforms.split(', ').map(platformLabel).join(' · ') : null) },
   { key: 'main_position', label: 'Posiciones', text: true, kind: 'base', title: 'Posiciones que jugó, con el % de sus minutos en cada una', render: (r) => positionShares(r.person_id, r.main_position) },
-  { key: 'pro_overall', label: 'Media (EA)', kind: 'base', title: 'Media (overall) actual del Pro según EA' },
+  { key: 'pro_overall', label: 'Media (EA)', kind: 'base', title: 'Media del Pro según EA. Con datos por partido, una por arquetipo (la última con que jugó cada uno); si no, la única que da EA.', render: (r) => archLevelsCell(r) },
   { key: 'matches', label: 'PJ', kind: 'base', title: 'Partidos jugados (capturados)' },
   { key: 'wins', label: 'V-E-D', kind: 'base', title: 'Victorias, empates y derrotas (ordena por victorias)', render: (r) => `${r.wins}-${r.draws}-${r.losses}` },
   // --- Rendimiento
@@ -513,6 +513,28 @@ const RANKING_COLUMNS = [
   { theme: 'Equipo y contexto', key: 'avg_team_size', label: 'Jug. prom.', kind: 'rate', title: 'Jugadores del club en cancha, en promedio', digits: 1, better: null },
   { theme: 'Equipo y contexto', key: 'incomplete_matches', label: 'Abandonos', kind: 'abs', title: 'Partidos abandonados o cortados antes de tiempo', better: null },
 ];
+
+/**
+ * Media del Pro por arquetipo (022): la última media observada después de un
+ * partido con cada arquetipo. Map person_id -> [{ arch, ovr, at }] (de más reciente a más vieja).
+ */
+function archLevelsByPerson(rows) {
+  const by = new Map();
+  for (const t of rows) {
+    if (t.pro_overall == null || t.archetype_id == null) continue;
+    if (!by.has(t.person_id)) by.set(t.person_id, new Map());
+    const m = by.get(t.person_id), prev = m.get(t.archetype_id);
+    if (!prev || t.played_at > prev.at) m.set(t.archetype_id, { arch: t.archetype_id, ovr: Number(t.pro_overall), at: t.played_at });
+  }
+  return new Map([...by].map(([id, m]) => [id, [...m.values()].sort((a, b) => b.at.localeCompare(a.at))]));
+}
+/** Celda "Media (EA)": por arquetipo si hay datos por partido; si no, la única media de EA. */
+function archLevelsCell(r) {
+  const list = state.archLevels?.get(r.person_id);
+  if (!list?.length) return fmtNum(r.pro_overall);
+  return el('span', { class: 'arch-levels', title: 'Media del Pro con cada arquetipo, observada después de su último partido con él' },
+    list.map((a, i) => el('span', { class: i ? 'muted' : null }, `${archetypeName(a.arch)} ${a.ovr}`)));
+}
 
 /** Totales que se pasan a "por 90 min" en el navegador (clave + "_p90"). */
 const PER90_KEYS = ['shots', 'passes_made', 'second_assists_exp', 'dribbles_exp', 'through_passes_exp', 'possession_lost_exp', 'tackles_made',
@@ -2249,7 +2271,9 @@ async function renderPerson(filters, requestId) {
     el('div', { class: 'detail-head' },
       el('div', { class: 'detail-id' }, el('div', { class: 'detail-avatar' }, avatar(name, true), photoControls(state.personId, name)), el('div', {}, el('h2', {}, name),
         el('div', { class: 'badges' }, posBadge(summary?.main_position), platforms.map((p) => el('span', { class: 'badge' }, platformLabel(p))),
-          summary?.pro_overall != null ? el('span', { class: 'badge', title: 'Media (overall) del Pro según EA' }, `Media ${summary.pro_overall}`) : null,
+          ...(state.archLevels?.get(state.personId)?.length
+            ? state.archLevels.get(state.personId).map((a) => el('span', { class: 'badge', title: 'Media del Pro con ese arquetipo, después de su último partido con él' }, `${archetypeName(a.arch)} ${a.ovr}`))
+            : [summary?.pro_overall != null ? el('span', { class: 'badge', title: 'Media (overall) del Pro según EA (EA da una sola, sin decir de qué arquetipo)' }, `Media ${summary.pro_overall}`) : null]),
           summary?.pro_name ? el('span', { class: 'badge', title: 'Nombre del personaje' }, summary.pro_name) : null))),
       el('div', { class: 'detail-actions' },
         el('button', { type: 'button', class: 'close', onclick: () => compareWith(state.personId) }, 'Comparar con…'),
@@ -2630,9 +2654,12 @@ const SUB = {
     { label: 'Duelos aéreos por 90*', w: 10, kind: 'p90', num: n('aerial_duels_won_exp'), ok: has('aerial_duels_won_exp') },
     { label: 'Entradas peligrosas por 90*', w: 5, kind: 'p90', low: true, num: n('dangerous_tackles_exp'), ok: has('dangerous_tackles_exp') },
   ],
+  // Arquero (aprobado por el usuario el 2026-11-16): se usa en los minutos que jugó de arquero.
   defenseGk: [
-    { label: '% de atajadas', w: 70, kind: 'ratio', num: n('saves'), den: sum('saves', 'goals_conceded') },
-    { label: 'Atajadas por 90', w: 30, kind: 'p90', num: n('saves') },
+    { label: 'Arquero: % de atajadas', w: 50, kind: 'ratio', num: n('saves'), den: sum('saves', 'goals_conceded') },
+    { label: 'Arquero: goles recibidos por 90', w: 20, kind: 'p90', low: true, num: n('goals_conceded') },
+    { label: 'Arquero: atajadas por 90', w: 15, kind: 'p90', num: n('saves') },
+    { label: 'Arquero: vallas invictas por partido', w: 15, kind: 'ratio', num: n('clean_sheets_gk'), den: () => 1 },
   ],
   passing: [
     { label: 'Precisión de pase', w: 30, kind: 'ratio', num: n('passes_made'), den: n('pass_attempts') },
@@ -2706,7 +2733,8 @@ function bestIndices(people, timeline) {
   const meanSkill = avg(roster.map((m) => m.opp).filter((v) => v != null).map(Number));
   // Nivel (v2.13): la misma actuación vale más con una media del Pro más baja.
   // Factor = media del equipo / su media ese día, entre ×0,90 y ×1,10; se combina con la dificultad.
-  const withLevel = timeline.map((t) => ({ ...t, _ovr: levelOn(t.playername, t.played_at) }));
+  // Media del partido (022, por arquetipo) si existe; si no, la foto diaria (aproximada).
+  const withLevel = timeline.map((t) => ({ ...t, _exact: t.pro_overall != null, _ovr: t.pro_overall != null ? Number(t.pro_overall) : levelOn(t.playername, t.played_at) }));
   const meanOvr = avg(withLevel.map((t) => t._ovr).filter((v) => v != null));
   const rows = withLevel.map((t) => {
     const diff = difficultyOf(t, meanSkill);
@@ -2737,13 +2765,29 @@ function bestIndices(people, timeline) {
     o.level = avg(mine.map((t) => t._lvl));
     o.ovr = avg(mine.map((t) => t._ovr).filter((v) => v != null));
     o.meanOvr = meanOvr;
-    const gk = (state.positions.get(p.person_id) ?? [])[0]?.pos === 'goalkeeper';
-    for (const [key, specs] of [['attack', gk ? null : SUB.attack], ['defense', gk ? SUB.defenseGk : SUB.defense], ['passing', SUB.passing]]) {
-      if (!specs) { o[key] = null; continue; }
-      const c = compositeIndex(mine, rows, specs);
-      o[key] = c.v; o.sub[key] = c.parts;
-    }
+    o.exactLevels = mine.filter((t) => t._exact).length;
+    o.levelRows = mine.length;
+    // Por posición (aprobado por el usuario): los minutos de arquero se miden con la
+    // defensa de arquero y no cuentan en el ataque; los de campo, con la de campo.
+    // Si jugó de las dos formas, la defensa combina ambas según sus minutos.
+    const field = mine.filter((t) => t.position !== 'goalkeeper');
+    const keeper = mine.filter((t) => t.position === 'goalkeeper');
+    const secs = (list) => list.reduce((a, t) => a + Number(t.seconds_played ?? 0), 0);
+    const att = field.length ? compositeIndex(field, rows, SUB.attack) : null;
+    o.attack = att?.v ?? null; o.sub.attack = att?.parts;
+    const defF = field.length ? compositeIndex(field, rows, SUB.defense) : null;
+    const defK = keeper.length ? compositeIndex(keeper, rows, SUB.defenseGk) : null;
+    const parts = [[defF, secs(field)], [defK, secs(keeper)]].filter(([c, s]) => c?.v != null && s > 0);
+    const ws = parts.reduce((a, [, s]) => a + s, 0);
+    o.defense = ws ? parts.reduce((a, [c, s]) => a + c.v * s, 0) / ws : null;
+    o.sub.defense = [...(defF?.parts ?? []), ...(defK?.parts ?? [])];
+    o.keeperShare = mine.length ? secs(keeper) / (secs(mine) || 1) : 0;
+    const pas = compositeIndex(mine, rows, SUB.passing);
+    o.passing = pas.v; o.sub.passing = pas.parts;
   }
+  // Arqueros del club en el rango: con uno solo, sus índices de arquero dan 100 (no hay con quién compararlo).
+  const keepers = new Set(rows.filter((t) => t.position === 'goalkeeper').map((t) => t.person_id));
+  for (const p of people) out.get(p.person_id).onlyKeeper = keepers.size === 1 && keepers.has(p.person_id);
   // Impacto: % de victorias con él menos sin él.
   for (const p of people) {
     const w = teamResults(roster.filter((m) => m.people.has(p.person_id)));
@@ -2793,7 +2837,7 @@ function computeBest() {
     const used = parts.filter((x) => x.score != null);
     const wsum = used.reduce((a, x) => a + x.c.weight, 0);
     for (const x of parts) x.points = x.score == null || !wsum ? null : (x.score * x.c.weight) / wsum;
-    return { p, parts, difficulty: raw.difficulty, level: raw.level, ovr: raw.ovr, meanOvr: raw.meanOvr, total: wsum ? used.reduce((a, x) => a + x.points, 0) : null, missing: parts.filter((x) => x.score == null).map((x) => x.c.label) };
+    return { p, parts, difficulty: raw.difficulty, level: raw.level, ovr: raw.ovr, meanOvr: raw.meanOvr, exactLevels: raw.exactLevels, levelRows: raw.levelRows, keeperShare: raw.keeperShare, onlyKeeper: raw.onlyKeeper, total: wsum ? used.reduce((a, x) => a + x.points, 0) : null, missing: parts.filter((x) => x.score == null).map((x) => x.c.label) };
   }).sort((a, b) => (b.total ?? -1) - (a.total ?? -1));
   return { rows, others, min, clubMatches };
 }
@@ -2826,6 +2870,10 @@ async function renderBest() {
       r.level != null ? el('p', { class: 'muted small' }, r.ovr != null
         ? `Factor de nivel: ×${fmtNum(r.level, 2)} (su media del Pro, ${fmtNum(r.ovr, 0)} en promedio, frente a ${fmtNum(r.meanOvr, 0)} del equipo; más bajo = más mérito).`
         : 'Factor de nivel: ×1,00 (EA no tiene fotos de su media del Pro).') : null,
+      r.levelRows ? el('p', { class: 'muted small' }, r.exactLevels === r.levelRows
+        ? 'Media del Pro de cada partido: exacta en todos (la del arquetipo con que jugó).'
+        : `Media del Pro exacta del partido en ${r.exactLevels} de ${r.levelRows}; en el resto, aproximada con la foto del día (puede ser la de otro arquetipo).`) : null,
+      r.keeperShare > 0 ? el('p', { class: 'muted small' }, `Jugó de arquero el ${fmtNum(100 * r.keeperShare, 0)} % de sus minutos: esos minutos se miden con la defensa de arquero y no cuentan en el ataque.${r.onlyKeeper ? ' Es el único arquero del club en estos partidos, así que sus índices de arquero dan 100: no hay con quién compararlo.' : ''}`) : null,
       el('div', { class: 'table-wrap' }, el('table', { class: 'data' },
         el('thead', {}, el('tr', {}, ['Criterio', 'Índice', 'Con corrección', 'Nota', 'Peso', 'Aporta'].map((h, k) => el('th', { scope: 'col', class: k === 0 ? 'left' : null }, h)))),
         el('tbody', {}, r.parts.map((x) => el('tr', { title: x.c.help },
@@ -2964,6 +3012,7 @@ async function refresh() {
     }
     state.ranking = addExtraCounters(ranking, timeline).map((r) => deriveRow({ ...r, pro_overall: ea.get(r.person_id)?.pro_overall ?? null, pro_name: ea.get(r.person_id)?.pro_name ?? null }));
     state.positions = positionsByPerson(timeline);
+    state.archLevels = archLevelsByPerson(timeline);
     syncPhotoNames();
     state.records = new Map(records.map((r) => [r.person_id, r]));
     renderReconAlert().catch(() => {});

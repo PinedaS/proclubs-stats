@@ -3,6 +3,15 @@
 // La fecha es la de Colombia (UTC−5), no la UTC: de noche ya es "mañana" en UTC.
 export const CHANGELOG = [
   {
+    version: '2.14',
+    date: '2026-11-16',
+    title: 'Media por arquetipo y arqueros',
+    changes: [
+      'Cada arquetipo tiene su propia media: desde hoy se guarda la media de cada jugador en cada partido (la del arquetipo con que jugó). "Media (EA)" muestra una por arquetipo cuando hay datos, y el mejor jugador la usa para el factor de nivel.',
+      'Mejor jugador: los minutos de arquero se miden con una defensa de arquero (atajadas, goles recibidos, vallas invictas) y no cuentan en el ataque; quien juega de arquero y de campo combina las dos.',
+    ],
+  },
+  {
     version: '2.13',
     date: '2026-11-16',
     title: 'Mejor jugador: nivel de cada jugador',

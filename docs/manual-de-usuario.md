@@ -102,6 +102,15 @@ Deja de ser beta cuando se cumplan tres condiciones:
 - **Dificultad:** en calificación, ataque, defensa y pase, cada partido vale más en divisiones altas (+5 % por división sobre la 5ª) y contra rivales de más nivel (entre −15 % y +15 %).
 - **Ataque, defensa y pase combinan varios datos:** G+A, conversión, regates*, tiros; entradas, intercepciones*, recuperaciones*, duelos aéreos*; precisión, pases filtrados*, pérdidas*, entre otros.
 - **Nivel del jugador:** la misma actuación vale más con una media del Pro más baja. Cada partido se ajusta por la media que el jugador tenía ese día frente a la del equipo, entre −10 % y +10 %.
+- **Media por arquetipo:** cada arquetipo tiene su propia media, y EA da una sola. Desde el 16-nov-2026 se guarda la media de cada partido, justo después de jugarlo. Los partidos anteriores usan la foto del día, que es una aproximación.
+- **Arqueros:** los minutos de arquero se miden con una defensa propia, frente a otros arqueros, y no cuentan en el ataque:
+
+  | Dato | Peso |
+  |---|---|
+  | % de atajadas | 50 % |
+  | Goles recibidos por 90 (menos es mejor) | 20 % |
+  | Atajadas por 90 | 15 % |
+  | Vallas invictas | 15 % |
 - **Juego limpio:** puntos de sanción por 90 minutos (roja 3, amarilla* 1, penal cometido* 1, falta* 0,25) frente al promedio del equipo. Menos sanciones = más puntos.
 
 - **Justo para quien rota:** todo se compara con el promedio de su rol. El portero se mide por % de atajadas en vez de por ataque.

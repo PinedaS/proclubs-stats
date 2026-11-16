@@ -365,10 +365,19 @@ No hay API oficial. Se usan los endpoints públicos que lee la web de Clubes de 
      - **Cálculo:** factor por partido = media del equipo / su media ese día, recortado a 0,90–1,10. Se multiplica con la dificultad, en los mismos cuatro criterios.
      - **Fuente:** la foto diaria `member_snapshots`, por cuenta (`playername`), del día del partido o la anterior más cercana. Antes de la primera foto se usa la primera; sin fotos, ×1.
      - **Se eligió la media de cada día y no la de entrada** (decisión del usuario): así no se pierde el mérito de los partidos jugados con nivel bajo.
+     - **Media por arquetipo (v2.14, migración 022, pedido del usuario):**
+       - **Verificado el 2026-11-16:** EA da **una sola** `proOverall` por miembro y club, sin decir de qué arquetipo es. Los partidos traen `archetypeid`, pero no la media.
+       - **Hipótesis sin confirmar:** esa media es la del arquetipo de su último partido en ese club. Indicio: PinedaDS tenía 76 en 100 D CILANTRO y 77 en FC Aston Huila, con el mismo arquetipo y un partido más reciente en Aston.
+       - **Captura:** el colector anota `player_match_stats.pro_overall` en el partido nuevo y reciente (< 6 h) más nuevo de cada jugador, justo después de capturarlo. Nunca la pisa.
+       - **Dashboard:** el factor de nivel usa esa media. Sin ella, usa la foto diaria y lo avisa ("exacta en N de M"). "Media (EA)" muestra una media por arquetipo si hay datos (`archLevelsByPerson`).
+       - **Pendiente: verificar la hipótesis** con partidos en los que alguien cambie de arquetipo.
+       - **Intervalo de 15 min:** un partido dura ~20 min reales, así que no caben dos partidos completos entre dos capturas. No hace falta acortarlo.
    - **Criterios compuestos (v2.12, datos y pesos aprobados por el usuario):** cada dato es un índice frente al rol (por posición y por minutos), con un recorte de ×0,25–×2,5. Ver `SUB` en `app.js`.
      - **Ataque:** G+A/90 35, conversión 15, regates*/90 15, rival superado*/90 10, 2ª asistencias*/90 10, tiros/90 10, tiros a puerta %* 5.
      - **Defensa:** entradas/90 25, % de entradas 15, intercepciones*/90 20, recuperaciones*/90 15, balones quitados*/90 10, aéreos*/90 10, entradas peligrosas*/90 (menos es mejor) 5.
-     - **Defensa del portero:** % de atajadas 70, atajadas/90 30.
+     - **Defensa del arquero (v2.14, aprobada por el usuario):** % de atajadas 50, goles recibidos/90 (menos es mejor) 20, atajadas/90 15, vallas invictas por partido 15.
+       - **Se aplica por posición:** los minutos de arquero usan la defensa de arquero y no cuentan en el ataque. Si alguien jugó de arquero y de campo, su defensa combina las dos según sus minutos.
+       - Si hay un solo arquero en el club, sus índices dan 100, y la pestaña lo avisa.
      - **Pase:** precisión 30, pases/90 15, filtrados*/90 15, pérdidas*/90 (menos es mejor) 15, pase adelante %* 10, pase largo %* 10, decisiones %* 5.
    - **Juego limpio:** sanción/90 = 3·roja + amarilla* + penal* + 0,25·falta*. Índice = (media + ε) / (suya + ε) × 100, con ε = máx(0,05; 10 % de la media).
    - **Cálculo:** índice (100 = promedio) → corrección por pocos partidos `100 + (i − 100) × PJ / (PJ + 5)` → nota `50 + (i − 100)`, recortada a 0–100 → promedio ponderado. Si falta un criterio, su peso se reparte entre los demás, con aviso.

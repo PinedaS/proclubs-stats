@@ -127,7 +127,7 @@ export const EXTRA_COUNTERS = [
 
 /** Datos por partido que usa la fórmula del mejor jugador (dificultad, criterios ampliados y juego limpio). */
 const BEST_FIELDS = [
-  'playername', 'club_division', 'shots', 'pass_attempts', 'passes_made', 'tackle_attempts', 'tackles_made', 'saves', 'goals_conceded', 'red_cards',
+  'playername', 'archetype_id', 'pro_overall', 'clean_sheets_gk', 'club_division', 'shots', 'pass_attempts', 'passes_made', 'tackle_attempts', 'tackles_made', 'saves', 'goals_conceded', 'red_cards',
   'dribbles_exp', 'interceptions_exp', 'possession_won_exp', 'possession_lost_exp', 'aerial_duels_won_exp', 'fouls_exp',
   'yellow_cards_exp', 'second_assists_exp', 'shots_on_target_exp', 'shots_off_target_exp', 'through_passes_exp',
   'forward_passes_ok_exp', 'forward_passes_failed_exp', 'best_option_exp', 'should_have_passed_exp', 'penalties_conceded_exp',
