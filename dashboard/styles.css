@@ -668,7 +668,9 @@ dialog.guide::backdrop { background: rgb(0 0 0 / .55); }
 .hl-move { white-space: nowrap; }
 
 /* v2.7 · Datos del ranking: totales / proporciones / oficiales / experimentales y "+ Añadir dato" */
-.data-toolbar { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; margin-top: 10px; position: relative; z-index: 4; }
+.data-toolbar { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; margin-top: 10px; position: relative; z-index: 30; }
+/* La tarjeta del ranking no recorta el menú "+ Añadir dato" (las demás siguen recortando por las esquinas). */
+.table-card:has(.data-toolbar) { overflow: visible; }
 .chips-btn { display: inline-flex; flex-wrap: wrap; gap: 6px; align-items: center; }
 .chips-btn button {
   font: inherit; font-size: .82rem; font-weight: 600; cursor: pointer; padding: 5px 11px; border-radius: 999px;

@@ -556,14 +556,14 @@ function renderColumnPicker() {
   const rest = RANKING_COLUMNS.filter((c) => c.kind !== 'base' && !shown.has(c.key));
   const themes = [...new Set(rest.map((c) => c.theme))];
   $('#col-picker-count').textContent = state.addedCols.length ? `${state.addedCols.length} agregado${state.addedCols.length === 1 ? '' : 's'}` : '';
-  $('#col-picker-body').replaceChildren(
+  $('#col-picker-body').replaceChildren(...[
     rest.length ? null : el('p', { class: 'muted small' }, 'Ya están todos los datos en la tabla.'),
     ...themes.map((t) => el('div', { class: 'picker-group' }, el('p', { class: 'picker-title' }, t),
       rest.filter((c) => c.theme === t).map((c) => el('button', {
         type: 'button', class: `picker-item${c.exp ? ' exp' : ''}`, title: c.exp ? `${c.title.replace(/\.$/, '')}. ${EXP_NOTE}.` : c.title,
         onclick: () => setAddedCols([...state.addedCols, c.key]),
       }, el('span', {}, `+ ${c.title}`), el('span', { class: 'picker-tags' }, c.kind === 'abs' ? 'Total' : 'Proporción', c.exp ? ' · Experimental' : ' · Oficial'))))),
-    state.addedCols.length ? el('button', { type: 'button', class: 'link-btn', onclick: () => setAddedCols([]) }, 'Quitar todo lo agregado') : null);
+    state.addedCols.length ? el('button', { type: 'button', class: 'link-btn', onclick: () => setAddedCols([]) }, 'Quitar todo lo agregado') : null].filter(Boolean));
 }
 
 /**
@@ -761,14 +761,15 @@ function renderRankingChart(rows, col) {
   const ordered = bestFirst(rows, col) ?? rows.filter((r) => r[col.key] != null).sort((a, b) => Number(b[col.key]) - Number(a[col.key]));
   if (!ordered.length) { box.replaceChildren(el('p', { class: 'muted small' }, 'Sin datos de este dato con los filtros actuales.')); return; }
   const max = Math.max(...ordered.map((r) => Math.abs(Number(r[col.key])))) || 1;
-  box.replaceChildren(el('div', { class: 'hbars', role: 'list' }, ordered.map((r) => {
+  // replaceChildren escribe "null" si recibe null: se filtran los vacíos.
+  box.replaceChildren(...[el('div', { class: 'hbars', role: 'list' }, ordered.map((r) => {
     const v = Number(r[col.key]);
     const text = col.render ? col.render(r) : fmtNum(v, col.digits ?? 0);
     return el('div', { class: `hbar${r.matches < PODIUM_MIN_MATCHES ? ' low-sample' : ''}`, role: 'listitem', title: `${r.person_name}: ${typeof text === 'string' ? text : fmtNum(v, col.digits ?? 0)} · ${r.matches} PJ`, ...onActivate(() => openPerson(r.person_id)) },
       el('span', { class: 'hbar-name' }, r.person_name),
       el('span', { class: 'hbar-track' }, el('i', { style: `width:${Math.max(1, (100 * Math.abs(v)) / max)}%` })),
       el('span', { class: 'hbar-val' }, text));
-  })), betterOf(col) === 'low' ? el('p', { class: 'muted small' }, 'En este dato, menos es mejor: arriba va quien tiene menos.') : null);
+  })), betterOf(col) === 'low' ? el('p', { class: 'muted small' }, 'En este dato, menos es mejor: arriba va quien tiene menos.') : null].filter(Boolean));
 }
 
 /**

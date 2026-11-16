@@ -9,6 +9,7 @@ export const CHANGELOG = [
     changes: [
       'Juego y temporada por separado: la cabecera dice "FC 27 · Temporada 1". En "Fechas" se puede elegir una temporada; la nueva se detecta sola cuando EA reinicia la temporada.',
       'Escudo real del club y escudos de cada división (los del juego), en la cabecera, en Partidos y en el detalle del jugador.',
+      'Correcciones: ya no aparece "null" debajo de la gráfica del ranking, y el menú "+ Añadir dato" se ve completo.',
       '"+ Añadir dato" suma más de 30 datos: pases cortos, medios y largos; al primer toque; tiros dentro y fuera del área; goles con la pierna mala; regates superando al rival; barridas; balones quitados; tipos de atajada del portero, y más.',
     ],
   },
