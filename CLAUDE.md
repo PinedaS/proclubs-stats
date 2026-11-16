@@ -66,6 +66,13 @@ API no oficial de EA ──► Colector (GitHub Actions, cada 30 min) ──► 
        2. Hay al menos 50 partidos capturados.
        3. Pasan dos semanas sin cambios de estructura: pestañas nuevas o quitadas, o cambios en la fórmula. Las correcciones no cuentan.
      - **Revisar a mediados de diciembre de 2026.** Para quitarla: borrar el `.beta-tag` de `index.html` y la nota de `renderChangelog`.
+   - **v2.11 (2026-11-16):**
+     - **Gráficas a elección:** cada `[data-chart]` tiene un botón para mostrarla u ocultarla, recordado en `prefs.hiddenCharts`. "Vista → Gráficas" pone `body.no-charts` y oculta todas las `.chart-card`.
+     - **App instalable (PWA):**
+       - Archivos: `manifest.webmanifest`, `icons/` (generados con un script de Node propio, sin dependencias) y `sw.js`.
+       - El service worker **no guarda nada en caché** a propósito: todo va a la red, así nunca se ve una versión vieja.
+       - Solo se registra en https. **No se probó la instalación en un celular real.**
+     - **Celular:** en Partidos se ocultan las columnas secundarias (`.m-hide`). El mensaje de las tablas vacías queda fijo a la izquierda.
    - **Documentación (2026-11-16):** `README.md`, `docs/manual-de-usuario.md` (para el equipo) y `docs/arquitectura.md` (técnica, con diagramas Mermaid). Actualizarlas al cambiar funciones.
    - **v2.7 (2026-11-16, pedidos del usuario):**
      - **Ranking:**

@@ -13,6 +13,11 @@ Deja de ser beta cuando se cumplan tres condiciones:
 - hay al menos 50 partidos capturados;
 - pasan dos semanas sin cambios de estructura (pestañas o fórmula).
 
+## 0b. Instalar como app y ocultar gráficas
+
+- **Instalar:** en Chrome (celular o computadora), menú ⋮ → "Instalar app" o "Agregar a la pantalla principal". Se abre como una app aparte, siempre con la última versión. Necesita conexión.
+- **Gráficas:** cada una tiene un botón "Ocultar gráfica" / "Mostrar gráfica". En "Vista" → "Gráficas" se apagan todas a la vez. Se recuerda en ese navegador.
+
 ## 1. De dónde salen los datos
 
 - Cada 15 minutos un proceso automático consulta la web pública de Clubes de EA y guarda los partidos nuevos.

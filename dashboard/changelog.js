@@ -3,6 +3,18 @@
 // La fecha es la de Colombia (UTC−5), no la UTC: de noche ya es "mañana" en UTC.
 export const CHANGELOG = [
   {
+    version: '2.11',
+    date: '2026-11-16',
+    title: 'Gráficas a elección, app instalable y celular',
+    changes: [
+      'Cada gráfica tiene su botón "Ocultar gráfica" / "Mostrar gráfica", y en "Vista" se pueden apagar todas. Se recuerda en este navegador.',
+      'Se puede instalar como app en el celular o en la computadora (en Chrome: menú ⋮ → "Instalar app" o "Agregar a la pantalla principal").',
+      'Celular: las tarjetas del ranking ya no se salen de la pantalla; en Partidos se ven fecha, rival, marcador y resultado sin desplazar; los mensajes de "sin datos" se leen completos.',
+      'Por rol, "Por arquetipo": si nadie comparte arquetipo con otro jugador, se explica por qué todos dan 100 en vez de mostrar una gráfica vacía.',
+      'La barra de "Datos" ya no tapa las pestañas al desplazar.',
+    ],
+  },
+  {
     version: '2.10',
     date: '2026-11-16',
     title: 'Mejor jugador (experimental) y versión beta',

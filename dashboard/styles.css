@@ -583,6 +583,10 @@ dialog.guide::backdrop { background: rgb(0 0 0 / .55); }
   .rank-card-head { display: flex; align-items: center; gap: 8px; min-width: 0; }
   .rank-card-head .place { color: var(--ink-3); font-weight: 800; width: 1.4em; flex: none; }
   .rank-card-head .person { flex: 1 1 auto; min-width: 0; max-width: none; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  /* Las posiciones con % no deben ensanchar la tarjeta: se apilan si no caben. */
+  .rank-card-head { flex-wrap: wrap; row-gap: 4px; }
+  .rank-card-head .pos-shares { order: 10; flex: 1 0 100%; min-width: 0; flex-wrap: wrap; white-space: normal; padding-left: calc(1.4em + 40px); }
+  .rank-card { min-width: 0; overflow: hidden; }
   .rank-card-stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(0, 1fr)); gap: 6px; margin-top: 8px; text-align: center; }
   .rank-card-stats > div { background: var(--surface); border-radius: 8px; padding: 6px 2px; }
   .rank-card-stats .v { font-size: 1.05rem; font-weight: 800; font-variant-numeric: tabular-nums; }
@@ -675,7 +679,8 @@ dialog.guide::backdrop { background: rgb(0 0 0 / .55); }
 .hl-move { white-space: nowrap; }
 
 /* v2.7 · Datos del ranking: totales / proporciones / oficiales / experimentales y "+ Añadir dato" */
-.data-toolbar { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; margin-top: 10px; position: relative; z-index: 30; }
+/* z-index 6: por encima de la tabla (celdas fijas 1–2) y debajo de las pestañas fijas (10). */
+.data-toolbar { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; margin-top: 10px; position: relative; z-index: 6; }
 /* La tarjeta del ranking no recorta el menú "+ Añadir dato" (las demás siguen recortando por las esquinas). */
 .table-card:has(.data-toolbar) { overflow: visible; }
 .chips-btn { display: inline-flex; flex-wrap: wrap; gap: 6px; align-items: center; }
@@ -854,4 +859,27 @@ dialog.guide::backdrop { background: rgb(0 0 0 / .55); }
   .best-row { grid-template-columns: 26px auto 1fr 52px; gap: 8px; }
   .best-bar { display: none; }
   .best-how { margin: 0 8px 12px; }
+}
+
+/* v2.11 · Mostrar/ocultar gráficas, mensajes vacíos legibles y Partidos en el celular */
+.chart-toggle {
+  display: block; margin: 0 18px 8px auto; font: inherit; font-size: .78rem; font-weight: 600; cursor: pointer;
+  color: var(--ink-3); background: none; border: 1px solid var(--border); border-radius: 999px; padding: 3px 10px;
+}
+.chart-toggle:hover, .chart-toggle:focus-visible { color: var(--ink); border-color: var(--accent); }
+[data-chart].collapsed { display: none; }
+body.no-charts .chart-card, body.no-charts [data-chart], body.no-charts .chart-toggle,
+body.no-charts #person-detail .chart, body.no-charts #person-detail .pchart, body.no-charts #person-detail .pchart-slot { display: none !important; }
+.data td.empty { white-space: normal; }
+.data td.empty .empty-msg { display: block; position: sticky; left: 12px; max-width: min(560px, calc(100vw - 64px)); white-space: normal; }
+.date-cell { white-space: nowrap; }
+.date-cell > span { display: block; }
+.m-only { display: none !important; }
+@media (max-width: 640px) {
+  .m-hide { display: none !important; }
+  .date-cell .m-only { display: inline-block !important; margin-top: 3px; }
+  .score-cell { white-space: nowrap; }
+  .score-cell .m-only { display: block !important; margin-top: 4px; text-align: right; }
+  .score-cell .m-only .result { margin-left: auto; }
+  .chart-toggle { margin-right: 8px; }
 }

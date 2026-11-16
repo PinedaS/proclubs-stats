@@ -223,8 +223,10 @@ function showError(err) {
   box.hidden = false;
 }
 
+// El mensaje va en un bloque fijo al borde izquierdo: en tablas más anchas que la
+// pantalla (celular) se lee completo sin desplazar.
 const emptyRow = (cols, text = 'Sin datos para estos filtros.') =>
-  el('tr', {}, el('td', { class: 'empty', colspan: cols }, text));
+  el('tr', {}, el('td', { class: 'empty', colspan: cols }, el('span', { class: 'empty-msg' }, text)));
 
 function onActivate(fn) {
   return {
@@ -1550,23 +1552,29 @@ async function renderMatches(filters, requestId) {
   for (const m of shown) {
     const f = flags.get(m.match_id);
     const row = el('tr', { class: 'clickable', 'aria-expanded': 'false' },
-      el('td', { class: 'left' }, fmtDate(m.played_at)),
-      el('td', { class: 'left' }, el('span', { class: 'badge' }, TYPE_LABEL[m.match_type] ?? m.match_type)),
+      // Fecha en dos líneas (día y hora); en el celular también lleva el tipo, porque esa columna se oculta.
+      el('td', { class: 'left date-cell' },
+        el('span', {}, new Date(m.played_at).toLocaleDateString('es-CO', { day: 'numeric', month: 'short' })),
+        el('span', { class: 'muted small' }, new Date(m.played_at).toLocaleTimeString('es-CO', { hour: 'numeric', minute: '2-digit' })),
+        el('span', { class: 'badge m-only' }, TYPE_LABEL[m.match_type] ?? m.match_type)),
+      el('td', { class: 'left m-hide' }, el('span', { class: 'badge' }, TYPE_LABEL[m.match_type] ?? m.match_type)),
       el('td', { class: 'left' }, m.opponent_name ?? '—', f?.incomplete ? [' ', el('span', { class: 'badge warn', title: 'El partido se cortó antes del 90 % del tiempo o un equipo abandonó. El marcador es el que da EA.' }, 'Abandonado')] : null, highlights(m, f?.incomplete)),
-      covSkill.show ? el('td', {}, fmtNum(m.opponent_skill_rating)) : null,
-      covOppDiv.show ? el('td', { title: m.opponent_division != null ? `División del rival al jugar. ${divisionTitle(m.opponent_division)}` : 'Sin dato: se empezó a guardar después' }, m.opponent_division != null ? el('span', { class: 'div-value' }, divisionIcon(m.opponent_division), gameDivision(m.opponent_division)) : '—') : null,
-      covDiv.show ? el('td', { title: f?.club_division != null ? `División del club ese día. ${divisionTitle(f.club_division)}` : 'Sin dato de división' }, f?.club_division != null ? el('span', { class: 'div-value' }, divisionIcon(f.club_division), gameDivision(f.club_division)) : '—') : null,
-      el('td', { title: 'Jugadores del club en cancha' }, fmtNum(f?.team_size)),
+      covSkill.show ? el('td', { class: 'm-hide' }, fmtNum(m.opponent_skill_rating)) : null,
+      covOppDiv.show ? el('td', { class: 'm-hide', title: m.opponent_division != null ? `División del rival al jugar. ${divisionTitle(m.opponent_division)}` : 'Sin dato: se empezó a guardar después' }, m.opponent_division != null ? el('span', { class: 'div-value' }, divisionIcon(m.opponent_division), gameDivision(m.opponent_division)) : '—') : null,
+      covDiv.show ? el('td', { class: 'm-hide', title: f?.club_division != null ? `División del club ese día. ${divisionTitle(f.club_division)}` : 'Sin dato de división' }, f?.club_division != null ? el('span', { class: 'div-value' }, divisionIcon(f.club_division), gameDivision(f.club_division)) : '—') : null,
+      el('td', { class: 'm-hide', title: 'Jugadores del club en cancha' }, fmtNum(f?.team_size)),
       // Marcador tal cual EA (en un abandono es el que asigna EA; la etiqueta "Abandonado" lo avisa).
-      el('td', {}, el('strong', {}, `${m.goals_for} – ${m.goals_against}`)),
-      el('td', {}, resultBadge(m.outcome, m.winner_by_dnf)));
+      el('td', { class: 'score-cell' }, el('strong', {}, `${m.goals_for} – ${m.goals_against}`), el('span', { class: 'm-only' }, resultBadge(m.outcome, m.winner_by_dnf))),
+      el('td', { class: 'm-hide' }, resultBadge(m.outcome, m.winner_by_dnf)));
     const toggle = () => toggleMatchPlayers(row, m.match_id, cols.length);
     Object.entries(onActivate(toggle)).forEach(([k, v]) => (k.startsWith('on') ? row.addEventListener(k.slice(2), v) : row.setAttribute(k, v)));
     body.append(row);
   }
+  // En el celular se ocultan las columnas secundarias (m-hide): quedan fecha, rival, marcador y resultado.
+  const mobileHidden = new Set(['Tipo', 'Nivel rival', 'Div. rival', 'Div.', 'Jug.', 'Res.']);
   $('#matches-table').replaceChildren(el('thead', {}, el('tr', {}, cols.map((h, i) => (Array.isArray(h)
-    ? el('th', { scope: 'col' }, h[0], partialBadge(h[1]))
-    : el('th', { scope: 'col', class: i < 3 ? 'left' : null }, h))))), body);
+    ? el('th', { scope: 'col', class: mobileHidden.has(h[0]) ? 'm-hide' : null }, h[0], partialBadge(h[1]))
+    : el('th', { scope: 'col', class: [i < 3 ? 'left' : '', mobileHidden.has(h) ? 'm-hide' : ''].join(' ').trim() || null }, h))))), body);
 }
 
 async function toggleMatchPlayers(row, matchId, colspan) {
@@ -2417,6 +2425,14 @@ function renderRoleDots(rows) {
   const people = rows.filter((r) => r.matches >= state.minMatches);
   const vals = people.flatMap((r) => cols.map((c) => r[c.key]).filter((v) => v != null).map(Number));
   if (!vals.length) { box.replaceChildren(); return; }
+  // Si todos dan 100, nadie comparte rol con otro (p. ej. cada uno con un arquetipo
+  // distinto): cada uno ES el promedio de su rol y no hay con quién compararlo.
+  if (vals.every((v) => Math.abs(v - 100) < 0.5)) {
+    box.replaceChildren(el('p', { class: 'muted small' }, state.roleGroup === 'archetype'
+      ? 'Todos dan 100 porque nadie comparte arquetipo con otro jugador del club: cada uno es el promedio de su propio arquetipo y no hay con quién compararlo. Usa "Por posición", o espera a que más jugadores usen el mismo arquetipo.'
+      : 'Todos dan 100 porque nadie comparte posición con otro jugador del club en estos partidos: no hay con quién compararlo.'));
+    return;
+  }
   // Escala limitada a ±60: un valor extremo (p. ej. 332 con 2 PJ) no aplasta a los demás;
   // se dibuja en el borde, hueco y con su número.
   const CAP = 60;
@@ -2425,8 +2441,10 @@ function renderRoleDots(rows) {
   const sxRaw = (v) => L + ((v - (100 - span)) / (2 * span)) * (W - L - R);
   const sx = (v) => sxRaw(Math.max(100 - span, Math.min(100 + span, v)));
   const s = svg('svg', { viewBox: `0 0 ${W} ${H}`, width: W, height: H, class: 'pchart-svg', role: 'img', 'aria-label': 'Índices relativos al rol de cada jugador alrededor de 100' });
-  s.append(svg('line', { x1: sx(100), x2: sx(100), y1: T - 4, y2: H - 24, class: 'axis-line' }), svgText(sx(100), H - 8, '100 = promedio del rol', { class: 'axis', 'text-anchor': 'middle' }));
-  s.append(svgText(L, H - 8, `${fmtNum(100 - span)} peor`, { class: 'axis' }), svgText(W - R, H - 8, `mejor ${fmtNum(100 + span)}`, { class: 'axis', 'text-anchor': 'end' }));
+  // En pantallas angostas, textos cortos para que no se pisen.
+  const narrow = W < 460;
+  s.append(svg('line', { x1: sx(100), x2: sx(100), y1: T - 4, y2: H - 24, class: 'axis-line' }), svgText(sx(100), H - 8, narrow ? '100' : '100 = promedio del rol', { class: 'axis', 'text-anchor': 'middle' }));
+  s.append(svgText(L, H - 8, narrow ? `${fmtNum(100 - span)}` : `${fmtNum(100 - span)} peor`, { class: 'axis' }), svgText(W - R, H - 8, narrow ? `${fmtNum(100 + span)}` : `mejor ${fmtNum(100 + span)}`, { class: 'axis', 'text-anchor': 'end' }));
   cols.forEach((c, i) => {
     const y = T + i * rowH + rowH / 2;
     s.append(svg('line', { x1: L, x2: W - R, y1: y, y2: y, class: 'grid-line' }), svgText(L - 8, y + 4, c.label, { class: 'axis strong', 'text-anchor': 'end' }));
@@ -2884,6 +2902,52 @@ function renderChangelog() {
   ].filter(Boolean));
 }
 
+/**
+ * Mostrar/ocultar gráficas (pedido del usuario): cada gráfica ([data-chart]) tiene su
+ * botón y se recuerda en este navegador; "Gráficas" en "Vista" apaga o prende todas.
+ * Una gráfica oculta no tiene ancho: al mostrarla se vuelve a dibujar (refresh).
+ */
+function setupChartToggles() {
+  const hidden = new Set(prefs.load().hiddenCharts ?? []);
+  for (const box of document.querySelectorAll('[data-chart]')) {
+    const id = box.id;
+    const btn = el('button', { type: 'button', class: 'chart-toggle', 'aria-controls': id });
+    const apply = () => {
+      const off = hidden.has(id);
+      box.classList.toggle('collapsed', off);
+      btn.textContent = off ? '▸ Mostrar gráfica' : '▾ Ocultar gráfica';
+      btn.setAttribute('aria-expanded', String(!off));
+    };
+    btn.addEventListener('click', () => {
+      if (hidden.has(id)) hidden.delete(id); else hidden.add(id);
+      prefs.save({ hiddenCharts: [...hidden] });
+      apply();
+      if (!hidden.has(id)) refresh();
+    });
+    box.before(btn);
+    apply();
+  }
+  const sw = $('#show-charts');
+  const saved = prefs.load().showCharts;
+  sw.checked = saved !== false;
+  document.body.classList.toggle('no-charts', !sw.checked);
+  sw.addEventListener('change', () => {
+    prefs.save({ showCharts: sw.checked });
+    document.body.classList.toggle('no-charts', !sw.checked);
+    if (sw.checked) refresh();
+  });
+}
+
+/**
+ * App instalable (PWA): el service worker solo deja pasar las peticiones a la red
+ * (no guarda nada en caché), así nunca se ve una versión vieja. Chrome lo pide,
+ * junto con manifest.webmanifest, para ofrecer "Instalar".
+ */
+function registerServiceWorker() {
+  if (!('serviceWorker' in navigator) || location.protocol !== 'https:') return;
+  navigator.serviceWorker.register('sw.js').catch(() => { /* sin instalación: el dashboard funciona igual */ });
+}
+
 /** Lo elegido en los menús "Fechas" y "Vista", a la vista sin abrirlos. */
 function updateFiltersSummary() {
   const from = $('#from').value, to = $('#to').value;
@@ -2894,6 +2958,7 @@ function updateFiltersSummary() {
   if (state.minMatches > 1) opts.push(`mín. ${state.minMatches} PJ`);
   // Por defecto se muestra todo tal cual EA; solo se avisa si se excluyen abandonos.
   if ($('#exclude-incomplete').checked) opts.push('sin abandonos');
+  if (!$('#show-charts').checked) opts.push('sin gráficas');
   $('#view-value').textContent = opts.join(' · ');
 }
 
@@ -2935,6 +3000,8 @@ async function initClubs() {
 
 async function init() {
   watchPlayerColumns();
+  setupChartToggles();
+  registerServiceWorker();
   await initClubs();
   document.querySelector('.filters').addEventListener('change', updateFiltersSummary);
   document.querySelector('.filters').addEventListener('input', updateFiltersSummary);
