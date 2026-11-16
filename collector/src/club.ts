@@ -11,6 +11,17 @@ function int(v: unknown): number | null {
 }
 
 /**
+ * Escudo del club en la fila del ranking de la temporada: clubInfo.teamId (escudo
+ * real) y clubInfo.customKit.crestAssetId (escudo propio). null si no vienen.
+ */
+export function crestOf(season: unknown): { teamId: number | null; crestAssetId: number | null } {
+  const info = ((season ?? null) as Dict | null)?.clubInfo as Dict | undefined;
+  const kit = info?.customKit as Dict | undefined;
+  const pos = (v: unknown) => { const n = int(v); return n !== null && n > 0 ? n : null; };
+  return { teamId: pos(info?.teamId), crestAssetId: pos(kit?.crestAssetId) };
+}
+
+/**
  * @param overall respuesta de clubs/overallStats (o null)
  * @param season  fila de currentSeasonLeaderboard/search de NUESTRO club (o null)
  */

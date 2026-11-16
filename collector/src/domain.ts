@@ -135,6 +135,17 @@ export interface MemberSnapshotRow {
   raw: unknown;
 }
 
+/** Temporada de liga de un club (tabla club_seasons, migración 020). */
+export interface ClubSeasonRow {
+  club_id: number;
+  season_no: number;
+  started_at: string;
+  detected_by: 'inicio del registro' | 'reinicio de EA';
+  expected_end_at?: string | null;
+  prev_games?: number | null;
+  prev_points?: number | null;
+}
+
 /** Endpoints de EA que se guardan crudos en ea_snapshots (migración 019). */
 export const EXTRA_ENDPOINTS = ['clubs/info', 'club/playoffAchievements', 'members/career/stats'] as const;
 export type ExtraEndpoint = (typeof EXTRA_ENDPOINTS)[number];

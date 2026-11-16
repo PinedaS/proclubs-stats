@@ -88,7 +88,7 @@ export const deletePlayerPhoto = (personId) => storageCall('DELETE', personId);
 
 /** Todos los clubes seguidos, el más reciente primero. */
 export function getClubs() {
-  return request('clubs?select=club_id,name,season&order=first_seen_at.desc');
+  return request('clubs?select=club_id,name,season,team_id,crest_asset_id&order=first_seen_at.desc');
 }
 
 export function getClubSnapshots(clubId) {
@@ -112,12 +112,31 @@ export function getRecentMatches(clubId, limit = 30) {
 }
 
 /**
+ * Contadores que se suman por persona en el navegador para "+ Añadir dato"
+ * (columnas de v_player_match_stats, migración 020). _exp = experimental.
+ */
+export const EXTRA_COUNTERS = [
+  'short_passes_ok_exp', 'short_passes_failed_exp', 'medium_passes_ok_exp', 'medium_passes_failed_exp',
+  'long_passes_ok_exp', 'long_passes_failed_exp', 'first_time_passes_exp', 'switches_exp', 'flair_passes_exp',
+  'offside_passes_exp', 'through_ball_assists_exp', 'box_shots_on_exp', 'box_shots_off_exp', 'outside_shots_on_exp',
+  'outside_shots_off_exp', 'weak_foot_goals_exp', 'post_goals_exp', 'carries_exp', 'beats_exp', 'skill_beats_exp',
+  'standing_tackles_exp', 'sliding_tackles_exp', 'dangerous_tackles_exp', 'clean_tackles_exp', 'dispossessed_exp',
+  'crosses_blocked_exp', 'corners_conceded_exp', 'corners_taken_exp', 'out_of_position_severe_exp',
+  'parry_saves', 'punch_saves', 'reflex_saves', 'cross_saves', 'ball_dive_saves', 'good_direction_saves',
+];
+
+/** Temporadas del club (migración 020), de la más reciente a la más vieja. */
+export function getSeasons(clubId) {
+  return request(`club_seasons?select=season_no,started_at,ended_at,detected_by,expected_end_at&order=season_no.desc${clubParam(clubId)}`);
+}
+
+/**
  * Cada jugador en cada partido, con el resultado del equipo: tendencias, evolución
  * semanal, posiciones por minutos, "con y sin" y duplas se calculan con esto.
  */
 export function getRatingsTimeline(f) {
   const p = filterParams(f);
-  p.set('select', 'match_id,played_at,person_id,person_name,rating,incomplete,goals,assists,goals_for,goals_against,outcome,position,seconds_played,opponent_skill_rating');
+  p.set('select', ['match_id,played_at,person_id,person_name,rating,incomplete,goals,assists,goals_for,goals_against,outcome,position,seconds_played,opponent_skill_rating', ...EXTRA_COUNTERS].join(','));
   p.set('order', 'played_at.asc');
   if (f.excludeIncomplete) p.set('incomplete', 'is.false');
   return request(`v_player_match_stats?${p}`);

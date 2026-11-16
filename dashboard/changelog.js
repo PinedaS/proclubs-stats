@@ -3,6 +3,16 @@
 // La fecha es la de Colombia (UTC−5), no la UTC: de noche ya es "mañana" en UTC.
 export const CHANGELOG = [
   {
+    version: '2.8',
+    date: '2026-11-16',
+    title: 'Temporadas, escudo y más datos',
+    changes: [
+      'Juego y temporada por separado: la cabecera dice "FC 27 · Temporada 1". En "Fechas" se puede elegir una temporada; la nueva se detecta sola cuando EA reinicia la temporada.',
+      'Escudo real del club y escudos de cada división (los del juego), en la cabecera, en Partidos y en el detalle del jugador.',
+      '"+ Añadir dato" suma más de 30 datos: pases cortos, medios y largos; al primer toque; tiros dentro y fuera del área; goles con la pierna mala; regates superando al rival; barridas; balones quitados; tipos de atajada del portero, y más.',
+    ],
+  },
+  {
     version: '2.7',
     date: '2026-11-16',
     title: 'Datos a elección, duplas y más gráficas',

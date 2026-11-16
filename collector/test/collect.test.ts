@@ -3,7 +3,7 @@ import { readFileSync } from 'node:fs';
 import { describe, test } from 'node:test';
 import { ProClubsError, type ClubMatch } from 'proclubs-sdk';
 import { collect, type CollectDeps } from '../src/collect.ts';
-import type { ClubRow, ClubSnapshotRow, EaSnapshotRow, MatchType, MemberSnapshotRow, NormalizedMatch, RawMatchRow, RunResult } from '../src/domain.ts';
+import type { ClubRow, ClubSeasonRow, ClubSnapshotRow, EaSnapshotRow, MatchType, MemberSnapshotRow, NormalizedMatch, RawMatchRow, RunResult } from '../src/domain.ts';
 import { ClubNotFoundError, type FoundClub, type MatchSource } from '../src/ea-source.ts';
 import { RepositoryError, type StatsRepository } from '../src/repository.ts';
 
@@ -70,6 +70,22 @@ class FakeRepo implements StatsRepository {
   async saveClubSnapshot(row: ClubSnapshotRow): Promise<void> {
     this.clubSnapshots.push(row);
   }
+  async getLatestClubSnapshot(): Promise<ClubSnapshotRow | null> {
+    return this.clubSnapshots.at(-1) ?? null;
+  }
+  crest: { teamId: number | null; crestAssetId: number | null } | null = null;
+  async setClubCrest(_clubId: number, teamId: number | null, crestAssetId: number | null): Promise<void> {
+    this.crest = { teamId, crestAssetId };
+  }
+  seasons: (ClubSeasonRow & { ended_at: string | null })[] = [];
+  async getOpenSeason(clubId: number) {
+    const s = this.seasons.find((x) => x.club_id === clubId && x.ended_at === null);
+    return s ? { season_no: s.season_no, started_at: s.started_at, expected_end_at: s.expected_end_at ?? null } : null;
+  }
+  async startSeason(row: ClubSeasonRow): Promise<void> {
+    for (const s of this.seasons) if (s.club_id === row.club_id && s.ended_at === null) s.ended_at = row.started_at;
+    this.seasons.push({ ...row, ended_at: null });
+  }
 }
 
 class FakeSource implements MatchSource {
@@ -97,7 +113,8 @@ class FakeSource implements MatchSource {
   }
   overview: { overall: unknown; season: unknown } | Error = {
     overall: { skillRating: '1595', bestDivision: '4', gamesPlayed: '104', wins: '48', ties: '10', losses: '46', wstreak: '0', unbeatenstreak: '2' },
-    season: { clubId: '1330384', points: '47', currentDivision: '3', gamesPlayed: '63', wins: '30', ties: '7', losses: '26', goals: '157', goalsAgainst: '127' },
+    season: { clubId: '1330384', points: '47', currentDivision: '3', gamesPlayed: '63', wins: '30', ties: '7', losses: '26', goals: '157', goalsAgainst: '127',
+      clubInfo: { teamId: 243, customKit: { crestAssetId: '99020510' } } },
   };
   async getClubOverview(clubId: string): Promise<{ overall: unknown; season: unknown }> {
     if (clubId !== '1330384') {
@@ -205,6 +222,39 @@ describe('collect: miembros y fuerza del rival', () => {
   });
 });
 
+describe('collect: temporadas', () => {
+  test('abre la temporada 1 con el primer partido y la siguiente cuando EA reinicia', async () => {
+    const repo = new FakeRepo();
+    const source = new FakeSource({ leagueMatch: fixture });
+    const d = deps(source, repo);
+    await collect(d);
+    assert.equal(repo.seasons.length, 1);
+    const first = repo.seasons[0]!;
+    assert.equal(first.season_no, 1);
+    assert.equal(first.detected_by, 'inicio del registro');
+    const oldest = new Date(Math.min(...fixture.map((m) => Number(m.timestamp) * 1000))).toISOString();
+    assert.equal(Date.parse(first.started_at), Date.parse(oldest), 'empieza con el partido más viejo visto');
+
+    // Misma temporada: nada cambia.
+    await collect(d);
+    assert.equal(repo.seasons.length, 1);
+
+    // EA reinicia los contadores (63 -> 1 partido, 47 -> 3 puntos).
+    const prevCapture = repo.clubSnapshots.at(-1)!.captured_at;
+    const ov = source.overview as { overall: unknown; season: Record<string, unknown> };
+    source.overview = { overall: ov.overall, season: { ...ov.season, gamesPlayed: '1', points: '3', wins: '1', ties: '0', losses: '0' } };
+    d.now = () => new Date('2026-11-10T12:15:00Z');
+    await collect(d);
+    assert.equal(repo.seasons.length, 2);
+    const [s1, s2] = repo.seasons;
+    assert.equal(s2!.season_no, 2);
+    assert.equal(s2!.detected_by, 'reinicio de EA');
+    assert.equal(s2!.started_at, prevCapture, 'empieza en la última captura de la temporada vieja');
+    assert.equal(s2!.prev_games, 63);
+    assert.equal(s1!.ended_at, prevCapture);
+  });
+});
+
 describe('collect: foto del club', () => {
   test('guarda nivel, división y puntos de la temporada', async () => {
     const repo = new FakeRepo();
@@ -219,6 +269,7 @@ describe('collect: foto del club', () => {
     assert.equal(s.season_draws, 7);
     assert.equal(s.unbeaten_streak, 2);
     assert.equal(s.snapshot_date, '2026-11-10');
+    assert.deepEqual(repo.crest, { teamId: 243, crestAssetId: 99020510 }, 'escudo del club');
   });
 
   test('si EA falla con el resumen del club, marca error pero conserva los partidos', async () => {

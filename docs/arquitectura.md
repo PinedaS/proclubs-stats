@@ -109,6 +109,16 @@ erDiagram
   accounts ||--o{ player_match_stats : "cuenta de EA"
   persons ||--o{ accounts : "una persona, varias cuentas"
   clubs ||--o{ collector_runs : "ejecuciones"
+  clubs ||--o{ club_seasons : "temporadas del juego"
+
+  club_seasons {
+    bigint club_id PK
+    int season_no PK
+    timestamptz started_at
+    timestamptz ended_at
+    text detected_by
+    timestamptz expected_end_at
+  }
 
   clubs {
     bigint club_id PK "cambia cada juego"
@@ -184,6 +194,10 @@ erDiagram
 - **Identidad:** la llave de un jugador es su `player_id` de EA, porque el nombre puede cambiar. Una **persona** agrupa varias cuentas: alguien que juega en PC y en PS5 se une con `merge_persons()`. Los rankings son por persona.
 - **No se pierde nada:** el JSON completo se guarda en `match_raw.payload`, `club_snapshots.raw`, `member_snapshots.raw` y `ea_snapshots.payload`. Los contadores sin documentar de EA (`match_event_aggregate_*`) se guardan todos en `player_match_stats.event_counts`.
 - **Experimentales:** se calculan en la vista `v_player_match_stats` con `event_sum(event_counts, códigos)`, con sufijo `_exp`. Los códigos y su contraste con datos oficiales están en `datos-ea.md`.
+- **Juego y temporada:** `clubs.season` es el juego (FC27) y `club_seasons` guarda las temporadas dentro de él.
+  - EA no da el número ni las fechas. El colector (`seasons.ts`) abre una temporada nueva cuando bajan los partidos de `currentSeason` y no suben los puntos.
+  - El dashboard filtra una temporada por su rango de fechas, con los mismos `p_from`/`p_to` de todas las funciones.
+- **Escudo:** `clubs.crest_asset_id` y `team_id` salen de `currentSeason.clubInfo`. La imagen y los íconos de división se cargan de las direcciones públicas de EA que documenta la comunidad.
 - **Valores de EA tal cual:** la división se guarda con el número de EA; el dashboard muestra uno menos, como el juego. La calificación media y el % MVP son los de EA, sin ponderar.
 
 ### Funciones de análisis (RPC que lee el dashboard)
@@ -289,4 +303,4 @@ npm run test:integration
 - `run_tests.sh`: migraciones y pruebas SQL en un Postgres desechable (Docker).
 - `test:integration`: el colector contra Postgres y PostgREST reales en Docker.
 
-**Para aplicar una migración nueva:** súbela al repo, ábrela en el SQL Editor de Supabase, ejecútala y verifica el resultado con consultas al catálogo. Todas las migraciones aplicadas están en `supabase/migrations` (001–019).
+**Para aplicar una migración nueva:** súbela al repo, ábrela en el SQL Editor de Supabase, ejecútala y verifica el resultado con consultas al catálogo. Todas las migraciones aplicadas están en `supabase/migrations` (001–020).

@@ -4,8 +4,9 @@ import { ProClubsError } from 'proclubs-sdk';
 import type { Config } from './config.ts';
 import { EXTRA_ENDPOINTS, type EaSnapshotRow, type RunResult } from './domain.ts';
 import { divisionOf, skillRatingOf, type FoundClub, type MatchSource } from './ea-source.ts';
+import { isSeasonOverdue, isSeasonReset, type SeasonCounters } from './seasons.ts';
 import type { StatsRepository } from './repository.ts';
-import { toClubSnapshotRow } from './club.ts';
+import { crestOf, toClubSnapshotRow } from './club.ts';
 import { toMemberSnapshotRows } from './members.ts';
 import { TransformError, normalizeMatch, toRawRow } from './transform.ts';
 
@@ -66,6 +67,7 @@ export async function collect(deps: CollectDeps): Promise<RunResult> {
   let matchesSeen = 0;
   let matchesNew = 0;
   const opponents: Opponent[] = [];
+  let firstPlayedAt: string | null = null; // partido más viejo visto (inicio de la 1.ª temporada de un club nuevo)
   const recentNew: string[] = [];
 
   const finish = async (fatal?: unknown): Promise<RunResult> => {
@@ -126,6 +128,7 @@ export async function collect(deps: CollectDeps): Promise<RunResult> {
           log.error(err.message);
           continue;
         }
+        if (firstPlayedAt == null || normalized.match.played_at < firstPlayedAt) firstPlayedAt = normalized.match.played_at;
         const recent = !existing.has(row.match_id) && now().getTime() - Date.parse(normalized.match.played_at) <= DIVISION_MAX_AGE_MS;
         if (!existing.has(row.match_id)) {
           newHere++;
@@ -142,7 +145,7 @@ export async function collect(deps: CollectDeps): Promise<RunResult> {
 
     await fillOpponentInfo(deps, clubId, opponents, now());
     await captureMembers(deps, club.clubId, now(), failures);
-    const division = await captureClub(deps, club, now(), failures);
+    const division = await captureClub(deps, club, now(), failures, firstPlayedAt);
     await captureExtras(deps, clubId, now());
     if (division != null && recentNew.length) {
       await deps.repo.setClubDivision(recentNew, division);
@@ -235,7 +238,7 @@ async function captureExtras(deps: CollectDeps, clubId: number, at: Date): Promi
  * Foto del club (nivel, división, temporada). Si EA falla, se registra como falla.
  * Devuelve la división actual (o null) para anotarla en los partidos nuevos.
  */
-async function captureClub(deps: CollectDeps, club: FoundClub, at: Date, failures: SoftFailure[]): Promise<number | null> {
+async function captureClub(deps: CollectDeps, club: FoundClub, at: Date, failures: SoftFailure[], firstPlayedAt: string | null): Promise<number | null> {
   let overview: { overall: unknown; season: unknown };
   try {
     overview = await deps.source.getClubOverview(club.clubId, club.name);
@@ -247,9 +250,41 @@ async function captureClub(deps: CollectDeps, club: FoundClub, at: Date, failure
   }
   const row = toClubSnapshotRow(overview.overall, overview.season, club.clubId, at);
   if (!row) return null;
+  // La foto anterior se lee ANTES de guardar (la del día se pisa en cada ejecución).
+  const prev = await deps.repo.getLatestClubSnapshot(row.club_id);
   await deps.repo.saveClubSnapshot(row);
+  await trackSeason(deps, row.club_id, prev, row, at, firstPlayedAt);
+  const crest = crestOf(overview.season);
+  if (crest.teamId != null || crest.crestAssetId != null) await deps.repo.setClubCrest(row.club_id, crest.teamId, crest.crestAssetId);
   deps.log.info(`Club: nivel ${row.skill_rating ?? '—'}, división ${row.current_division ?? '—'}, ${row.season_points ?? '—'} pts`);
   return row.current_division;
+}
+
+/**
+ * Temporadas (migración 020):
+ *  - club sin temporada: abre la 1, desde su partido más viejo visto;
+ *  - EA reinició los contadores (isSeasonReset): cierra la actual y abre la
+ *    siguiente desde la captura anterior (la última que veía la temporada vieja);
+ *  - pasó un día del fin esperado sin reinicio: solo lo avisa en el log.
+ */
+async function trackSeason(deps: CollectDeps, clubId: number, prev: SeasonCounters | null, curr: SeasonCounters, at: Date, firstPlayedAt: string | null): Promise<void> {
+  const open = await deps.repo.getOpenSeason(clubId);
+  if (!open) {
+    await deps.repo.startSeason({ club_id: clubId, season_no: 1, started_at: firstPlayedAt ?? at.toISOString(), detected_by: 'inicio del registro' });
+    deps.log.info('Temporada 1 abierta (inicio del registro)');
+    return;
+  }
+  if (isSeasonReset(prev, curr)) {
+    await deps.repo.startSeason({
+      club_id: clubId, season_no: open.season_no + 1, started_at: prev!.captured_at, detected_by: 'reinicio de EA',
+      prev_games: prev!.season_games, prev_points: prev!.season_points,
+    });
+    deps.log.info(`Temporada ${open.season_no + 1}: EA reinició la temporada (${prev!.season_games} → ${curr.season_games} partidos)`);
+    return;
+  }
+  if (isSeasonOverdue(open.expected_end_at, at)) {
+    deps.log.error(`La temporada ${open.season_no} debía terminar el ${open.expected_end_at} y EA no reinició sus contadores: revisar.`);
+  }
 }
 
 /** Foto de members/stats. Si EA falla, se registra como falla (dato oficial). */

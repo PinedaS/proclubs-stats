@@ -68,6 +68,7 @@
       <details class="pop" id="dates-pop">
         <summary><span>Fechas</span><span class="pop-value" id="dates-value"></span></summary>
         <div class="pop-panel">
+          <label class="field" title="Temporadas de liga dentro del juego. Se detectan cuando EA reinicia los contadores de la temporada.">Temporada <select id="season-select"></select></label>
           <label class="field">Desde <input type="date" id="from"></label>
           <label class="field">Hasta <input type="date" id="to"></label>
           <button type="button" class="link-btn" id="clear-dates">Quitar fechas</button>
@@ -284,6 +285,9 @@
       <h3>Duplas</h3>
       <p>Arriba, cómo le va al equipo <strong>con y sin</strong> cada jugador (% de victorias y goles). Abajo eliges un jugador: a un lado, los partidos <strong>con él</strong>, junto a cada compañero; al otro, los partidos <strong>sin él</strong>, y cuánto cambia la calificación de cada compañero con y sin él. Muestra que las cosas van juntas, no que uno cause el rendimiento del otro: también influyen el rival, la posición y la suerte.</p>
 
+      <h3>Juego y temporadas</h3>
+      <p>Cada juego (FC 27, FC 28) tiene varias temporadas de liga, que terminan con una semana de Play-offs. EA no da el número de temporada, así que se cuentan desde que empezamos a registrar al club, y una nueva se detecta sola cuando EA reinicia los partidos y puntos de la temporada. En "Fechas" puedes ver una temporada sola o todas las del juego. La ficha "Temporada" de la cabecera siempre muestra la temporada en curso.</p>
+
       <h3>Datos parciales</h3>
       <p>Algunos datos se empezaron a guardar después que otros. Cuando un dato falta en parte de los partidos, lleva la etiqueta <strong>Parcial</strong>; si falta en más de la mitad, no se muestra (queda guardado para usarlo cuando haya suficiente).</p>
 
@@ -302,8 +306,7 @@
       <h3>Datos guardados que no se muestran</h3>
       <p>Se guarda <strong>todo</strong> lo que entrega EA, aunque no todo aparezca aquí. Así se puede usar después sin haberlo perdido (EA solo deja ver los últimos 10 partidos). Guardado, pero sin mostrar:</p>
       <ul>
-        <li><strong>Atajadas por tipo</strong> (de reflejos, en estirada, con los puños, de centros…) de cada partido.</li>
-        <li><strong>Más contadores del juego</strong> (unos 120 tipos por jugador y partido): pases cortos, medios y largos, pases al primer toque, entradas de pie y barridas, tiros dentro y fuera del área, goles de pierna mala, conducciones y avisos del juego. La mayoría tienen significado conocido, pero EA no los documenta.</li>
+        <li><strong>Más contadores del juego</strong> (unos 120 tipos por jugador y partido). Los más útiles ya se pueden sumar a la tabla con "+ Añadir dato" (pases por distancia, tiros por zona, barridas, tipos de atajada…). Quedan guardados, sin mostrar, los avisos del juego ("usa el balón", "elige tu pase"…), los tipos de gol sin nombre conocido y unos 28 códigos que nadie ha descifrado.</li>
         <li><strong>Datos de los rivales</strong>: sus jugadores en cada partido, su nivel y su ficha del club y de la temporada. La <strong>división del rival</strong> se empezó a guardar el 16/11/2026 y aparecerá en Partidos cuando esté en la mayoría de los partidos.</li>
         <li><strong>Carrera de cada miembro</strong> según EA (todos sus partidos en el club), <strong>logros de play-off</strong> y la <strong>ficha del club</strong> (uniformes y escudo), una foto por día.</li>
         <li>Tiempos internos de cada jugador (por ejemplo, segundos inactivo), que podrían servir para detectar a quien se queda quieto.</li>

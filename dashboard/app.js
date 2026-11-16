@@ -26,6 +26,8 @@ const state = {
   addedCols: [],
   positions: new Map(), // person_id -> [{ pos, pct, sec }] de más a menos minutos
   pairsPerson: null, // Duplas: jugador elegido
+  seasons: [], // temporadas del club (club_seasons), de la más reciente a la más vieja
+  seasonNo: null, // temporada elegida en el filtro (null = todas)
   ranking: [],
   records: new Map(),
   members: null,
@@ -150,6 +152,41 @@ function gameDivision(apiDiv) {
   const n = Number(apiDiv) - 1;
   return n >= 1 ? `${n}ª` : TOP_DIVISION_NAME;
 }
+/**
+ * Ícono oficial de la división (imágenes públicas de EA, documentadas por la
+ * comunidad). Verificado el 2026-11-16: el número de la imagen es el de la API
+ * (divisioncrest1 = escudo morado con león = División Élite; divisioncrest5
+ * muestra un "4"). Si no carga, se quita y queda el texto.
+ */
+const DIVISION_ICON = (n) => `https://media.contentapi.ea.com/content/dam/eacom/fc/pro-clubs/divisioncrest${n}.png`;
+function divisionIcon(apiDiv, size = 'sm') {
+  const n = Number(apiDiv);
+  if (!Number.isInteger(n) || n < 1 || n > 6) return null;
+  return el('img', { class: `div-icon ${size}`, src: DIVISION_ICON(n), alt: '', loading: 'lazy', decoding: 'async', referrerpolicy: 'no-referrer', onerror: (e) => e.target.remove() });
+}
+
+/**
+ * Escudo del club: el propio (crestAssetId) o el real (teamId), desde la dirección
+ * pública de EA que documenta la comunidad. Si ninguno carga, queda el escudo
+ * dibujado con las iniciales.
+ */
+const CREST_URL = (id) => `https://eafc24.content.easports.com/fifa/fltOnlineAssets/24B23FDE-7835-41C2-87A2-F453DFDB2E82/2024/fcweb/crests/256x256/l${id}.png`;
+function renderCrest(club) {
+  const box = document.querySelector('.crest');
+  box.querySelector('img')?.remove();
+  box.classList.remove('has-img');
+  const ids = [club.crest_asset_id, club.team_id].filter((v) => v != null);
+  if (!ids.length) return;
+  const img = el('img', { src: CREST_URL(ids[0]), alt: '', decoding: 'async', referrerpolicy: 'no-referrer' });
+  img.addEventListener('load', () => box.classList.add('has-img'));
+  img.addEventListener('error', () => {
+    ids.shift();
+    if (ids.length) img.src = CREST_URL(ids[0]);
+    else { img.remove(); box.classList.remove('has-img'); }
+  });
+  box.append(img);
+}
+
 const divisionTitle = (apiDiv) => (apiDiv == null ? null : `División del juego. EA la envía como ${apiDiv} (el juego muestra una menos).`);
 
 function playerCell(name, sub) {
@@ -193,8 +230,27 @@ function readFilters() {
     d.setDate(d.getDate() + addDays);
     return d.toISOString();
   };
+  const season = state.seasons.find((s) => s.season_no === state.seasonNo);
+  // Una temporada es un rango de fechas: se filtra con los mismos p_from/p_to (fin exclusivo).
+  if (season) return { types, from: season.started_at, to: season.ended_at ?? null, excludeIncomplete: $('#exclude-incomplete').checked, clubId: state.clubId };
   // "Hasta" es inclusivo para el usuario; en la API p_to es exclusivo (+1 día).
   return { types, from: day($('#from').value), to: day($('#to').value, 1), excludeIncomplete: $('#exclude-incomplete').checked, clubId: state.clubId };
+}
+
+/** "Temporada 2 · 3 dic – hoy". */
+function seasonLabel(s) {
+  const d = (iso) => new Date(iso).toLocaleDateString('es-CO', { day: 'numeric', month: 'short' });
+  return `Temporada ${s.season_no} · ${d(s.started_at)} – ${s.ended_at ? d(s.ended_at) : 'hoy'}`;
+}
+
+/** Temporadas del club (dentro del juego): llena el selector del menú "Fechas". */
+async function loadSeasons() {
+  state.seasons = await api.getSeasons(state.clubId).catch(() => []);
+  if (!state.seasons.some((s) => s.season_no === state.seasonNo)) state.seasonNo = null;
+  const sel = $('#season-select');
+  sel.replaceChildren(el('option', { value: '' }, 'Todas las del juego'), ...state.seasons.map((s) => el('option', { value: s.season_no }, seasonLabel(s))));
+  sel.value = state.seasonNo == null ? '' : String(state.seasonNo);
+  for (const id of ['#from', '#to']) $(id).disabled = state.seasonNo != null;
 }
 
 // ---------------------------------------------------------------------------
@@ -259,12 +315,14 @@ async function renderHeader() {
   const club = state.clubs.find((c) => c.club_id === state.clubId) ?? null;
   const snaps = await api.getClubSnapshots(state.clubId).catch(() => []);
   state.clubSnaps = snaps;
+  // clubs.season es el JUEGO ("FC27" -> "FC 27"); la temporada va aparte (club_seasons).
+  const game = String(club?.season ?? '').replace(/^FC\s*(\d+)$/i, 'FC $1') || 'FC';
+  const current = state.seasons.find((s) => s.ended_at == null) ?? state.seasons[0] ?? null;
+  const seasonText = state.seasonNo != null ? `Temporada ${state.seasonNo}` : current ? `Temporada ${current.season_no}` : null;
   if (club) {
     $('#club-name').textContent = club.name;
     $('#crest-initials').textContent = initials(club.name);
-    // "FC27" -> "FC 27": el título sigue a la temporada del club (FC 28 sin tocar código).
-    const game = String(club.season ?? '').replace(/^FC\s*(\d+)$/i, 'FC $1') || 'FC';
-    $('#club-season').textContent = `Temporada ${club.season}`;
+    renderCrest(club);
     $('#game-label').textContent = `EA SPORTS ${game} · Clubes`;
     document.title = `${club.name} · Stats EA ${game}`;
   }
@@ -274,8 +332,8 @@ async function renderHeader() {
   const recent = await api.getRecentMatches(state.clubId).catch(() => []);
   const capturedMatches = state.ranking[0]?.club_matches;
   if (club) {
-    $('#club-season').textContent = `Temporada ${club.season} · ${fmtNum(capturedMatches ?? 0)} partido${capturedMatches === 1 ? '' : 's'}`;
-    $('#club-season').title = 'Partidos capturados con los filtros actuales';
+    $('#club-season').textContent = [game, seasonText, `${fmtNum(capturedMatches ?? 0)} partido${capturedMatches === 1 ? '' : 's'}`].filter(Boolean).join(' · ');
+    $('#club-season').title = 'Juego, temporada y partidos capturados con los filtros actuales. Las temporadas se cuentan desde que empezamos a registrar al club.';
   }
   const form = el('div', { class: 'form-chips', role: 'img', 'aria-label': `Últimos resultados: ${recent.slice(0, 5).map((m) => OUTCOME[m.outcome]?.label ?? '—').join(', ')}` },
     recent.length ? [...recent.slice(0, 5)].reverse().map((m) => el('span', {
@@ -285,9 +343,13 @@ async function renderHeader() {
     kpi('Nivel del club', fmtNum(last?.skill_rating),
       delta == null || snaps.length < 2 ? 'skillRating de EA' : `${fmtSigned(delta)} desde ${fmtDate(`${first.snapshot_date}T12:00:00Z`, false)}`,
       delta > 0 ? 'up' : delta < 0 ? 'down' : null),
-    Object.assign(kpi('División', gameDivision(last?.current_division) ?? '—', last?.best_division != null ? `Mejor: ${gameDivision(last.best_division)}` : null), { title: divisionTitle(last?.current_division) ?? '' }),
-    kpi('Temporada', last?.season_wins != null ? `${last.season_wins}-${last.season_draws}-${last.season_losses}` : '—',
-      last?.season_points != null ? `${fmtNum(last.season_points)} pts · goles ${last.season_goals ?? '—'} : ${last.season_goals_against ?? '—'}` : 'V-E-D'),
+    Object.assign(kpi('División', el('span', { class: 'div-value' }, divisionIcon(last?.current_division), gameDivision(last?.current_division) ?? '—'),
+      last?.best_division != null ? `Mejor: ${gameDivision(last.best_division)}` : null), { title: divisionTitle(last?.current_division) ?? '' }),
+    // EA da los números de la temporada EN CURSO (no de la elegida en el filtro).
+    Object.assign(kpi(current ? `Temporada ${current.season_no} (en curso)` : 'Temporada', last?.season_wins != null ? `${last.season_wins}-${last.season_draws}-${last.season_losses}` : '—',
+      [last?.season_points != null ? `${fmtNum(last.season_points)} pts · goles ${last.season_goals ?? '—'} : ${last.season_goals_against ?? '—'}` : 'V-E-D',
+        current?.expected_end_at ? `termina ~${new Date(current.expected_end_at).toLocaleDateString('es-CO', { day: 'numeric', month: 'short' })}` : null].filter(Boolean).join(' · ')),
+    { title: current?.expected_end_at ? 'Fin estimado según el calendario del juego (EA no lo da en la API). La temporada nueva se detecta sola cuando EA reinicia sus contadores.' : '' }),
     kpi('Forma (últ. 5)', form, streakText(recent)),
   );
 }
@@ -386,6 +448,40 @@ const RANKING_COLUMNS = [
   { theme: 'Disciplina', key: 'penalties_conceded_exp', label: 'Penales cometidos*', kind: 'abs', title: 'Penales cometidos (faltas en el área propia). EA no dice cuántos goles fueron de penal.', exp: true, better: 'low' },
   { theme: 'Disciplina', key: 'fouls_won_exp', label: 'Faltas recibidas*', kind: 'abs', title: 'Faltas que le hicieron', exp: true },
   { theme: 'Disciplina', key: 'offsides_exp', label: 'Fuera de juego*', kind: 'abs', title: 'Veces en fuera de juego (tiende a contar de menos)', exp: true, better: 'low' },
+  // --- Más contadores (020): solo con "+ Añadir dato". Se suman en el navegador (addExtraCounters).
+  { theme: 'Ataque', key: 'box_shots_exp', label: 'Tiros en área*', kind: 'abs', title: 'Tiros desde dentro del área', exp: true },
+  { theme: 'Ataque', key: 'outside_shots_exp', label: 'Tiros de afuera*', kind: 'abs', title: 'Tiros desde fuera del área', exp: true },
+  { theme: 'Ataque', key: 'weak_foot_goals_exp', label: 'Goles pierna mala*', kind: 'abs', title: 'Goles con la pierna mala', exp: true },
+  { theme: 'Ataque', key: 'post_goals_exp', label: 'Goles tras palo*', kind: 'abs', title: 'Goles que entraron después de pegar en el palo', exp: true },
+  { theme: 'Ataque', key: 'carries_exp', label: 'Conducciones*', kind: 'abs', title: 'Conducciones con el balón', exp: true },
+  { theme: 'Ataque', key: 'beats_exp', label: 'Rival superado*', kind: 'abs', title: 'Regates superando al rival (con o sin filigrana)', exp: true },
+  { theme: 'Ataque', key: 'beats_exp_p90', label: 'Rival superado/90*', kind: 'rate', title: 'Regates superando al rival por cada 90 minutos', digits: 2, exp: true },
+  { theme: 'Ataque', key: 'skill_beats_exp', label: 'Filigranas*', kind: 'abs', title: 'Regates superando al rival con filigrana (skill move)', exp: true },
+  { theme: 'Ataque', key: 'corners_taken_exp', label: 'Córners*', kind: 'abs', title: 'Córners lanzados', exp: true },
+  { theme: 'Pase', key: 'short_pass_pct_exp', label: 'Pase corto %*', kind: 'rate', title: 'Pases cortos completados', digits: 1, exp: true },
+  { theme: 'Pase', key: 'medium_pass_pct_exp', label: 'Pase medio %*', kind: 'rate', title: 'Pases de media distancia completados', digits: 1, exp: true },
+  { theme: 'Pase', key: 'long_pass_pct_exp', label: 'Pase largo %*', kind: 'rate', title: 'Pases largos completados', digits: 1, exp: true },
+  { theme: 'Pase', key: 'first_time_passes_exp', label: 'Primer toque*', kind: 'abs', title: 'Pases al primer toque', exp: true },
+  { theme: 'Pase', key: 'switches_exp', label: 'Cambios de frente*', kind: 'abs', title: 'Cambios de frente', exp: true },
+  { theme: 'Pase', key: 'flair_passes_exp', label: 'Pases de lujo*', kind: 'abs', title: 'Pases de lujo (taco, rabona…)', exp: true },
+  { theme: 'Pase', key: 'through_ball_assists_exp', label: 'Asist. filtradas*', kind: 'abs', title: 'Asistencias con pase filtrado', exp: true },
+  { theme: 'Pase', key: 'offside_passes_exp', label: 'Pases a fuera de juego*', kind: 'abs', title: 'Pases a un compañero en fuera de juego', exp: true, better: 'low' },
+  { theme: 'Defensa', key: 'standing_tackles_exp', label: 'Entradas de pie*', kind: 'abs', title: 'Entradas de pie ganadas', exp: true },
+  { theme: 'Defensa', key: 'sliding_tackles_exp', label: 'Barridas*', kind: 'abs', title: 'Entradas con barrida ganadas', exp: true },
+  { theme: 'Defensa', key: 'clean_tackles_exp', label: 'Entradas limpias*', kind: 'abs', title: 'Entradas limpias al balón', exp: true },
+  { theme: 'Defensa', key: 'dangerous_tackles_exp', label: 'Entradas peligrosas*', kind: 'abs', title: 'Entradas peligrosas', exp: true, better: 'low' },
+  { theme: 'Defensa', key: 'dispossessed_exp', label: 'Balones quitados*', kind: 'abs', title: 'Veces que le quitó el balón al rival', exp: true },
+  { theme: 'Defensa', key: 'dispossessed_exp_p90', label: 'Balones quitados/90*', kind: 'rate', title: 'Balones quitados al rival por cada 90 minutos', digits: 2, exp: true },
+  { theme: 'Defensa', key: 'crosses_blocked_exp', label: 'Centros bloqueados*', kind: 'abs', title: 'Centros bloqueados', exp: true },
+  { theme: 'Defensa', key: 'corners_conceded_exp', label: 'Córners concedidos*', kind: 'abs', title: 'Córners concedidos', exp: true, better: 'low' },
+  { theme: 'Defensa', key: 'out_of_position_severe_exp', label: 'Muy fuera de posición*', kind: 'abs', title: 'Avisos del juego de "fuera de posición" en los dos niveles más graves', exp: true, better: 'low' },
+  // --- Portero: tipos de atajada (oficiales de EA)
+  { theme: 'Portero', key: 'reflex_saves', label: 'At. reflejo', kind: 'abs', title: 'Atajadas de reflejo' },
+  { theme: 'Portero', key: 'ball_dive_saves', label: 'At. estirada', kind: 'abs', title: 'Atajadas en estirada' },
+  { theme: 'Portero', key: 'parry_saves', label: 'At. desviadas', kind: 'abs', title: 'Atajadas desviando el balón' },
+  { theme: 'Portero', key: 'punch_saves', label: 'At. puños', kind: 'abs', title: 'Atajadas con los puños' },
+  { theme: 'Portero', key: 'cross_saves', label: 'At. centros', kind: 'abs', title: 'Centros atajados' },
+  { theme: 'Portero', key: 'good_direction_saves', label: 'At. buena dirección', kind: 'abs', title: 'Atajadas que dejan el balón en buena dirección' },
   // --- Equipo y contexto
   { theme: 'Equipo y contexto', key: 'minutes_played', label: 'Min.', kind: 'abs', title: 'Minutos jugados (tiempo de juego)' },
   { theme: 'Equipo y contexto', key: 'goal_diff', label: 'Dif. goles', kind: 'abs', title: 'Goles a favor menos en contra en los partidos que jugó', render: (r) => fmtSigned(r.goal_diff) },
@@ -399,7 +495,34 @@ const RANKING_COLUMNS = [
 
 /** Totales que se pasan a "por 90 min" en el navegador (clave + "_p90"). */
 const PER90_KEYS = ['shots', 'passes_made', 'second_assists_exp', 'dribbles_exp', 'through_passes_exp', 'possession_lost_exp', 'tackles_made',
-  'interceptions_exp', 'possession_won_exp', 'aerial_duels_won_exp', 'fouls_exp'];
+  'interceptions_exp', 'possession_won_exp', 'aerial_duels_won_exp', 'fouls_exp', 'beats_exp', 'dispossessed_exp'];
+
+/**
+ * Suma por persona los contadores de la línea de tiempo (mismos filtros que el
+ * ranking) y arma los datos derivados: tiros por zona y % de pases por distancia.
+ * Si una persona no tiene ningún valor de un contador, queda en null (no en 0).
+ */
+function addExtraCounters(rows, timeline) {
+  const sums = new Map();
+  for (const t of timeline) {
+    if (!sums.has(t.person_id)) sums.set(t.person_id, {});
+    const s = sums.get(t.person_id);
+    for (const k of api.EXTRA_COUNTERS) if (t[k] != null) s[k] = (s[k] ?? 0) + Number(t[k]);
+  }
+  const add = (a, b) => (a == null && b == null ? null : (a ?? 0) + (b ?? 0));
+  const pct = (ok, ko) => (ok == null || ok + (ko ?? 0) === 0 ? null : Math.round((1000 * ok) / (ok + (ko ?? 0))) / 10);
+  return rows.map((r) => {
+    const s = sums.get(r.person_id) ?? {};
+    return {
+      ...r, ...s,
+      box_shots_exp: add(s.box_shots_on_exp, s.box_shots_off_exp),
+      outside_shots_exp: add(s.outside_shots_on_exp, s.outside_shots_off_exp),
+      short_pass_pct_exp: pct(s.short_passes_ok_exp, s.short_passes_failed_exp),
+      medium_pass_pct_exp: pct(s.medium_passes_ok_exp, s.medium_passes_failed_exp),
+      long_pass_pct_exp: pct(s.long_passes_ok_exp, s.long_passes_failed_exp),
+    };
+  });
+}
 
 /** Agrega a cada fila de person_stats los datos derivados (por 90 min, % de victorias). */
 function deriveRow(r) {
@@ -1429,8 +1552,8 @@ async function renderMatches(filters, requestId) {
       el('td', { class: 'left' }, el('span', { class: 'badge' }, TYPE_LABEL[m.match_type] ?? m.match_type)),
       el('td', { class: 'left' }, m.opponent_name ?? '—', f?.incomplete ? [' ', el('span', { class: 'badge warn', title: 'El partido se cortó antes del 90 % del tiempo o un equipo abandonó. El marcador es el que da EA.' }, 'Abandonado')] : null, highlights(m, f?.incomplete)),
       covSkill.show ? el('td', {}, fmtNum(m.opponent_skill_rating)) : null,
-      covOppDiv.show ? el('td', { title: m.opponent_division != null ? `División del rival al jugar. ${divisionTitle(m.opponent_division)}` : 'Sin dato: se empezó a guardar después' }, gameDivision(m.opponent_division) ?? '—') : null,
-      covDiv.show ? el('td', { title: f?.club_division != null ? `División del club ese día. ${divisionTitle(f.club_division)}` : 'Sin dato de división' }, gameDivision(f?.club_division) ?? '—') : null,
+      covOppDiv.show ? el('td', { title: m.opponent_division != null ? `División del rival al jugar. ${divisionTitle(m.opponent_division)}` : 'Sin dato: se empezó a guardar después' }, m.opponent_division != null ? el('span', { class: 'div-value' }, divisionIcon(m.opponent_division), gameDivision(m.opponent_division)) : '—') : null,
+      covDiv.show ? el('td', { title: f?.club_division != null ? `División del club ese día. ${divisionTitle(f.club_division)}` : 'Sin dato de división' }, f?.club_division != null ? el('span', { class: 'div-value' }, divisionIcon(f.club_division), gameDivision(f.club_division)) : '—') : null,
       el('td', { title: 'Jugadores del club en cancha' }, fmtNum(f?.team_size)),
       // Marcador tal cual EA (en un abandono es el que asigna EA; la etiqueta "Abandonado" lo avisa).
       el('td', {}, el('strong', {}, `${m.goals_for} – ${m.goals_against}`)),
@@ -1736,7 +1859,7 @@ function divisionContext(matches, summary, levelTiles) {
       const list = groups.get(k);
       const count = (o) => list.filter((m) => m.outcome === o).length;
       return el('tr', {},
-        el('td', { class: 'left', title: k === 'sin' ? null : divisionTitle(k) }, k === 'sin' ? el('span', { class: 'muted', title: 'Partidos anteriores al registro de la división' }, 'Sin dato') : gameDivision(k)),
+        el('td', { class: 'left', title: k === 'sin' ? null : divisionTitle(k) }, k === 'sin' ? el('span', { class: 'muted', title: 'Partidos anteriores al registro de la división' }, 'Sin dato') : el('span', { class: 'div-value' }, divisionIcon(k), gameDivision(k))),
         el('td', {}, String(list.length)),
         el('td', {}, el('strong', {}, fmtNum(avg(list, (m) => m.rating), 2))),
         el('td', {}, `${count('win')}-${count('draw')}-${count('loss')}`),
@@ -2266,7 +2389,7 @@ async function refresh() {
       const prev = ea.get(m.person_id);
       if (!prev || m.pro_overall > prev.pro_overall) ea.set(m.person_id, m);
     }
-    state.ranking = ranking.map((r) => deriveRow({ ...r, pro_overall: ea.get(r.person_id)?.pro_overall ?? null, pro_name: ea.get(r.person_id)?.pro_name ?? null }));
+    state.ranking = addExtraCounters(ranking, timeline).map((r) => deriveRow({ ...r, pro_overall: ea.get(r.person_id)?.pro_overall ?? null, pro_name: ea.get(r.person_id)?.pro_name ?? null }));
     state.positions = positionsByPerson(timeline);
     syncPhotoNames();
     state.records = new Map(records.map((r) => [r.person_id, r]));
@@ -2368,7 +2491,8 @@ function renderChangelog() {
 function updateFiltersSummary() {
   const from = $('#from').value, to = $('#to').value;
   const short = (v) => new Date(`${v}T12:00:00`).toLocaleDateString('es-CO', { day: 'numeric', month: 'short' });
-  $('#dates-value').textContent = from || to ? `${from ? short(from) : '…'} – ${to ? short(to) : 'hoy'}` : 'Todas';
+  $('#dates-value').textContent = state.seasonNo != null ? `Temporada ${state.seasonNo}`
+    : from || to ? `${from ? short(from) : '…'} – ${to ? short(to) : 'hoy'}` : 'Todas';
   const opts = [];
   if (state.minMatches > 1) opts.push(`mín. ${state.minMatches} PJ`);
   // Por defecto se muestra todo tal cual EA; solo se avisa si se excluyen abandonos.
@@ -2407,7 +2531,8 @@ async function initClubs() {
     const url = new URL(location.href);
     url.searchParams.set('club', String(state.clubId));
     history.replaceState(null, '', url);
-    refresh();
+    state.seasonNo = null;
+    loadSeasons().finally(() => { updateFiltersSummary(); refresh(); });
   });
 }
 
@@ -2416,8 +2541,16 @@ async function init() {
   await initClubs();
   document.querySelector('.filters').addEventListener('change', updateFiltersSummary);
   document.querySelector('.filters').addEventListener('input', updateFiltersSummary);
+  await loadSeasons();
+  $('#season-select').addEventListener('change', (e) => {
+    state.seasonNo = e.target.value === '' ? null : Number(e.target.value);
+    for (const id of ['#from', '#to']) $(id).disabled = state.seasonNo != null;
+    updateFiltersSummary(); refresh();
+  });
   $('#clear-dates').addEventListener('click', () => {
     $('#from').value = ''; $('#to').value = '';
+    state.seasonNo = null; $('#season-select').value = '';
+    for (const id of ['#from', '#to']) $(id).disabled = false;
     $('#dates-pop').open = false;
     updateFiltersSummary(); refresh();
   });

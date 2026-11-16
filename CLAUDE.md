@@ -58,7 +58,7 @@ API no oficial de EA ──► Colector (GitHub Actions, cada 30 min) ──► 
    - Filtros: tipo de partido, fechas, mínimo de partidos y excluir incompletos.
    - Los archivos se versionan con el commit en `pages.yml` (`__V__`), para no mezclar versiones viejas desde la caché de Pages.
    - Probado en Chrome con los datos del club de prueba.
-   - **Migraciones aplicadas en Supabase:** 001–019, cada una verificada después de aplicarla.
+   - **Migraciones aplicadas en Supabase:** 001–020, cada una verificada después de aplicarla.
    - **Documentación (2026-11-16):** `README.md`, `docs/manual-de-usuario.md` (para el equipo) y `docs/arquitectura.md` (técnica, con diagramas Mermaid). Actualizarlas al cambiar funciones.
    - **v2.7 (2026-11-16, pedidos del usuario):**
      - **Ranking:**
@@ -390,11 +390,27 @@ No hay API oficial. Se usan los endpoints públicos que lee la web de Clubes de 
      - El token **vence** (fecha elegida por el usuario). Al vencer, GitHub responde 401 y el dashboard muestra en rojo "Disparo falló…" (`dispatch_status()`). Para renovarlo: crear otro token igual y reemplazar el valor en Vault con el mismo nombre.
 7. **Catálogo de datos de EA:** ver `docs/datos-ea.md`. Recoge los endpoints y campos verificados, los no usados y los que EA no expone.
 
-9. **PENDIENTE (pedido del usuario, 2026-11-16): separar JUEGO y TEMPORADA.**
-   - Hoy `clubs.season` = "FC27" mezcla el juego con la temporada. Dentro de cada FC hay **varias temporadas de liga de Clubes**.
-   - Hay que modelar dos niveles: **juego** (FC 27, FC 28) y **temporada dentro del juego**.
-   - Idea a verificar: EA reinicia `currentSeason` (partidos, puntos, V-E-D) al empezar cada temporada; detectar ese reinicio en `club_snapshots`.
-   - El dashboard debería poder filtrar por temporada y mostrar "FC 27 · Temporada N".
+9. ~~Separar JUEGO y TEMPORADA.~~ **Hecho el 2026-11-16 (migración 020, v2.8).**
+   - **Modelo:**
+     - `clubs.season` es el **juego** (FC27).
+     - `club_seasons` guarda las temporadas dentro del juego: `season_no` propio desde que empezamos a registrar, `started_at`/`ended_at`, `detected_by` y `expected_end_at`.
+   - **Investigado:**
+     - EA (glosario oficial): los Play-offs son la última semana de cada temporada.
+     - PRO11 (guía no oficial): las temporadas van por fecha y son iguales para todos. La temporada 2 de FC 27 va del 22-oct al 3-dic-2026.
+     - EA **no** da el número ni las fechas de la temporada en la API.
+   - **Detección:** `collector/src/seasons.ts`.
+     - Si bajan los partidos de `currentSeason` y no suben los puntos, empezó una temporada nueva. Su inicio es la captura anterior.
+     - Si pasa un día del `expected_end_at` sin reinicio, solo se avisa en el log.
+     - **Sin verificar con un reinicio real: revisar alrededor del 3-dic-2026** que se haya abierto la temporada 2.
+   - **Dashboard:**
+     - Selector "Temporada" en "Fechas", que filtra por el rango de fechas con los mismos `p_from`/`p_to`.
+     - La cabecera dice "FC 27 · Temporada N".
+     - La ficha de temporada siempre es la temporada en curso (la da EA).
+   - **También en la 020:**
+     - Escudo real: `clubs.crest_asset_id` y `team_id`.
+     - Íconos de división de EA: `divisioncrest{n}.png` con n = número de EA. Verificado: el 1 es la Élite (león morado) y el 5 muestra un "4".
+     - 35 contadores más en la vista (pases por distancia, tiros por zona, barridas, tipos de atajada…), que se suman en el navegador para "+ Añadir dato".
+   - **Pendiente del usuario:** confirmar que el escudo (balón con aros de colores) es el de 100 D CILANTRO.
 10. ~~Capturar todos los datos de EA.~~ **Hecho el 2026-11-16 (migración 019):**
     - `ea_snapshots` guarda crudos `clubs/info`, play-off, carrera y la foto de cada rival.
     - `matches.opponent_division` guarda la división del rival.

@@ -754,3 +754,13 @@ dialog.guide::backdrop { background: rgb(0 0 0 / .55); }
   .vcols, .vpairs { gap: 3px; }
   .vcol-label { font-size: .6rem; }
 }
+
+/* v2.8 · Escudo real (oculto hasta que carga) e íconos de división de EA */
+.crest img { position: absolute; inset: 0; opacity: 0; }
+.crest.has-img img { opacity: 1; }
+.div-value { display: inline-flex; align-items: center; gap: 6px; }
+.div-icon { flex: none; object-fit: contain; }
+.div-icon.sm { width: 22px; height: 22px; }
+.kpi .div-icon.sm { width: 30px; height: 30px; }
+#season-select { font: inherit; text-transform: none; letter-spacing: normal; font-weight: 500; color: var(--ink); background: var(--bg); border: 1px solid var(--border); border-radius: 10px; padding: 6px 8px; }
+.pop-panel input:disabled { opacity: .45; }

@@ -1,7 +1,8 @@
 // Patrón Repository: el colector solo conoce esta interfaz. Cambiar de
 // proveedor (o usar un doble en los tests) no toca la lógica.
 import { createClient, type SupabaseClient } from '@supabase/supabase-js';
-import type { ClubRow, ClubSnapshotRow, EaSnapshotRow, MemberSnapshotRow, NormalizedMatch, RawMatchRow, RunResult } from './domain.ts';
+import type { ClubRow, ClubSeasonRow, ClubSnapshotRow, EaSnapshotRow, MemberSnapshotRow, NormalizedMatch, RawMatchRow, RunResult } from './domain.ts';
+import type { SeasonCounters } from './seasons.ts';
 
 export interface StatsRepository {
   /** Foto diaria del club (upsert por club y día). */
@@ -15,6 +16,14 @@ export interface StatsRepository {
   setOpponentDivision(matchId: string, division: number): Promise<void>;
   /** JSON completo de endpoints de EA (upsert por club de captura, club consultado, endpoint y día). */
   saveEaSnapshots(rows: EaSnapshotRow[]): Promise<void>;
+  /** Última foto del club (para comparar los contadores de la temporada). */
+  getLatestClubSnapshot(clubId: number): Promise<SeasonCounters | null>;
+  /** Temporada en curso del club, o null si todavía no tiene ninguna. */
+  getOpenSeason(clubId: number): Promise<{ season_no: number; started_at: string; expected_end_at: string | null } | null>;
+  /** Cierra la temporada abierta (si hay) en `row.started_at` y abre la nueva. */
+  startSeason(row: ClubSeasonRow): Promise<void>;
+  /** Escudo del club según EA (teamId y crestAssetId). */
+  setClubCrest(clubId: number, teamId: number | null, crestAssetId: number | null): Promise<void>;
   /** División del club al capturar. Solo llena partidos que aún no la tienen (nunca la pisa). */
   setClubDivision(matchIds: string[], division: number): Promise<void>;
   startRun(runner: string): Promise<number>;
@@ -146,6 +155,46 @@ export class SupabaseStatsRepository implements StatsRepository {
       .from('ea_snapshots')
       .upsert(rows, { onConflict: 'for_club_id,club_id,endpoint,snapshot_date' });
     check('saveEaSnapshots', error);
+  }
+
+  async setClubCrest(clubId: number, teamId: number | null, crestAssetId: number | null): Promise<void> {
+    const { error } = await this.#db.from('clubs').update({ team_id: teamId, crest_asset_id: crestAssetId }).eq('club_id', clubId);
+    check('setClubCrest', error);
+  }
+
+  async getLatestClubSnapshot(clubId: number): Promise<SeasonCounters | null> {
+    const { data, error } = await this.#db
+      .from('club_snapshots')
+      .select('captured_at, season_games, season_points')
+      .eq('club_id', clubId)
+      .order('captured_at', { ascending: false })
+      .limit(1);
+    check('getLatestClubSnapshot', error);
+    return ((data ?? []) as SeasonCounters[])[0] ?? null;
+  }
+
+  async getOpenSeason(clubId: number): Promise<{ season_no: number; started_at: string; expected_end_at: string | null } | null> {
+    const { data, error } = await this.#db
+      .from('club_seasons')
+      .select('season_no, started_at, expected_end_at')
+      .eq('club_id', clubId)
+      .is('ended_at', null)
+      .limit(1);
+    check('getOpenSeason', error);
+    return ((data ?? []) as { season_no: number; started_at: string; expected_end_at: string | null }[])[0] ?? null;
+  }
+
+  async startSeason(row: ClubSeasonRow): Promise<void> {
+    // Dos pasos (PostgREST no agrupa en una transacción): cerrar y abrir. Si falla
+    // el segundo, la próxima ejecución no ve temporada abierta y abre una nueva.
+    let res = await this.#db
+      .from('club_seasons')
+      .update({ ended_at: row.started_at })
+      .eq('club_id', row.club_id)
+      .is('ended_at', null);
+    check('startSeason (cerrar)', res.error);
+    res = await this.#db.from('club_seasons').upsert(row, { onConflict: 'club_id,season_no' });
+    check('startSeason (abrir)', res.error);
   }
 
   async setClubDivision(matchIds: string[], division: number): Promise<void> {
