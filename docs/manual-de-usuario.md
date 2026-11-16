@@ -96,8 +96,12 @@ Deja de ser beta cuando se cumplan tres condiciones:
   | Pase frente a su rol | 10 % |
   | Impacto en el equipo | 10 % |
   | MVP | 10 % |
-  | Ante rivales fuertes | 5 % |
+  | Juego limpio | 5 % |
   | Regularidad | 5 % |
+
+- **Dificultad:** en calificación, ataque, defensa y pase, cada partido vale más en divisiones altas (+5 % por división sobre la 5ª) y contra rivales de más nivel (entre −15 % y +15 %).
+- **Ataque, defensa y pase combinan varios datos:** G+A, conversión, regates*, tiros; entradas, intercepciones*, recuperaciones*, duelos aéreos*; precisión, pases filtrados*, pérdidas*, entre otros.
+- **Juego limpio:** puntos de sanción por 90 minutos (roja 3, amarilla* 1, penal cometido* 1, falta* 0,25) frente al promedio del equipo. Menos sanciones = más puntos.
 
 - **Justo para quien rota:** todo se compara con el promedio de su rol. El portero se mide por % de atajadas en vez de por ataque.
 - **Pocos partidos:** con pocos partidos, el resultado se acerca al promedio.

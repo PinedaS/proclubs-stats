@@ -883,3 +883,7 @@ body.no-charts #person-detail .chart, body.no-charts #person-detail .pchart, bod
   .score-cell .m-only .result { margin-left: auto; }
   .chart-toggle { margin-right: 8px; }
 }
+
+/* v2.12 · Desglose de los criterios compuestos del mejor jugador */
+.best-sub { display: flex; flex-wrap: wrap; gap: 4px 10px; margin-top: 3px; font-size: .74rem; }
+.best-sub span { white-space: nowrap; }

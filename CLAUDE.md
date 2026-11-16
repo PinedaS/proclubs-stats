@@ -356,7 +356,17 @@ No hay API oficial. Se usan los endpoints públicos que lee la web de Clubes de 
    - Dashboard en GitHub Pages, y minutos de Actions ilimitados.
    - **Riesgo:** GitHub desactiva los workflows programados de un repo público tras **60 días sin actividad** en el repo. Hay que mitigarlo en el paso 4 (p. ej. un *keepalive*).
 2. **Fórmula de "mejor jugador": EXPERIMENTAL desde la v2.10 (2026-11-16, aprobada por el usuario).** Pestaña "Mejor jugador" (`computeBest` en `app.js`). **No cambiar criterios, pesos ni el mínimo sin que el usuario lo pida.**
-   - **Pesos fijos, iguales para todos** (decisión del usuario): calificación frente al rol 30, ataque frente al rol 15, defensa frente al rol 15 (portero: % de atajadas), pase frente al rol 10, impacto (% de victorias con él − sin él) 10, MVP frente al promedio 10, ante rivales fuertes (≥ mediana) 5 y regularidad 5.
+   - **Pesos fijos, iguales para todos** (decisión del usuario; v2.12, 2026-11-16): calificación frente al rol 30, ataque frente al rol 15, defensa frente al rol 15, pase frente al rol 10, impacto (% de victorias con él − sin él) 10, MVP frente al promedio 10, **juego limpio 5** y regularidad 5. "Ante rivales fuertes" se quitó: lo cubre el ajuste por dificultad.
+   - **Ajuste por dificultad (v2.12, aprobado por el usuario, opción B):** en calificación, ataque, defensa y pase, cada partido se multiplica por división × rival.
+     - **División:** +5 % por división sobre la 5ª (API 6 = ×1,00; Élite = ×1,25).
+     - **Rival:** su nivel / el nivel medio de los rivales del club, recortado a 0,85–1,15.
+     - Lo malo (pérdidas, entradas peligrosas) se **divide** por el factor.
+   - **Criterios compuestos (v2.12, datos y pesos aprobados por el usuario):** cada dato es un índice frente al rol (por posición y por minutos), con un recorte de ×0,25–×2,5. Ver `SUB` en `app.js`.
+     - **Ataque:** G+A/90 35, conversión 15, regates*/90 15, rival superado*/90 10, 2ª asistencias*/90 10, tiros/90 10, tiros a puerta %* 5.
+     - **Defensa:** entradas/90 25, % de entradas 15, intercepciones*/90 20, recuperaciones*/90 15, balones quitados*/90 10, aéreos*/90 10, entradas peligrosas*/90 (menos es mejor) 5.
+     - **Defensa del portero:** % de atajadas 70, atajadas/90 30.
+     - **Pase:** precisión 30, pases/90 15, filtrados*/90 15, pérdidas*/90 (menos es mejor) 15, pase adelante %* 10, pase largo %* 10, decisiones %* 5.
+   - **Juego limpio:** sanción/90 = 3·roja + amarilla* + penal* + 0,25·falta*. Índice = (media + ε) / (suya + ε) × 100, con ε = máx(0,05; 10 % de la media).
    - **Cálculo:** índice (100 = promedio) → corrección por pocos partidos `100 + (i − 100) × PJ / (PJ + 5)` → nota `50 + (i − 100)`, recortada a 0–100 → promedio ponderado. Si falta un criterio, su peso se reparte entre los demás, con aviso.
    - **Mínimo para entrar:** 30 % de los partidos del club en el rango filtrado (decisión del usuario).
    - **Efectos observados con 12 partidos (2026-11-16):**

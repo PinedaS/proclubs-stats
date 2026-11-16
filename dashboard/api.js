@@ -125,6 +125,14 @@ export const EXTRA_COUNTERS = [
   'parry_saves', 'punch_saves', 'reflex_saves', 'cross_saves', 'ball_dive_saves', 'good_direction_saves',
 ];
 
+/** Datos por partido que usa la fórmula del mejor jugador (dificultad, criterios ampliados y juego limpio). */
+const BEST_FIELDS = [
+  'club_division', 'shots', 'pass_attempts', 'passes_made', 'tackle_attempts', 'tackles_made', 'saves', 'goals_conceded', 'red_cards',
+  'dribbles_exp', 'interceptions_exp', 'possession_won_exp', 'possession_lost_exp', 'aerial_duels_won_exp', 'fouls_exp',
+  'yellow_cards_exp', 'second_assists_exp', 'shots_on_target_exp', 'shots_off_target_exp', 'through_passes_exp',
+  'forward_passes_ok_exp', 'forward_passes_failed_exp', 'best_option_exp', 'should_have_passed_exp', 'penalties_conceded_exp',
+];
+
 /** Temporadas del club (migración 020), de la más reciente a la más vieja. */
 export function getSeasons(clubId) {
   return request(`club_seasons?select=season_no,started_at,ended_at,detected_by,expected_end_at&order=season_no.desc${clubParam(clubId)}`);
@@ -136,7 +144,7 @@ export function getSeasons(clubId) {
  */
 export function getRatingsTimeline(f) {
   const p = filterParams(f);
-  p.set('select', ['match_id,played_at,person_id,person_name,rating,incomplete,goals,assists,goals_for,goals_against,outcome,position,seconds_played,opponent_skill_rating', ...EXTRA_COUNTERS].join(','));
+  p.set('select', ['match_id,played_at,person_id,person_name,rating,incomplete,goals,assists,goals_for,goals_against,outcome,position,seconds_played,opponent_skill_rating', ...BEST_FIELDS, ...EXTRA_COUNTERS].join(','));
   p.set('order', 'played_at.asc');
   if (f.excludeIncomplete) p.set('incomplete', 'is.false');
   return request(`v_player_match_stats?${p}`);

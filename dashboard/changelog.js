@@ -3,6 +3,16 @@
 // La fecha es la de Colombia (UTC−5), no la UTC: de noche ya es "mañana" en UTC.
 export const CHANGELOG = [
   {
+    version: '2.12',
+    date: '2026-11-16',
+    title: 'Mejor jugador: dificultad, juego limpio y más datos',
+    changes: [
+      'Cada partido vale según su dificultad: más en divisiones altas (+5 % por división sobre la 5ª) y contra rivales de más nivel (hasta ±15 %).',
+      'Ataque, defensa y pase usan muchos más datos: regates, rival superado, segundas asistencias, intercepciones, recuperaciones, duelos aéreos, pases filtrados, pérdidas y más. Al tocar un jugador se ve cada uno.',
+      'Nuevo criterio "Juego limpio" (5 %): menos rojas, amarillas, faltas y penales cometidos = más puntos. Reemplaza a "Ante rivales fuertes", que ahora cubre el ajuste por dificultad.',
+    ],
+  },
+  {
     version: '2.11',
     date: '2026-11-16',
     title: 'Gráficas a elección, app instalable y celular',

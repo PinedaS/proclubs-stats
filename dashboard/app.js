@@ -2558,47 +2558,167 @@ function teamPlaceSection(personId) {
 }
 
 // ---------------------------------------------------------------------------
-// Mejor jugador (EXPERIMENTAL, v2.10). Fórmula aprobada por el usuario el
-// 2026-11-16: criterios y pesos FIJOS (todos ven el mismo ranking) y mínimo del
-// 30 % de los partidos del club. No cambia ningún dato de EA: es un cálculo encima.
+// Mejor jugador (EXPERIMENTAL). Fórmula aprobada por el usuario el 2026-11-16
+// (v2.10) y ampliada el mismo día (v2.12): criterios y pesos FIJOS (todos ven el
+// mismo ranking) y mínimo del 30 % de los partidos del club. No cambia ningún
+// dato de EA: es un cálculo encima.
 //
 //   1. Cada criterio es un índice: 100 = promedio (del rol, cuando aplica).
-//   2. Corrección por pocos partidos: 100 + (índice − 100) × PJ / (PJ + 5).
-//   3. Nota 0–100: 50 + (índice − 100), recortada a [0, 100].
-//   4. Puntaje = promedio ponderado de las notas. Si a alguien le falta un
-//      criterio, su peso se reparte entre los demás (se avisa).
+//      Calificación, ataque, defensa y pase se comparan con el promedio del club
+//      en las posiciones que jugó, ponderado por sus minutos en cada una.
+//   2. Dificultad (v2.12): en esos cuatro, cada partido pesa según la división
+//      (+5 % por división sobre la 5ª) y el nivel del rival (su nivel / el medio
+//      de los rivales, entre ×0,85 y ×1,15). Lo bueno se multiplica; lo malo
+//      (pérdidas, entradas peligrosas) se divide.
+//   3. Corrección por pocos partidos: 100 + (índice − 100) × PJ / (PJ + 5).
+//   4. Nota 0–100: 50 + (índice − 100), recortada a [0, 100].
+//   5. Puntaje = promedio ponderado de las notas. Si a alguien le falta un
+//      criterio o un dato, su peso se reparte entre los demás (se avisa).
 // ---------------------------------------------------------------------------
 
 const BEST_MIN_SHARE = 0.3; // 30 % de los partidos del club en el rango filtrado
 const BEST_SHRINK_K = 5;
+const DIV_STEP = 0.05; // +5 % por división sobre la 5ª del juego (API 6)
+const RIVAL_CAP = 0.15; // factor del rival entre ×0,85 y ×1,15
 const BEST_CRITERIA = [
-  { key: 'rating', label: 'Calificación frente a su rol', weight: 30, help: 'Su calificación de EA comparada con el promedio del club en las posiciones que jugó (por minutos).' },
-  { key: 'attack', label: 'Ataque frente a su rol', weight: 15, help: 'Goles + asistencias por 90 min frente al promedio de su rol.' },
-  { key: 'defense', label: 'Defensa frente a su rol', weight: 15, help: 'Entradas e intercepciones* por 90 min frente a su rol. Si jugó sobre todo de portero: % de atajadas frente a otros porteros.' },
-  { key: 'passing', label: 'Pase frente a su rol', weight: 10, help: 'Precisión de pase frente al promedio de su rol.' },
+  { key: 'rating', label: 'Calificación frente a su rol', weight: 30, help: 'Su calificación de EA frente al promedio del club en las posiciones que jugó, ajustada por la dificultad de cada partido.' },
+  { key: 'attack', label: 'Ataque frente a su rol', weight: 15, help: 'G+A, conversión, regates*, rival superado*, segundas asistencias*, tiros y tiros a puerta* frente a su rol, ajustados por dificultad.' },
+  { key: 'defense', label: 'Defensa frente a su rol', weight: 15, help: 'Entradas, % de entradas, intercepciones*, recuperaciones*, balones quitados*, duelos aéreos* y entradas peligrosas* (menos es mejor) frente a su rol, ajustados por dificultad. Portero: % de atajadas y atajadas por 90.' },
+  { key: 'passing', label: 'Pase frente a su rol', weight: 10, help: 'Precisión, pases completados, filtrados*, pérdidas* (menos es mejor), pase adelante*, pase largo* y decisiones* frente a su rol, ajustados por dificultad.' },
   { key: 'impact', label: 'Impacto en el equipo', weight: 10, help: '% de victorias del equipo con él menos % sin él (cada punto de diferencia suma o resta un punto al índice).' },
   { key: 'mvp', label: 'MVP', weight: 10, help: 'Su % de MVP frente al promedio de los jugadores que entran al ranking.' },
-  { key: 'strong', label: 'Ante rivales fuertes', weight: 5, help: 'Su calificación frente a su rol, solo en partidos contra rivales de nivel igual o mayor a la mediana.' },
+  { key: 'fairplay', label: 'Juego limpio', weight: 5, help: 'Sanciones por 90 min frente al promedio: roja 3, amarilla* 1, penal cometido* 1, falta* 0,25. Menos sanciones = más puntos.' },
   { key: 'regularity', label: 'Regularidad', weight: 5, help: 'Qué tan estable es su calificación: menos variación que el promedio = índice mayor.' },
 ];
 
-/** Índices de cada criterio por persona (sin corregir). */
+// Datos de cada criterio por rol. kind: 'p90' = por 90 min; 'ratio' = num / den.
+// low: menos es mejor. w: peso dentro del criterio (aprobado por el usuario).
+const n = (k) => (t) => Number(t[k] ?? 0);
+const sum = (...ks) => (t) => ks.reduce((a, k) => a + Number(t[k] ?? 0), 0);
+const has = (...ks) => (t) => ks.every((k) => t[k] != null);
+const SUB = {
+  attack: [
+    { label: 'G+A por 90', w: 35, kind: 'p90', num: sum('goals', 'assists') },
+    { label: 'Conversión', w: 15, kind: 'ratio', num: n('goals'), den: n('shots') },
+    { label: 'Regates por 90*', w: 15, kind: 'p90', num: n('dribbles_exp'), ok: has('dribbles_exp') },
+    { label: 'Rival superado por 90*', w: 10, kind: 'p90', num: n('beats_exp'), ok: has('beats_exp') },
+    { label: '2ª asistencias por 90*', w: 10, kind: 'p90', num: n('second_assists_exp'), ok: has('second_assists_exp') },
+    { label: 'Tiros por 90', w: 10, kind: 'p90', num: n('shots') },
+    { label: 'Tiros a puerta %*', w: 5, kind: 'ratio', num: n('shots_on_target_exp'), den: sum('shots_on_target_exp', 'shots_off_target_exp'), ok: has('shots_on_target_exp') },
+  ],
+  defense: [
+    { label: 'Entradas por 90', w: 25, kind: 'p90', num: n('tackles_made') },
+    { label: '% de entradas', w: 15, kind: 'ratio', num: n('tackles_made'), den: n('tackle_attempts') },
+    { label: 'Intercepciones por 90*', w: 20, kind: 'p90', num: n('interceptions_exp'), ok: has('interceptions_exp') },
+    { label: 'Recuperaciones por 90*', w: 15, kind: 'p90', num: n('possession_won_exp'), ok: has('possession_won_exp') },
+    { label: 'Balones quitados por 90*', w: 10, kind: 'p90', num: n('dispossessed_exp'), ok: has('dispossessed_exp') },
+    { label: 'Duelos aéreos por 90*', w: 10, kind: 'p90', num: n('aerial_duels_won_exp'), ok: has('aerial_duels_won_exp') },
+    { label: 'Entradas peligrosas por 90*', w: 5, kind: 'p90', low: true, num: n('dangerous_tackles_exp'), ok: has('dangerous_tackles_exp') },
+  ],
+  defenseGk: [
+    { label: '% de atajadas', w: 70, kind: 'ratio', num: n('saves'), den: sum('saves', 'goals_conceded') },
+    { label: 'Atajadas por 90', w: 30, kind: 'p90', num: n('saves') },
+  ],
+  passing: [
+    { label: 'Precisión de pase', w: 30, kind: 'ratio', num: n('passes_made'), den: n('pass_attempts') },
+    { label: 'Pases por 90', w: 15, kind: 'p90', num: n('passes_made') },
+    { label: 'Filtrados por 90*', w: 15, kind: 'p90', num: n('through_passes_exp'), ok: has('through_passes_exp') },
+    { label: 'Pérdidas por 90*', w: 15, kind: 'p90', low: true, num: n('possession_lost_exp'), ok: has('possession_lost_exp') },
+    { label: 'Pase adelante %*', w: 10, kind: 'ratio', num: n('forward_passes_ok_exp'), den: sum('forward_passes_ok_exp', 'forward_passes_failed_exp'), ok: has('forward_passes_ok_exp') },
+    { label: 'Pase largo %*', w: 10, kind: 'ratio', num: n('long_passes_ok_exp'), den: sum('long_passes_ok_exp', 'long_passes_failed_exp'), ok: has('long_passes_ok_exp') },
+    { label: 'Decisiones %*', w: 5, kind: 'ratio', num: n('best_option_exp'), den: sum('best_option_exp', 'should_have_passed_exp'), ok: has('best_option_exp') },
+  ],
+};
+
+/** Factor de dificultad de un partido: división × nivel del rival (1 si falta el dato). */
+function difficultyOf(t, meanSkill) {
+  const div = Number(t.club_division);
+  const fDiv = Number.isInteger(div) && div >= 1 && div <= 6 ? 1 + DIV_STEP * (6 - div) : 1;
+  const sk = Number(t.opponent_skill_rating);
+  const fRival = sk > 0 && meanSkill ? Math.min(1 + RIVAL_CAP, Math.max(1 - RIVAL_CAP, sk / meanSkill)) : 1;
+  return fDiv * fRival;
+}
+
+/**
+ * Índice de un dato frente al rol: para cada posición que jugó, su valor (con la
+ * dificultad de cada partido) dividido por el promedio del club en esa posición;
+ * luego se promedian las posiciones por sus minutos. Recortado a ×0,25–×2,5 por dato.
+ */
+function roleIndex(rows, all, spec) {
+  const valid = (t) => (spec.ok ? spec.ok(t) : true) && Number(t.seconds_played ?? 0) > 0;
+  const base = new Map();
+  for (const t of all) {
+    if (!valid(t) || !t.position) continue;
+    const b = base.get(t.position) ?? { num: 0, den: 0 };
+    b.num += spec.num(t); b.den += spec.kind === 'p90' ? Number(t.seconds_played) : spec.den(t);
+    base.set(t.position, b);
+  }
+  const mine = new Map();
+  for (const t of rows) {
+    if (!valid(t) || !t.position) continue;
+    const m = mine.get(t.position) ?? { num: 0, den: 0, sec: 0 };
+    m.num += spec.low ? spec.num(t) / t._d : spec.num(t) * t._d;
+    m.den += spec.kind === 'p90' ? Number(t.seconds_played) : spec.den(t);
+    m.sec += Number(t.seconds_played);
+    mine.set(t.position, m);
+  }
+  let acc = 0, w = 0;
+  for (const [pos, m] of mine) {
+    const b = base.get(pos);
+    if (!b || !b.den || !m.den) continue;
+    const bv = b.num / b.den, mv = m.num / m.den;
+    let r;
+    if (spec.low) r = mv === 0 ? (bv === 0 ? 1 : 2.5) : bv / mv;
+    else r = bv === 0 ? (mv === 0 ? 1 : 2.5) : mv / bv;
+    acc += m.sec * Math.min(2.5, Math.max(0.25, r)); w += m.sec;
+  }
+  return w ? 100 * (acc / w) : null;
+}
+
+/** Índice compuesto de un criterio: promedio ponderado de sus datos (los que faltan se omiten). */
+function compositeIndex(rows, all, specs) {
+  const parts = specs.map((s) => ({ label: s.label, w: s.w, v: roleIndex(rows, all, s) }));
+  const ok = parts.filter((x) => x.v != null);
+  const ws = ok.reduce((a, x) => a + x.w, 0);
+  return { v: ws ? ok.reduce((a, x) => a + x.v * x.w, 0) / ws : null, parts };
+}
+
+/** Índices de cada criterio por persona (sin corregir) y el desglose de los compuestos. */
 function bestIndices(people, timeline) {
-  const out = new Map(people.map((p) => [p.person_id, {}]));
+  const out = new Map(people.map((p) => [p.person_id, { sub: {} }]));
   const avg = (a) => (a.length ? a.reduce((x, y) => x + y, 0) / a.length : null);
-  // Rol: índices de relative_stats (posición, ponderados por minutos).
+  const roster = [...matchRoster(timeline).values()];
+  const meanSkill = avg(roster.map((m) => m.opp).filter((v) => v != null).map(Number));
+  const rows = timeline.map((t) => ({ ...t, _d: difficultyOf(t, meanSkill) }));
+  const byPerson = new Map();
+  for (const t of rows) { if (!byPerson.has(t.person_id)) byPerson.set(t.person_id, []); byPerson.get(t.person_id).push(t); }
+
+  // Calificación frente al rol, con dificultad: Σ seg × (calif × d / promedio de la posición) / Σ seg.
+  const posAvg = new Map();
+  for (const t of rows) {
+    if (t.rating == null || !t.position) continue;
+    const e = posAvg.get(t.position) ?? { s: 0, n: 0 }; e.s += Number(t.rating); e.n++; posAvg.set(t.position, e);
+  }
   for (const p of people) {
-    const rel = state.relative.get(p.person_id) ?? {};
+    const mine = byPerson.get(p.person_id) ?? [];
+    let num = 0, den = 0;
+    for (const t of mine) {
+      const pa = posAvg.get(t.position);
+      if (t.rating == null || !pa?.n) continue;
+      const w = Number(t.seconds_played ?? 0) || 1;
+      num += w * ((Number(t.rating) * t._d) / (pa.s / pa.n)); den += w;
+    }
     const o = out.get(p.person_id);
+    o.rating = den ? 100 * (num / den) : null;
+    o.difficulty = avg(mine.map((t) => t._d));
     const gk = (state.positions.get(p.person_id) ?? [])[0]?.pos === 'goalkeeper';
-    o.rating = rel.rating_idx;
-    o.attack = gk ? null : rel.ga90_idx;
-    const def = gk ? [rel.save_idx] : [rel.tackles90_idx, rel.interceptions90_idx_exp];
-    o.defense = avg(def.filter((v) => v != null).map(Number));
-    o.passing = rel.pass_idx;
+    for (const [key, specs] of [['attack', gk ? null : SUB.attack], ['defense', gk ? SUB.defenseGk : SUB.defense], ['passing', SUB.passing]]) {
+      if (!specs) { o[key] = null; continue; }
+      const c = compositeIndex(mine, rows, specs);
+      o[key] = c.v; o.sub[key] = c.parts;
+    }
   }
   // Impacto: % de victorias con él menos sin él.
-  const roster = [...matchRoster(timeline).values()];
   for (const p of people) {
     const w = teamResults(roster.filter((m) => m.people.has(p.person_id)));
     const wo = teamResults(roster.filter((m) => !m.people.has(p.person_id)));
@@ -2607,24 +2727,21 @@ function bestIndices(people, timeline) {
   // MVP frente al promedio de los que entran.
   const mvpMean = avg(people.map((p) => Number(p.mom_pct ?? 0)));
   for (const p of people) out.get(p.person_id).mvp = mvpMean ? (100 * Number(p.mom_pct ?? 0)) / mvpMean : null;
-  // Rivales fuertes: calificación frente al promedio del club en esa posición, solo vs. rivales ≥ mediana.
-  const posAvg = new Map();
-  for (const t of timeline) {
-    if (t.rating == null || !t.position) continue;
-    const e = posAvg.get(t.position) ?? { s: 0, n: 0 }; e.s += Number(t.rating); e.n++; posAvg.set(t.position, e);
-  }
-  const skills = roster.map((m) => m.opp).filter((v) => v != null).map(Number);
-  const cut = median(skills);
+  // Juego limpio: puntos de sanción por 90 (roja 3, amarilla* 1, penal* 1, falta* 0,25) frente al promedio.
+  const sanction = (p) => {
+    const mine = byPerson.get(p.person_id) ?? [];
+    const sec = mine.reduce((a, t) => a + Number(t.seconds_played ?? 0), 0);
+    if (!sec) return null;
+    const pts = mine.reduce((a, t) => a + 3 * Number(t.red_cards ?? 0) + Number(t.yellow_cards_exp ?? 0) + Number(t.penalties_conceded_exp ?? 0) + 0.25 * Number(t.fouls_exp ?? 0), 0);
+    return (pts * 5400) / sec;
+  };
+  const sanctions = new Map(people.map((p) => [p.person_id, sanction(p)]));
+  const sMean = avg([...sanctions.values()].filter((v) => v != null));
   for (const p of people) {
-    let num = 0, den = 0;
-    for (const t of timeline) {
-      if (t.person_id !== p.person_id || t.rating == null || t.opponent_skill_rating == null || cut == null || Number(t.opponent_skill_rating) < cut) continue;
-      const pa = posAvg.get(t.position);
-      if (!pa?.n) continue;
-      const w = Number(t.seconds_played ?? 0) || 1;
-      num += w * (Number(t.rating) / (pa.s / pa.n)); den += w;
-    }
-    out.get(p.person_id).strong = den ? 100 * (num / den) : null;
+    const s = sanctions.get(p.person_id);
+    // ε evita dividir por cero: quien no tiene sanciones queda arriba, sin un índice infinito.
+    const eps = Math.max(0.05, 0.1 * (sMean ?? 0));
+    out.get(p.person_id).fairplay = s == null || sMean == null ? null : (100 * (sMean + eps)) / (s + eps);
   }
   // Regularidad: variación media del grupo / la suya (menos variación = más de 100).
   const stdMean = avg(people.map((p) => p.rating_stddev).filter((v) => v != null).map(Number));
@@ -2643,14 +2760,14 @@ function computeBest() {
     const raw = idx.get(p.person_id);
     const parts = BEST_CRITERIA.map((c) => {
       const v = raw[c.key];
-      if (v == null || !Number.isFinite(v)) return { c, idx: null, adj: null, score: null };
+      if (v == null || !Number.isFinite(v)) return { c, idx: null, adj: null, score: null, sub: raw.sub[c.key] };
       const adj = 100 + (v - 100) * (p.matches / (p.matches + BEST_SHRINK_K));
-      return { c, idx: v, adj, score: Math.max(0, Math.min(100, 50 + (adj - 100))) };
+      return { c, idx: v, adj, score: Math.max(0, Math.min(100, 50 + (adj - 100))), sub: raw.sub[c.key] };
     });
     const used = parts.filter((x) => x.score != null);
     const wsum = used.reduce((a, x) => a + x.c.weight, 0);
     for (const x of parts) x.points = x.score == null || !wsum ? null : (x.score * x.c.weight) / wsum;
-    return { p, parts, total: wsum ? used.reduce((a, x) => a + x.points, 0) : null, missing: parts.filter((x) => x.score == null).map((x) => x.c.label) };
+    return { p, parts, difficulty: raw.difficulty, total: wsum ? used.reduce((a, x) => a + x.points, 0) : null, missing: parts.filter((x) => x.score == null).map((x) => x.c.label) };
   }).sort((a, b) => (b.total ?? -1) - (a.total ?? -1));
   return { rows, others, min, clubMatches };
 }
@@ -2664,12 +2781,16 @@ function renderBest() {
     box.replaceChildren(el('p', { class: 'muted', style: 'padding: 0 18px 18px' }, `Nadie tiene todavía el mínimo de ${min} partidos (30 % de los ${clubMatches} del club con estos filtros).`));
     return;
   }
+  const subLine = (sub) => (sub?.length
+    ? el('div', { class: 'best-sub muted small' }, sub.map((s) => el('span', { title: s.v == null ? 'Sin dato: su peso se reparte' : null }, `${s.label} ${s.v == null ? '—' : fmtNum(s.v, 0)}`)))
+    : null);
   const list = el('div', { class: 'best-list' }, rows.map((r, i) => {
     const detail = el('div', { class: 'best-detail', hidden: true },
+      r.difficulty != null ? el('p', { class: 'muted small' }, `Dificultad media de sus partidos: ×${fmtNum(r.difficulty, 2)} (1,00 = 5ª división y rival de nivel medio).`) : null,
       el('div', { class: 'table-wrap' }, el('table', { class: 'data' },
         el('thead', {}, el('tr', {}, ['Criterio', 'Índice', 'Con corrección', 'Nota', 'Peso', 'Aporta'].map((h, k) => el('th', { scope: 'col', class: k === 0 ? 'left' : null }, h)))),
         el('tbody', {}, r.parts.map((x) => el('tr', { title: x.c.help },
-          el('td', { class: 'left' }, x.c.label),
+          el('td', { class: 'left' }, x.c.label, subLine(x.sub)),
           el('td', {}, x.idx == null ? '—' : fmtNum(x.idx, 0)),
           el('td', {}, x.adj == null ? '—' : fmtNum(x.adj, 0)),
           el('td', {}, x.score == null ? '—' : fmtNum(x.score, 0)),
