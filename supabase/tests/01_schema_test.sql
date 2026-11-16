@@ -459,9 +459,44 @@ end $$;
 update public.matches set club_division = null;
 
 -- =============================================================================
+-- 4g. 019: fotos crudas de EA (ea_snapshots) y división del rival
+-- =============================================================================
+insert into public.ea_snapshots (for_club_id, club_id, endpoint, snapshot_date, is_opponent, payload) values
+  (1330384, 1330384, 'clubs/info', '2026-11-10', false, '{"name":"x"}'),
+  (1330384, 999001, 'clubs/overallStats', '2026-11-10', true, '{"skillRating":"1500"}');
+insert into public.ea_snapshots (for_club_id, club_id, endpoint, snapshot_date, is_opponent, payload) values
+  (1330384, 1330384, 'clubs/info', '2026-11-10', false, '{"name":"y"}')
+  on conflict (for_club_id, club_id, endpoint, snapshot_date) do update set payload = excluded.payload;
+select pg_temp.assert_eq('ea_snapshots: una fila por club, endpoint y día', (select count(*) from public.ea_snapshots), 2::bigint);
+do $$
+begin
+  begin
+    insert into public.ea_snapshots (for_club_id, club_id, endpoint, snapshot_date, payload) values (1330384, 1, 'otro/endpoint', '2026-11-10', '{}');
+    raise exception 'FAIL: endpoint desconocido aceptado';
+  exception when check_violation then raise notice 'PASS endpoint desconocido rechazado';
+  end;
+  begin
+    update public.matches set opponent_division = 0;
+    raise exception 'FAIL: división del rival 0 aceptada';
+  exception when check_violation then raise notice 'PASS división del rival fuera de rango rechazada';
+  end;
+end $$;
+update public.matches set opponent_division = 6 where match_id = (select min(match_id) from public.matches);
+set role anon;
+select pg_temp.assert_eq('anon lee la división del rival', (select count(*) from public.matches where opponent_division = 6), 1::bigint);
+do $$
+begin
+  perform 1 from public.ea_snapshots;
+  raise exception 'FAIL: anon pudo leer ea_snapshots';
+exception when insufficient_privilege then raise notice 'PASS anon no lee ea_snapshots';
+end $$;
+reset role;
+
+-- =============================================================================
 -- 5. Borrar el club de prueba
 -- =============================================================================
 select public.purge_club(1330384);
+select pg_temp.assert_eq('purge: sin fotos crudas de EA', (select count(*) from public.ea_snapshots), 0::bigint);
 
 select pg_temp.assert_eq('purge: sin partidos',  (select count(*) from public.matches), 0::bigint);
 select pg_temp.assert_eq('purge: sin raw',       (select count(*) from public.match_raw), 0::bigint);
