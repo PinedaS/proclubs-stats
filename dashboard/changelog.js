@@ -3,6 +3,15 @@
 // La fecha es la de Colombia (UTC−5), no la UTC: de noche ya es "mañana" en UTC.
 export const CHANGELOG = [
   {
+    version: '2.13',
+    date: '2026-11-16',
+    title: 'Mejor jugador: nivel de cada jugador',
+    changes: [
+      'La misma actuación tiene más mérito con una media del Pro más baja: cada partido se ajusta por la media que el jugador tenía ese día frente a la del equipo (entre −10 % y +10 %).',
+      'Al usar la media de cada día, los buenos partidos jugados con nivel bajo no pierden mérito cuando el jugador sube.',
+    ],
+  },
+  {
     version: '2.12',
     date: '2026-11-16',
     title: 'Mejor jugador: dificultad, juego limpio y más datos',

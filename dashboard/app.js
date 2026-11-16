@@ -2580,6 +2580,21 @@ const BEST_MIN_SHARE = 0.3; // 30 % de los partidos del club en el rango filtrad
 const BEST_SHRINK_K = 5;
 const DIV_STEP = 0.05; // +5 % por división sobre la 5ª del juego (API 6)
 const RIVAL_CAP = 0.15; // factor del rival entre ×0,85 y ×1,15
+const LEVEL_CAP = 0.10; // factor de nivel del jugador entre ×0,90 y ×1,10 (v2.13)
+
+/**
+ * Media del Pro de una cuenta el día del partido (v2.13, aprobado por el usuario):
+ * la foto diaria de ese día o la anterior más cercana; si el partido es anterior a
+ * la primera foto, la primera. null si EA no tiene fotos de esa cuenta.
+ */
+function levelOn(playername, playedAt) {
+  const list = state.levels?.get(playername);
+  if (!list?.length) return null;
+  const day = String(playedAt).slice(0, 10);
+  let best = list[0];
+  for (const s of list) if (s.snapshot_date <= day) best = s;
+  return Number(best.pro_overall);
+}
 const BEST_CRITERIA = [
   { key: 'rating', label: 'Calificación frente a su rol', weight: 30, help: 'Su calificación de EA frente al promedio del club en las posiciones que jugó, ajustada por la dificultad de cada partido.' },
   { key: 'attack', label: 'Ataque frente a su rol', weight: 15, help: 'G+A, conversión, regates*, rival superado*, segundas asistencias*, tiros y tiros a puerta* frente a su rol, ajustados por dificultad.' },
@@ -2689,7 +2704,15 @@ function bestIndices(people, timeline) {
   const avg = (a) => (a.length ? a.reduce((x, y) => x + y, 0) / a.length : null);
   const roster = [...matchRoster(timeline).values()];
   const meanSkill = avg(roster.map((m) => m.opp).filter((v) => v != null).map(Number));
-  const rows = timeline.map((t) => ({ ...t, _d: difficultyOf(t, meanSkill) }));
+  // Nivel (v2.13): la misma actuación vale más con una media del Pro más baja.
+  // Factor = media del equipo / su media ese día, entre ×0,90 y ×1,10; se combina con la dificultad.
+  const withLevel = timeline.map((t) => ({ ...t, _ovr: levelOn(t.playername, t.played_at) }));
+  const meanOvr = avg(withLevel.map((t) => t._ovr).filter((v) => v != null));
+  const rows = withLevel.map((t) => {
+    const diff = difficultyOf(t, meanSkill);
+    const lvl = t._ovr && meanOvr ? Math.min(1 + LEVEL_CAP, Math.max(1 - LEVEL_CAP, meanOvr / t._ovr)) : 1;
+    return { ...t, _diff: diff, _lvl: lvl, _d: diff * lvl };
+  });
   const byPerson = new Map();
   for (const t of rows) { if (!byPerson.has(t.person_id)) byPerson.set(t.person_id, []); byPerson.get(t.person_id).push(t); }
 
@@ -2710,7 +2733,10 @@ function bestIndices(people, timeline) {
     }
     const o = out.get(p.person_id);
     o.rating = den ? 100 * (num / den) : null;
-    o.difficulty = avg(mine.map((t) => t._d));
+    o.difficulty = avg(mine.map((t) => t._diff));
+    o.level = avg(mine.map((t) => t._lvl));
+    o.ovr = avg(mine.map((t) => t._ovr).filter((v) => v != null));
+    o.meanOvr = meanOvr;
     const gk = (state.positions.get(p.person_id) ?? [])[0]?.pos === 'goalkeeper';
     for (const [key, specs] of [['attack', gk ? null : SUB.attack], ['defense', gk ? SUB.defenseGk : SUB.defense], ['passing', SUB.passing]]) {
       if (!specs) { o[key] = null; continue; }
@@ -2767,12 +2793,22 @@ function computeBest() {
     const used = parts.filter((x) => x.score != null);
     const wsum = used.reduce((a, x) => a + x.c.weight, 0);
     for (const x of parts) x.points = x.score == null || !wsum ? null : (x.score * x.c.weight) / wsum;
-    return { p, parts, difficulty: raw.difficulty, total: wsum ? used.reduce((a, x) => a + x.points, 0) : null, missing: parts.filter((x) => x.score == null).map((x) => x.c.label) };
+    return { p, parts, difficulty: raw.difficulty, level: raw.level, ovr: raw.ovr, meanOvr: raw.meanOvr, total: wsum ? used.reduce((a, x) => a + x.points, 0) : null, missing: parts.filter((x) => x.score == null).map((x) => x.c.label) };
   }).sort((a, b) => (b.total ?? -1) - (a.total ?? -1));
   return { rows, others, min, clubMatches };
 }
 
-function renderBest() {
+async function renderBest() {
+  // Medias del Pro día a día del club (factor de nivel); se piden una vez por club.
+  if (state.levelsClub !== state.clubId) {
+    const snaps = await api.getMemberLevels(state.clubId).catch(() => []);
+    state.levels = new Map();
+    for (const s of snaps) {
+      if (!state.levels.has(s.member_name)) state.levels.set(s.member_name, []);
+      state.levels.get(s.member_name).push(s);
+    }
+    state.levelsClub = state.clubId;
+  }
   const { rows, others, min, clubMatches } = computeBest();
   const box = $('#best-body');
   $('#best-weights').replaceChildren(...BEST_CRITERIA.map((c) => el('tr', {}, el('td', { class: 'left' }, c.label), el('td', {}, `${c.weight} %`), el('td', { class: 'left muted small' }, c.help))));
@@ -2787,6 +2823,9 @@ function renderBest() {
   const list = el('div', { class: 'best-list' }, rows.map((r, i) => {
     const detail = el('div', { class: 'best-detail', hidden: true },
       r.difficulty != null ? el('p', { class: 'muted small' }, `Dificultad media de sus partidos: ×${fmtNum(r.difficulty, 2)} (1,00 = 5ª división y rival de nivel medio).`) : null,
+      r.level != null ? el('p', { class: 'muted small' }, r.ovr != null
+        ? `Factor de nivel: ×${fmtNum(r.level, 2)} (su media del Pro, ${fmtNum(r.ovr, 0)} en promedio, frente a ${fmtNum(r.meanOvr, 0)} del equipo; más bajo = más mérito).`
+        : 'Factor de nivel: ×1,00 (EA no tiene fotos de su media del Pro).') : null,
       el('div', { class: 'table-wrap' }, el('table', { class: 'data' },
         el('thead', {}, el('tr', {}, ['Criterio', 'Índice', 'Con corrección', 'Nota', 'Peso', 'Aporta'].map((h, k) => el('th', { scope: 'col', class: k === 0 ? 'left' : null }, h)))),
         el('tbody', {}, r.parts.map((x) => el('tr', { title: x.c.help },
@@ -2940,7 +2979,7 @@ async function refresh() {
       tasks.push(real ? renderPositions(filters, requestId) : renderRoles(filters, requestId));
     }
     if (state.view === 'h2h') renderH2h();
-    if (state.view === 'best') renderBest();
+    if (state.view === 'best') tasks.push(renderBest());
     if (state.view === 'compare') tasks.push(renderCompare(filters, requestId));
     if (state.view === 'pairs') renderPairs();
     if (state.view === 'matches') tasks.push(renderMatches(filters, requestId));

@@ -127,7 +127,7 @@ export const EXTRA_COUNTERS = [
 
 /** Datos por partido que usa la fórmula del mejor jugador (dificultad, criterios ampliados y juego limpio). */
 const BEST_FIELDS = [
-  'club_division', 'shots', 'pass_attempts', 'passes_made', 'tackle_attempts', 'tackles_made', 'saves', 'goals_conceded', 'red_cards',
+  'playername', 'club_division', 'shots', 'pass_attempts', 'passes_made', 'tackle_attempts', 'tackles_made', 'saves', 'goals_conceded', 'red_cards',
   'dribbles_exp', 'interceptions_exp', 'possession_won_exp', 'possession_lost_exp', 'aerial_duels_won_exp', 'fouls_exp',
   'yellow_cards_exp', 'second_assists_exp', 'shots_on_target_exp', 'shots_off_target_exp', 'through_passes_exp',
   'forward_passes_ok_exp', 'forward_passes_failed_exp', 'best_option_exp', 'should_have_passed_exp', 'penalties_conceded_exp',
@@ -211,6 +211,13 @@ export function getReconciliation(clubId) {
 /** Último estado de cada miembro según members/stats (página "Members" de EA). */
 export function getMembers(clubId) {
   return request(`v_member_latest?select=*&order=pro_overall.desc.nullslast,member_name.asc${clubParam(clubId)}`);
+}
+
+/** Media del Pro de todos los miembros del club, día a día (factor de nivel del mejor jugador). */
+export function getMemberLevels(clubId) {
+  const p = new URLSearchParams({ select: 'member_name,snapshot_date,pro_overall', pro_overall: 'not.is.null', order: 'snapshot_date.asc' });
+  if (clubId) p.set('club_id', `eq.${Number(clubId)}`);
+  return request(`member_snapshots?${p}`);
 }
 
 /** Evolución de la media del Pro de uno o varios gamertags. */

@@ -361,6 +361,10 @@ No hay API oficial. Se usan los endpoints públicos que lee la web de Clubes de 
      - **División:** +5 % por división sobre la 5ª (API 6 = ×1,00; Élite = ×1,25).
      - **Rival:** su nivel / el nivel medio de los rivales del club, recortado a 0,85–1,15.
      - Lo malo (pérdidas, entradas peligrosas) se **divide** por el factor.
+   - **Factor de nivel del jugador (v2.13, pedido y aprobado por el usuario):** la misma actuación vale más con una media del Pro más baja.
+     - **Cálculo:** factor por partido = media del equipo / su media ese día, recortado a 0,90–1,10. Se multiplica con la dificultad, en los mismos cuatro criterios.
+     - **Fuente:** la foto diaria `member_snapshots`, por cuenta (`playername`), del día del partido o la anterior más cercana. Antes de la primera foto se usa la primera; sin fotos, ×1.
+     - **Se eligió la media de cada día y no la de entrada** (decisión del usuario): así no se pierde el mérito de los partidos jugados con nivel bajo.
    - **Criterios compuestos (v2.12, datos y pesos aprobados por el usuario):** cada dato es un índice frente al rol (por posición y por minutos), con un recorte de ×0,25–×2,5. Ver `SUB` en `app.js`.
      - **Ataque:** G+A/90 35, conversión 15, regates*/90 15, rival superado*/90 10, 2ª asistencias*/90 10, tiros/90 10, tiros a puerta %* 5.
      - **Defensa:** entradas/90 25, % de entradas 15, intercepciones*/90 20, recuperaciones*/90 15, balones quitados*/90 10, aéreos*/90 10, entradas peligrosas*/90 (menos es mejor) 5.
