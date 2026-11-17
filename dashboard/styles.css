@@ -896,3 +896,10 @@ body.no-charts #person-detail .chart, body.no-charts #person-detail .pchart, bod
 
 /* Encabezados con explicación al pasar el cursor */
 th.has-tip { cursor: help; text-decoration: underline dotted; text-underline-offset: 3px; text-decoration-color: var(--ink-3); }
+
+/* Desplegable con la explicación de columnas y criterios (sirve en el celular) */
+.col-help { margin-top: 8px; color: var(--ink-3); }
+.col-help summary { cursor: pointer; padding: 6px 0; }
+.col-help dl { margin: 6px 0 10px; }
+.col-help dt { color: var(--ink-2, inherit); font-weight: 600; margin-top: 8px; }
+.col-help dd { margin: 2px 0 0; }

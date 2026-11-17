@@ -2900,7 +2900,13 @@ async function renderBest() {
           el('td', {}, x.score == null ? '—' : fmtNum(x.score, 0)),
           el('td', {}, `${x.c.weight} %`),
           el('td', {}, el('strong', {}, x.points == null ? '—' : fmtNum(x.points, 1)))))))),
-      r.missing.length ? el('p', { class: 'muted small' }, `Sin dato en: ${r.missing.join(', ')}. Su peso se repartió entre los demás criterios.`) : null);
+      r.missing.length ? el('p', { class: 'muted small' }, `Sin dato en: ${r.missing.join(', ')}. Su peso se repartió entre los demás criterios.`) : null,
+      // Las explicaciones al pasar el cursor (title) no existen en el celular:
+      // el mismo texto, en un desplegable que se abre tocando.
+      el('details', { class: 'col-help small' },
+        el('summary', {}, '¿Qué significa cada columna y cada criterio?'),
+        el('dl', {}, BEST_COLS.flatMap(([h, tip]) => [el('dt', {}, h), el('dd', {}, tip)])),
+        el('dl', {}, r.parts.flatMap((x) => [el('dt', {}, x.c.label), el('dd', {}, x.c.help)]))));
     const head = el('button', { type: 'button', class: 'best-row', 'aria-expanded': 'false', onclick: () => {
       detail.hidden = !detail.hidden; head.setAttribute('aria-expanded', String(!detail.hidden));
     } },
