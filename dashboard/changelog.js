@@ -3,6 +3,15 @@
 // La fecha es la de Colombia (UTC−5), no la UTC: de noche ya es "mañana" en UTC.
 export const CHANGELOG = [
   {
+    version: '2.15',
+    date: '2026-11-16',
+    title: 'Mejor jugador: ubicación y más datos',
+    changes: [
+      'Nuevo criterio "Ubicación*" (5 %): el % de veces que el jugador estuvo en posición, según los avisos del juego. Se mide por su cuenta, sin compararlo con el rol. Calificación pasa de 30 % a 25 %.',
+      'Ataque suma conducciones* y faltas recibidas*; defensa, el % de entradas limpias*; pase, pases al primer toque* y pases a fuera de juego* (menos es mejor).',
+    ],
+  },
+  {
     version: '2.14',
     date: '2026-11-16',
     title: 'Media por arquetipo y arqueros',

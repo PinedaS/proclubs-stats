@@ -2616,7 +2616,7 @@ const LEVEL_CAP = 0.10; // factor de nivel del jugador entre ×0,90 y ×1,10 (v2
 // que se ve al pasar el cursor (title).
 const BEST_COLS = [
   ['Criterio', 'Qué se mide. Los datos pequeños de abajo son los que forman el criterio, cada uno con su índice (100 = promedio de su rol). Los marcados con * son experimentales.'],
-  ['Índice', 'Cómo le fue frente al promedio: 100 = igual al promedio de su rol (en MVP, juego limpio y regularidad, al de los jugadores del ranking). 120 = 20 % mejor; 80 = 20 % peor. En Impacto es 100 + (% de victorias con él − % sin él). En calificación, ataque, defensa y pase ya incluye el ajuste por la dificultad de cada partido y por su nivel.'],
+  ['Índice', 'Cómo le fue frente al promedio: 100 = igual al promedio de su rol (en MVP, juego limpio y regularidad, al de los jugadores del ranking). 120 = 20 % mejor; 80 = 20 % peor. En Impacto es 100 + (% de victorias con él − % sin él). En Ubicación es su % en posición, tal cual, y no se corrige. En calificación, ataque, defensa y pase ya incluye el ajuste por la dificultad de cada partido y por su nivel.'],
   ['Con corrección', `El índice acercado a 100 según cuántos partidos jugó, para que pocos partidos no den un número extremo por suerte: 100 + (índice − 100) × PJ / (PJ + ${BEST_SHRINK_K}). Con muchos partidos casi no cambia.`],
   ['Nota', 'El índice corregido pasado a una nota de 0 a 100: 50 + (índice corregido − 100). 50 = promedio; se recorta a 0 y 100.'],
   ['Peso', 'Cuánto vale este criterio en el puntaje final. Los pesos son fijos e iguales para todos.'],
@@ -2637,10 +2637,13 @@ function levelOn(playername, playedAt) {
   return Number(best.pro_overall);
 }
 const BEST_CRITERIA = [
-  { key: 'rating', label: 'Calificación frente a su rol', weight: 30, help: 'Su calificación de EA frente al promedio del club en las posiciones que jugó, ajustada por la dificultad de cada partido.' },
-  { key: 'attack', label: 'Ataque frente a su rol', weight: 15, help: 'G+A, conversión, regates*, rival superado*, segundas asistencias*, tiros y tiros a puerta* frente a su rol, ajustados por dificultad.' },
-  { key: 'defense', label: 'Defensa frente a su rol', weight: 15, help: 'Entradas, % de entradas, intercepciones*, recuperaciones*, balones quitados*, duelos aéreos* y entradas peligrosas* (menos es mejor) frente a su rol, ajustados por dificultad. Sus minutos de arquero se miden con % de atajadas, goles recibidos (menos es mejor), atajadas y vallas invictas.' },
-  { key: 'passing', label: 'Pase frente a su rol', weight: 10, help: 'Precisión, pases completados, filtrados*, pérdidas* (menos es mejor), pase adelante*, pase largo* y decisiones* frente a su rol, ajustados por dificultad.' },
+  { key: 'rating', label: 'Calificación frente a su rol', weight: 25, help: 'Su calificación de EA frente al promedio del club en las posiciones que jugó, ajustada por la dificultad de cada partido.' },
+  { key: 'attack', label: 'Ataque frente a su rol', weight: 15, help: 'G+A, conversión, regates*, rival superado*, segundas asistencias*, tiros, tiros a puerta*, conducciones* y faltas recibidas* frente a su rol, ajustados por dificultad.' },
+  { key: 'defense', label: 'Defensa frente a su rol', weight: 15, help: 'Entradas, % de entradas, intercepciones*, recuperaciones*, balones quitados*, duelos aéreos*, % de entradas limpias* y entradas peligrosas* (menos es mejor) frente a su rol, ajustados por dificultad. Sus minutos de arquero se miden con % de atajadas, goles recibidos (menos es mejor), atajadas y vallas invictas.' },
+  { key: 'passing', label: 'Pase frente a su rol', weight: 10, help: 'Precisión, pases completados, filtrados*, pérdidas* (menos es mejor), pase adelante*, pase largo*, primer toque*, decisiones* y pases a fuera de juego* (menos es mejor) frente a su rol, ajustados por dificultad.' },
+  // Ubicación (aprobada por el usuario): su propio % en posición, sin compararlo con el rol
+  // ni corregirlo por pocos partidos. La nota es el % tal cual.
+  { key: 'positioning', label: 'Ubicación*', weight: 5, absolute: true, help: 'Su % de veces en posición frente a fuera de posición, según los avisos del juego. Se mide por su cuenta, sin compararlo con el rol: la nota es el % tal cual (98 % en posición = nota 98).' },
   { key: 'impact', label: 'Impacto en el equipo', weight: 10, help: '% de victorias del equipo con él menos % sin él (cada punto de diferencia suma o resta un punto al índice).' },
   { key: 'mvp', label: 'MVP', weight: 10, help: 'Su % de MVP frente al promedio de los jugadores que entran al ranking.' },
   { key: 'fairplay', label: 'Juego limpio', weight: 5, help: 'Sanciones por 90 min frente al promedio: roja 3, amarilla* 1, penal cometido* 1, falta* 0,25. Menos sanciones = más puntos.' },
@@ -2654,21 +2657,24 @@ const sum = (...ks) => (t) => ks.reduce((a, k) => a + Number(t[k] ?? 0), 0);
 const has = (...ks) => (t) => ks.every((k) => t[k] != null);
 const SUB = {
   attack: [
-    { label: 'G+A por 90', w: 35, kind: 'p90', num: sum('goals', 'assists') },
+    { label: 'G+A por 90', w: 30, kind: 'p90', num: sum('goals', 'assists') },
     { label: 'Conversión', w: 15, kind: 'ratio', num: n('goals'), den: n('shots') },
-    { label: 'Regates por 90*', w: 15, kind: 'p90', num: n('dribbles_exp'), ok: has('dribbles_exp') },
+    { label: 'Regates por 90*', w: 10, kind: 'p90', num: n('dribbles_exp'), ok: has('dribbles_exp') },
     { label: 'Rival superado por 90*', w: 10, kind: 'p90', num: n('beats_exp'), ok: has('beats_exp') },
     { label: '2ª asistencias por 90*', w: 10, kind: 'p90', num: n('second_assists_exp'), ok: has('second_assists_exp') },
     { label: 'Tiros por 90', w: 10, kind: 'p90', num: n('shots') },
     { label: 'Tiros a puerta %*', w: 5, kind: 'ratio', num: n('shots_on_target_exp'), den: sum('shots_on_target_exp', 'shots_off_target_exp'), ok: has('shots_on_target_exp') },
+    { label: 'Conducciones por 90*', w: 5, kind: 'p90', num: n('carries_exp'), ok: has('carries_exp') },
+    { label: 'Faltas recibidas por 90*', w: 5, kind: 'p90', num: n('fouls_won_exp'), ok: has('fouls_won_exp') },
   ],
   defense: [
-    { label: 'Entradas por 90', w: 25, kind: 'p90', num: n('tackles_made') },
+    { label: 'Entradas por 90', w: 20, kind: 'p90', num: n('tackles_made') },
     { label: '% de entradas', w: 15, kind: 'ratio', num: n('tackles_made'), den: n('tackle_attempts') },
     { label: 'Intercepciones por 90*', w: 20, kind: 'p90', num: n('interceptions_exp'), ok: has('interceptions_exp') },
     { label: 'Recuperaciones por 90*', w: 15, kind: 'p90', num: n('possession_won_exp'), ok: has('possession_won_exp') },
     { label: 'Balones quitados por 90*', w: 10, kind: 'p90', num: n('dispossessed_exp'), ok: has('dispossessed_exp') },
     { label: 'Duelos aéreos por 90*', w: 10, kind: 'p90', num: n('aerial_duels_won_exp'), ok: has('aerial_duels_won_exp') },
+    { label: '% de entradas limpias*', w: 5, kind: 'ratio', num: n('clean_tackles_exp'), den: n('tackles_made'), ok: has('clean_tackles_exp') },
     { label: 'Entradas peligrosas por 90*', w: 5, kind: 'p90', low: true, num: n('dangerous_tackles_exp'), ok: has('dangerous_tackles_exp') },
   ],
   // Arquero (aprobado por el usuario el 2026-11-16): se usa en los minutos que jugó de arquero.
@@ -2679,13 +2685,15 @@ const SUB = {
     { label: 'Arquero: vallas invictas por partido', w: 15, kind: 'ratio', num: n('clean_sheets_gk'), den: () => 1 },
   ],
   passing: [
-    { label: 'Precisión de pase', w: 30, kind: 'ratio', num: n('passes_made'), den: n('pass_attempts') },
+    { label: 'Precisión de pase', w: 25, kind: 'ratio', num: n('passes_made'), den: n('pass_attempts') },
     { label: 'Pases por 90', w: 15, kind: 'p90', num: n('passes_made') },
     { label: 'Filtrados por 90*', w: 15, kind: 'p90', num: n('through_passes_exp'), ok: has('through_passes_exp') },
     { label: 'Pérdidas por 90*', w: 15, kind: 'p90', low: true, num: n('possession_lost_exp'), ok: has('possession_lost_exp') },
     { label: 'Pase adelante %*', w: 10, kind: 'ratio', num: n('forward_passes_ok_exp'), den: sum('forward_passes_ok_exp', 'forward_passes_failed_exp'), ok: has('forward_passes_ok_exp') },
-    { label: 'Pase largo %*', w: 10, kind: 'ratio', num: n('long_passes_ok_exp'), den: sum('long_passes_ok_exp', 'long_passes_failed_exp'), ok: has('long_passes_ok_exp') },
+    { label: 'Pase largo %*', w: 5, kind: 'ratio', num: n('long_passes_ok_exp'), den: sum('long_passes_ok_exp', 'long_passes_failed_exp'), ok: has('long_passes_ok_exp') },
+    { label: 'Primer toque por 90*', w: 5, kind: 'p90', num: n('first_time_passes_exp'), ok: has('first_time_passes_exp') },
     { label: 'Decisiones %*', w: 5, kind: 'ratio', num: n('best_option_exp'), den: sum('best_option_exp', 'should_have_passed_exp'), ok: has('best_option_exp') },
+    { label: 'Pases a fuera de juego por 90*', w: 5, kind: 'p90', low: true, num: n('offside_passes_exp'), ok: has('offside_passes_exp') },
   ],
 };
 
@@ -2802,6 +2810,13 @@ function bestIndices(people, timeline) {
     const pas = compositeIndex(mine, rows, SUB.passing);
     o.passing = pas.v; o.sub.passing = pas.parts;
   }
+  // Ubicación*: su propio % en posición (en / (en + fuera)), tal cual, sin rol ni dificultad.
+  for (const p of people) {
+    const mine = (byPerson.get(p.person_id) ?? []).filter((t) => t.in_position_exp != null);
+    const inPos = mine.reduce((a, t) => a + Number(t.in_position_exp), 0);
+    const outPos = mine.reduce((a, t) => a + Number(t.out_of_position_exp ?? 0), 0);
+    out.get(p.person_id).positioning = inPos + outPos > 0 ? (100 * inPos) / (inPos + outPos) : null;
+  }
   // Arqueros del club en el rango: con uno solo, sus índices de arquero dan 100 (no hay con quién compararlo).
   const keepers = new Set(rows.filter((t) => t.position === 'goalkeeper').map((t) => t.person_id));
   for (const p of people) out.get(p.person_id).onlyKeeper = keepers.size === 1 && keepers.has(p.person_id);
@@ -2848,6 +2863,8 @@ function computeBest() {
     const parts = BEST_CRITERIA.map((c) => {
       const v = raw[c.key];
       if (v == null || !Number.isFinite(v)) return { c, idx: null, adj: null, score: null, sub: raw.sub[c.key] };
+      // Criterio absoluto (Ubicación): el valor ya es la nota, sin corrección.
+      if (c.absolute) return { c, idx: v, adj: v, score: Math.max(0, Math.min(100, v)), sub: raw.sub[c.key] };
       const adj = 100 + (v - 100) * (p.matches / (p.matches + BEST_SHRINK_K));
       return { c, idx: v, adj, score: Math.max(0, Math.min(100, 50 + (adj - 100))), sub: raw.sub[c.key] };
     });

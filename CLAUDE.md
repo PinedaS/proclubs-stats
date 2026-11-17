@@ -356,7 +356,9 @@ No hay API oficial. Se usan los endpoints públicos que lee la web de Clubes de 
    - Dashboard en GitHub Pages, y minutos de Actions ilimitados.
    - **Riesgo:** GitHub desactiva los workflows programados de un repo público tras **60 días sin actividad** en el repo. Hay que mitigarlo en el paso 4 (p. ej. un *keepalive*).
 2. **Fórmula de "mejor jugador": EXPERIMENTAL desde la v2.10 (2026-11-16, aprobada por el usuario).** Pestaña "Mejor jugador" (`computeBest` en `app.js`). **No cambiar criterios, pesos ni el mínimo sin que el usuario lo pida.**
-   - **Pesos fijos, iguales para todos** (decisión del usuario; v2.12, 2026-11-16): calificación frente al rol 30, ataque frente al rol 15, defensa frente al rol 15, pase frente al rol 10, impacto (% de victorias con él − sin él) 10, MVP frente al promedio 10, **juego limpio 5** y regularidad 5. "Ante rivales fuertes" se quitó: lo cubre el ajuste por dificultad.
+   - **Pesos fijos, iguales para todos** (decisión del usuario; v2.12, 2026-11-16): calificación frente al rol **25** (era 30 hasta la v2.15), ataque frente al rol 15, defensa frente al rol 15, pase frente al rol 10, impacto (% de victorias con él − sin él) 10, MVP frente al promedio 10, **juego limpio 5**, regularidad 5 y **ubicación* 5**. "Ante rivales fuertes" se quitó: lo cubre el ajuste por dificultad.
+   - **Ubicación* (v2.15, 2026-11-16, decisión del usuario):** % en posición = en / (en + fuera), con los contadores `in_position_exp` / `out_of_position_exp`. **Absoluto, a pedido del usuario:** no se compara con el rol, no se corrige por pocos partidos ni por dificultad, y la nota es el % tal cual (`absolute: true`).
+     - Se le mostró antes que depende mucho de la posición (con 42 registros: delanteros 75,6 %, medios 99,2 %, defensas 96 %, arquero 100 %) y eligió igual medirlo por su cuenta.
    - **Ajuste por dificultad (v2.12, aprobado por el usuario, opción B):** en calificación, ataque, defensa y pase, cada partido se multiplica por división × rival.
      - **División:** +5 % por división sobre la 5ª (API 6 = ×1,00; Élite = ×1,25).
      - **Rival:** su nivel / el nivel medio de los rivales del club, recortado a 0,85–1,15.
@@ -373,12 +375,12 @@ No hay API oficial. Se usan los endpoints públicos que lee la web de Clubes de 
        - **Pendiente: verificar la hipótesis** con partidos en los que alguien cambie de arquetipo.
        - **Intervalo de 15 min:** un partido dura ~20 min reales, así que no caben dos partidos completos entre dos capturas. No hace falta acortarlo.
    - **Criterios compuestos (v2.12, datos y pesos aprobados por el usuario):** cada dato es un índice frente al rol (por posición y por minutos), con un recorte de ×0,25–×2,5. Ver `SUB` en `app.js`.
-     - **Ataque:** G+A/90 35, conversión 15, regates*/90 15, rival superado*/90 10, 2ª asistencias*/90 10, tiros/90 10, tiros a puerta %* 5.
-     - **Defensa:** entradas/90 25, % de entradas 15, intercepciones*/90 20, recuperaciones*/90 15, balones quitados*/90 10, aéreos*/90 10, entradas peligrosas*/90 (menos es mejor) 5.
+     - **Ataque (v2.15):** G+A/90 30, conversión 15, regates*/90 10, rival superado*/90 10, 2ª asistencias*/90 10, tiros/90 10, tiros a puerta %* 5, conducciones*/90 5, faltas recibidas*/90 5.
+     - **Defensa (v2.15):** entradas/90 20, % de entradas 15, intercepciones*/90 20, recuperaciones*/90 15, balones quitados*/90 10, aéreos*/90 10, % de entradas limpias* (limpias / ganadas) 5, entradas peligrosas*/90 (menos es mejor) 5.
      - **Defensa del arquero (v2.14, aprobada por el usuario):** % de atajadas 50, goles recibidos/90 (menos es mejor) 20, atajadas/90 15, vallas invictas por partido 15.
        - **Se aplica por posición:** los minutos de arquero usan la defensa de arquero y no cuentan en el ataque. Si alguien jugó de arquero y de campo, su defensa combina las dos según sus minutos.
        - Si hay un solo arquero en el club, sus índices dan 100, y la pestaña lo avisa.
-     - **Pase:** precisión 30, pases/90 15, filtrados*/90 15, pérdidas*/90 (menos es mejor) 15, pase adelante %* 10, pase largo %* 10, decisiones %* 5.
+     - **Pase (v2.15):** precisión 25, pases/90 15, filtrados*/90 15, pérdidas*/90 (menos es mejor) 15, pase adelante %* 10, pase largo %* 5, primer toque*/90 5, decisiones %* 5, pases a fuera de juego*/90 (menos es mejor) 5.
    - **Juego limpio:** sanción/90 = 3·roja + amarilla* + penal* + 0,25·falta*. Índice = (media + ε) / (suya + ε) × 100, con ε = máx(0,05; 10 % de la media).
    - **Cálculo:** índice (100 = promedio) → corrección por pocos partidos `100 + (i − 100) × PJ / (PJ + 5)` → nota `50 + (i − 100)`, recortada a 0–100 → promedio ponderado. Si falta un criterio, su peso se reparte entre los demás, con aviso.
    - **Mínimo para entrar:** 30 % de los partidos del club en el rango filtrado (decisión del usuario).
