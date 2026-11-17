@@ -893,3 +893,6 @@ body.no-charts #person-detail .chart, body.no-charts #person-detail .pchart, bod
 
 /* Aviso cuando una gráfica no tiene qué mostrar (en vez de un espacio vacío) */
 .chart-empty { margin: 0 0 6px; padding: 10px 12px; border: 1px dashed var(--border); border-radius: 10px; }
+
+/* Encabezados con explicación al pasar el cursor */
+th.has-tip { cursor: help; text-decoration: underline dotted; text-underline-offset: 3px; text-decoration-color: var(--ink-3); }

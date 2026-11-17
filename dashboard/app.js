@@ -2612,6 +2612,17 @@ const DIV_STEP = 0.05; // +5 % por división sobre la 5ª del juego (API 6)
 const RIVAL_CAP = 0.15; // factor del rival entre ×0,85 y ×1,15
 const LEVEL_CAP = 0.10; // factor de nivel del jugador entre ×0,90 y ×1,10 (v2.13)
 
+// Encabezados de la tabla de criterios del mejor jugador, con la explicación
+// que se ve al pasar el cursor (title).
+const BEST_COLS = [
+  ['Criterio', 'Qué se mide. Los datos pequeños de abajo son los que forman el criterio, cada uno con su índice (100 = promedio de su rol). Los marcados con * son experimentales.'],
+  ['Índice', 'Cómo le fue frente al promedio: 100 = igual al promedio de su rol (en MVP, juego limpio y regularidad, al de los jugadores del ranking). 120 = 20 % mejor; 80 = 20 % peor. En Impacto es 100 + (% de victorias con él − % sin él). En calificación, ataque, defensa y pase ya incluye el ajuste por la dificultad de cada partido y por su nivel.'],
+  ['Con corrección', `El índice acercado a 100 según cuántos partidos jugó, para que pocos partidos no den un número extremo por suerte: 100 + (índice − 100) × PJ / (PJ + ${BEST_SHRINK_K}). Con muchos partidos casi no cambia.`],
+  ['Nota', 'El índice corregido pasado a una nota de 0 a 100: 50 + (índice corregido − 100). 50 = promedio; se recorta a 0 y 100.'],
+  ['Peso', 'Cuánto vale este criterio en el puntaje final. Los pesos son fijos e iguales para todos.'],
+  ['Aporta', 'Puntos que suma este criterio al puntaje final: nota × peso. Si falta algún criterio, su peso se reparte entre los demás, por eso puede dar algo más que nota × peso. La suma de esta columna es el puntaje.'],
+];
+
 /**
  * Media del Pro de una cuenta el día del partido (v2.13, aprobado por el usuario):
  * la foto diaria de ese día o la anterior más cercana; si el partido es anterior a
@@ -2628,7 +2639,7 @@ function levelOn(playername, playedAt) {
 const BEST_CRITERIA = [
   { key: 'rating', label: 'Calificación frente a su rol', weight: 30, help: 'Su calificación de EA frente al promedio del club en las posiciones que jugó, ajustada por la dificultad de cada partido.' },
   { key: 'attack', label: 'Ataque frente a su rol', weight: 15, help: 'G+A, conversión, regates*, rival superado*, segundas asistencias*, tiros y tiros a puerta* frente a su rol, ajustados por dificultad.' },
-  { key: 'defense', label: 'Defensa frente a su rol', weight: 15, help: 'Entradas, % de entradas, intercepciones*, recuperaciones*, balones quitados*, duelos aéreos* y entradas peligrosas* (menos es mejor) frente a su rol, ajustados por dificultad. Portero: % de atajadas y atajadas por 90.' },
+  { key: 'defense', label: 'Defensa frente a su rol', weight: 15, help: 'Entradas, % de entradas, intercepciones*, recuperaciones*, balones quitados*, duelos aéreos* y entradas peligrosas* (menos es mejor) frente a su rol, ajustados por dificultad. Sus minutos de arquero se miden con % de atajadas, goles recibidos (menos es mejor), atajadas y vallas invictas.' },
   { key: 'passing', label: 'Pase frente a su rol', weight: 10, help: 'Precisión, pases completados, filtrados*, pérdidas* (menos es mejor), pase adelante*, pase largo* y decisiones* frente a su rol, ajustados por dificultad.' },
   { key: 'impact', label: 'Impacto en el equipo', weight: 10, help: '% de victorias del equipo con él menos % sin él (cada punto de diferencia suma o resta un punto al índice).' },
   { key: 'mvp', label: 'MVP', weight: 10, help: 'Su % de MVP frente al promedio de los jugadores que entran al ranking.' },
@@ -2881,7 +2892,7 @@ async function renderBest() {
         : `Media del Pro exacta del partido en ${r.exactLevels} de ${r.levelRows}; en el resto, aproximada con la foto del día (puede ser la de otro arquetipo).`) : null,
       r.keeperShare > 0 ? el('p', { class: 'muted small' }, `Jugó de arquero el ${fmtNum(100 * r.keeperShare, 0)} % de sus minutos: esos minutos se miden con la defensa de arquero y no cuentan en el ataque.${r.onlyKeeper ? ' Es el único arquero del club en estos partidos, así que sus índices de arquero dan 100: no hay con quién compararlo.' : ''}`) : null,
       el('div', { class: 'table-wrap' }, el('table', { class: 'data' },
-        el('thead', {}, el('tr', {}, ['Criterio', 'Índice', 'Con corrección', 'Nota', 'Peso', 'Aporta'].map((h, k) => el('th', { scope: 'col', class: k === 0 ? 'left' : null }, h)))),
+        el('thead', {}, el('tr', {}, BEST_COLS.map(([h, tip], k) => el('th', { scope: 'col', class: k === 0 ? 'left has-tip' : 'has-tip', title: tip }, h)))),
         el('tbody', {}, r.parts.map((x) => el('tr', { title: x.c.help },
           el('td', { class: 'left' }, x.c.label, subLine(x.sub)),
           el('td', {}, x.idx == null ? '—' : fmtNum(x.idx, 0)),
