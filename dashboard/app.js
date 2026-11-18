@@ -2608,6 +2608,10 @@ function teamPlaceSection(personId) {
 
 const BEST_MIN_SHARE = 0.3; // 30 % de los partidos del club en el rango filtrado
 const BEST_SHRINK_K = 5;
+// v2.21 (decisión del usuario): para servir de comparación en los promedios por posición
+// hace falta el 15 % de los partidos del club y al menos 5 PJ (el mismo 5 de la corrección).
+const BEST_PEER_SHARE = 0.15;
+const BEST_PEER_MIN = 5;
 // Nota (v2.16): 50 + BEST_NOTE_PER_SD × (índice corregido − 100) / dispersión del criterio.
 // La dispersión mínima evita que diferencias mínimas se agranden con pocos jugadores.
 const BEST_NOTE_PER_SD = 15;
@@ -2813,7 +2817,7 @@ function compositeIndex(rows, all, specs, peers = all) {
 }
 
 /** Índices de cada criterio por persona (sin corregir) y el desglose de los compuestos. */
-function bestIndices(people, timeline) {
+function bestIndices(people, timeline, peerIds = new Set(people.map((p) => p.person_id))) {
   const out = new Map(people.map((p) => [p.person_id, { sub: {} }]));
   const avg = (a) => (a.length ? a.reduce((x, y) => x + y, 0) / a.length : null);
   const roster = [...matchRoster(timeline).values()];
@@ -2865,10 +2869,9 @@ function bestIndices(people, timeline) {
 
   // Calificación frente al rol, con dificultad: Σ seg × (calif × d / promedio de la posición) / Σ seg.
   // v2.21 (aprobado por el usuario): los promedios por posición salen solo de los
-  // jugadores que entran al ranking (30 % de los partidos del club), para que un
-  // jugador ocasional no baje ni suba el promedio contra el que se comparan los demás.
-  const eligibleIds = new Set(people.map((p) => p.person_id));
-  const peerRows = rows.filter((t) => eligibleIds.has(t.person_id));
+  // jugadores con al menos el 15 % de los partidos del club y 5 PJ (peerIds), para que
+  // un jugador ocasional no baje ni suba el promedio contra el que se comparan los demás.
+  const peerRows = rows.filter((t) => peerIds.has(t.person_id));
   const posAvg = new Map();
   for (const t of peerRows) {
     if (t.rating == null || !t.position) continue;
@@ -3021,7 +3024,10 @@ function computeBest() {
   const min = Math.max(1, Math.ceil(BEST_MIN_SHARE * clubMatches));
   const eligible = state.ranking.filter((r) => r.matches >= min);
   const others = state.ranking.filter((r) => r.matches < min);
-  const idx = bestIndices(eligible, state.timeline);
+  // Quiénes sirven de comparación en los promedios por posición (v2.21).
+  const peerMin = Math.max(BEST_PEER_MIN, Math.ceil(BEST_PEER_SHARE * clubMatches));
+  const peerIds = new Set(state.ranking.filter((r) => r.matches >= peerMin).map((r) => r.person_id));
+  const idx = bestIndices(eligible, state.timeline, peerIds);
   // 1) Índice y corrección por pocos partidos de cada criterio.
   const pre = eligible.map((p) => {
     const raw = idx.get(p.person_id);

@@ -8,7 +8,7 @@ export const CHANGELOG = [
     title: 'Mejor jugador: calificación según humanos y promedios más justos',
     changes: [
       'La calificación de EA sube cuando juegan menos humanos (con 2 es casi un punto más alta que con 3). Ahora se ajusta según cuántos humanos jugaron, igual que los demás datos.',
-      'Cada uno se compara solo con los jugadores que entran al ranking (al menos el 30 % de los partidos del club). Un jugador ocasional ya no cambia el promedio de su posición.',
+      'Cada uno se compara solo con los jugadores que tienen al menos el 15 % de los partidos del club y 5 partidos. Un jugador ocasional ya no cambia el promedio de su posición.',
     ],
   },
   {
