@@ -143,10 +143,17 @@ a.status:hover { border-color: var(--warning); }
 /* display: inline-flex anula el atributo hidden: se restablece para todos los avisos. */
 .status[hidden] { display: none; }
 .club-select[hidden] { display: none; }
+.club-select { position: relative; display: inline-block; }
 .club-select select {
   font: inherit; font-weight: 700; font-size: .88rem; color: var(--ink);
   background: color-mix(in srgb, var(--surface) 85%, transparent);
-  border: 1px solid var(--accent); border-radius: 999px; padding: 7px 14px; cursor: pointer;
+  border: 1px solid var(--accent); border-radius: 999px; padding: 7px 36px 7px 14px; cursor: pointer;
+  /* Flecha propia: la nativa queda pegada al borde redondeado y no se puede mover. */
+  appearance: none; -webkit-appearance: none;
+}
+.club-select::after {
+  content: ''; position: absolute; right: 16px; top: 50%; width: 7px; height: 7px; pointer-events: none;
+  border-right: 2px solid var(--ink-3); border-bottom: 2px solid var(--ink-3); transform: translateY(-70%) rotate(45deg);
 }
 .visually-hidden { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
 .status.good .icon { color: var(--good); }
