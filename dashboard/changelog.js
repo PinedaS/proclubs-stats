@@ -3,6 +3,14 @@
 // La fecha es la de Colombia (UTC−5), no la UTC: de noche ya es "mañana" en UTC.
 export const CHANGELOG = [
   {
+    version: '2.24',
+    date: '2026-11-18',
+    title: 'Pestaña "Compañeros"',
+    changes: [
+      'La pestaña "Duplas" pasa a llamarse "Compañeros": además de las duplas, muestra cómo le va al equipo con y sin cada jugador.',
+    ],
+  },
+  {
     version: '2.23',
     date: '2026-11-18',
     title: 'Comparar con más datos',

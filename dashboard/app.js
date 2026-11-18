@@ -25,7 +25,7 @@ const state = {
   colKinds: { abs: true, rate: true, official: true },
   addedCols: [],
   positions: new Map(), // person_id -> [{ pos, pct, sec }] de más a menos minutos
-  pairsPerson: null, // Duplas: jugador elegido
+  pairsPerson: null, // Compañeros: jugador elegido
   scatter: { x: 'avg_rating', y: 'ga_per90' }, // ejes de "Dos datos a la vez"
   seasons: [], // temporadas del club (club_seasons), de la más reciente a la más vieja
   seasonNo: null, // temporada elegida en el filtro (null = todas)
@@ -1381,7 +1381,7 @@ async function renderCompare(filters, requestId) {
 }
 
 // ---------------------------------------------------------------------------
-// Duplas
+// Compañeros (antes "Duplas")
 // ---------------------------------------------------------------------------
 
 /**
@@ -1428,7 +1428,7 @@ const fewMatches = (n) => n < Math.max(state.minMatches, PODIUM_MIN_MATCHES);
 const lowNote = (n) => (fewMatches(n) ? ' low-sample' : '');
 
 /**
- * Duplas (une las antiguas tablas "Duplas" y "Con y sin", pedido del usuario):
+ * Compañeros (antes "Duplas"; une las antiguas tablas "Duplas" y "Con y sin", pedido del usuario):
  *  1. El equipo con y sin cada jugador (con gráfica de la diferencia en % de victorias).
  *  2. Un jugador elegido: cómo le va al equipo CON él junto a cada compañero, y SIN él.
  * Todo es correlación: también influyen el rival, la posición y la suerte.

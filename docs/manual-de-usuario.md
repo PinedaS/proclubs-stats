@@ -78,7 +78,7 @@ Deja de ser beta cuando se cumplan tres condiciones:
 - Otras secciones también tienen gráficas:
   - **Por posición:** puntos alrededor del 100.
   - **Comparar:** una línea por jugador entre los grupos.
-  - **Duplas:** matriz de % de victorias por pareja.
+  - **Compañeros:** matriz de % de victorias por pareja.
   - **Partidos:** nivel del rival contra la diferencia de goles.
   - **Detalle del jugador:** "Su lugar en el equipo", dato por dato.
 - Cada jugador tiene siempre el mismo color en todas las gráficas, con su nombre al lado.
@@ -159,10 +159,12 @@ El mismo jugador en distintas situaciones:
 
 Fíjate en los partidos (PJ) de cada celda: 2 partidos no se comparan con 30.
 
-### Duplas
+### Compañeros
+
+Antes se llamaba "Duplas". Reúne cómo le va al equipo con y sin cada jugador, la matriz de parejas y el detalle de cada jugador.
 
 - **El equipo con y sin cada jugador:** % de victorias y goles en los partidos con él y sin él, con una gráfica de la diferencia.
-- **Duplas:** elige un jugador y ves cómo le va al equipo **con él**, junto a cada compañero, y **sin él**. También ves cuánto cambia la calificación de cada compañero con él y sin él.
+- **Con él y sin él:** elige un jugador y ves cómo le va al equipo **con él**, junto a cada compañero, y **sin él**. También ves cuánto cambia la calificación de cada compañero con él y sin él.
 - Es una correlación, no una causa: también influyen el rival, la posición y la suerte. Las filas con pocos partidos se ven atenuadas.
 
 ### Partidos

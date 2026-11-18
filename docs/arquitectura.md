@@ -215,7 +215,7 @@ Todas reciben los mismos filtros: tipos de partido, fechas, club y excluir aband
 | `v_member_latest`, `v_reconciliation` | Última foto de members/stats y conciliación EA vs. capturado. |
 | `dispatch_status()` | Estado del disparo desde Supabase (sin exponer el token). |
 
-`pair_stats` y `with_without_stats` siguen en la base, pero desde la v2.7 la pestaña Duplas se calcula en el navegador a partir de `v_player_match_stats`.
+`pair_stats` y `with_without_stats` siguen en la base, pero desde la v2.7 la pestaña Compañeros (antes "Duplas") se calcula en el navegador a partir de `v_player_match_stats`.
 
 ## 4. Seguridad
 
@@ -264,7 +264,7 @@ flowchart LR
   - posiciones por minutos;
   - por 90 min de los experimentales;
   - promedio del equipo;
-  - Duplas;
+  - Compañeros;
   - resultados por semana.
 - **Datos parciales:** `coverage()` mide en cuántos partidos existe un dato. Por debajo del 50 % la columna no se muestra; si falta en algunos, lleva la etiqueta "Parcial".
 - **Gráficas:** SVG o HTML propios, sin librerías. Usan un color por serie; para dos series, el par azul y naranja validado para daltonismo (`--pa`, `--pb`). Siempre llevan texto o leyenda además del color.
