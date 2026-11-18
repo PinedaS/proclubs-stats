@@ -118,6 +118,10 @@ Deja de ser beta cuando se cumplan tres condiciones:
 
 - **Contra los demás:** cada uno se compara con los **demás** jugadores de su posición, nunca consigo mismo. Si nadie más jugó esa posición, esos minutos no cuentan (si pasa en todas, el criterio queda en 100); si los demás jugaron pocos partidos ahí, la comparación cuenta menos.
 - **Amistosos:** en esta fórmula, cada amistoso vale la mitad que un partido de liga o de play-off.
+- **Abandonos:** un partido abandonado cuenta según los minutos que duró.
+- **Jugadores en cancha:** los datos por 90 minutos se ajustan según cuántos humanos jugaron, porque con menos humanos cada uno toca más el balón.
+- **Dificultad en todo:** MVP, juego limpio y regularidad también usan la división, el rival y el nivel; impacto, la división y el rival.
+- **Regularidad:** solo cuentan los partidos por debajo de su media.
 - **Impacto en el equipo:** se corrige según el menor entre partidos con él y sin él. Con menos de 5 partidos sin él, queda en 100.
 - **Pesos reales:** la nota es 50 + 15 × (índice − 100) ÷ la dispersión del criterio entre los jugadores del ranking (mínimo 5). Así cada criterio mueve el puntaje según su peso y no según lo disperso que sea.
 - **Justo para quien rota:** todo se compara con el promedio de su rol. El portero se mide por % de atajadas en vez de por ataque.

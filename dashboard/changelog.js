@@ -3,6 +3,17 @@
 // La fecha es la de Colombia (UTC−5), no la UTC: de noche ya es "mañana" en UTC.
 export const CHANGELOG = [
   {
+    version: '2.18',
+    date: '2026-11-17',
+    title: 'Mejor jugador: dificultad en todo, cancha y abandonos',
+    changes: [
+      'La división, el rival y el nivel del jugador ahora cuentan también en MVP, juego limpio y regularidad; en impacto, la división y el rival.',
+      'Regularidad: solo cuentan los partidos por debajo de la media del jugador. Un partido excepcional ya no le resta.',
+      'Jugadores en cancha: con menos humanos cada uno toca más el balón, así que sus datos por 90 minutos se ajustan según cuántos humanos jugaron.',
+      'Un partido abandonado cuenta según los minutos que duró. Los datos se siguen mostrando tal cual.',
+    ],
+  },
+  {
     version: '2.17',
     date: '2026-11-17',
     title: 'Mejor jugador: impacto y amistosos',

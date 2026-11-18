@@ -2658,7 +2658,7 @@ const BEST_CRITERIA = [
   { key: 'impact', label: 'Impacto en el equipo', weight: 10, help: '% de victorias del equipo con él menos % sin él (cada punto de diferencia suma o resta un punto al índice). Se corrige según el menor entre partidos con él y sin él, y con menos de 5 partidos sin él queda en 100.' },
   { key: 'mvp', label: 'MVP', weight: 10, help: 'Su % de MVP frente al promedio de los jugadores que entran al ranking.' },
   { key: 'fairplay', label: 'Juego limpio', weight: 5, help: 'Sanciones por 90 min frente al promedio: roja 3, amarilla* 1, penal cometido* 1, falta* 0,25. Menos sanciones = más puntos.' },
-  { key: 'regularity', label: 'Regularidad', weight: 5, help: 'Qué tan estable es su calificación: menos variación que el promedio = índice mayor.' },
+  { key: 'regularity', label: 'Regularidad', weight: 5, help: 'Qué tan estable es su calificación (ajustada por dificultad y nivel): solo cuentan los partidos por debajo de su media, así un partido excepcional no le resta. Menos caídas que el promedio = índice mayor.' },
 ];
 
 // Datos de cada criterio por rol. kind: 'p90' = por 90 min; 'ratio' = num / den.
@@ -2728,12 +2728,14 @@ function roleIndex(rows, all, spec) {
   // esa posición, sus minutos ahí no cuentan; con pocos partidos de los demás, la
   // comparación se acerca a 1 (peerTrust).
   const self = rows[0]?.person_id;
+  const sizeF = teamSizeFactors(all, spec, valid);
+  const num = (t) => spec.num(t) / sizeF(t);
   const base = new Map();
   for (const t of all) {
     if (!valid(t) || !t.position || t.person_id === self) continue;
     const b = base.get(t.position) ?? { num: 0, den: 0, n: 0 };
     const mw = t._mw ?? 1; // v2.17: amistoso = ½
-    b.num += mw * spec.num(t); b.den += mw * (spec.kind === 'p90' ? Number(t.seconds_played) : spec.den(t)); b.n += mw;
+    b.num += mw * num(t); b.den += mw * (spec.kind === 'p90' ? Number(t.seconds_played) : spec.den(t)); b.n += mw;
     base.set(t.position, b);
   }
   const mine = new Map();
@@ -2741,7 +2743,7 @@ function roleIndex(rows, all, spec) {
     if (!valid(t) || !t.position) continue;
     const m = mine.get(t.position) ?? { num: 0, den: 0, sec: 0 };
     const mw = t._mw ?? 1;
-    m.num += mw * (spec.low ? spec.num(t) / t._d : spec.num(t) * t._d);
+    m.num += mw * (spec.low ? num(t) / t._d : num(t) * t._d);
     m.den += mw * (spec.kind === 'p90' ? Number(t.seconds_played) : spec.den(t));
     m.sec += mw * Number(t.seconds_played);
     mine.set(t.position, m);
@@ -2767,6 +2769,35 @@ const ARCH_SPLIT = { offensive: { attack: 20, defense: 10 }, balanced: { attack:
 const ARCH_FAMILY_LABEL = { offensive: 'ofensivo', balanced: 'equilibrado', defensive: 'defensivo' };
 const archFamily = (id) => ARCH_FAMILY[Number(id)] ?? 'balanced';
 
+/**
+ * v2.18 (aprobado por el usuario): jugadores en cancha. Con menos humanos cada uno toca
+ * más el balón y sus datos por 90 min se inflan. Para cada dato por 90, factor = lo que
+ * produce el club por 90 min con ese número de humanos ÷ lo que produce en general,
+ * acercado a 1 con pocos partidos (n ÷ (n + 5)) y recortado a ×0,5–×2. Los % no se ajustan.
+ */
+function teamSizeFactors(all, spec, valid) {
+  if (spec.kind !== 'p90') return () => 1;
+  const by = new Map();
+  let num = 0, sec = 0;
+  for (const t of all) {
+    if (!valid(t)) continue;
+    const k = Number(t.team_size) || 0, mw = t._mw ?? 1;
+    const b = by.get(k) ?? { num: 0, sec: 0, ids: new Set() };
+    b.num += mw * spec.num(t); b.sec += mw * Number(t.seconds_played); b.ids.add(t.match_id);
+    by.set(k, b);
+    num += mw * spec.num(t); sec += mw * Number(t.seconds_played);
+  }
+  const overall = sec ? num / sec : 0;
+  const f = new Map();
+  for (const [k, b] of by) {
+    const raw = overall > 0 && b.sec ? b.num / b.sec / overall : 1;
+    const n = b.ids.size; // partidos con ese número de humanos
+    const shrunk = 1 + (raw - 1) * (n / (n + BEST_SHRINK_K));
+    f.set(k, Math.min(2, Math.max(0.5, shrunk)));
+  }
+  return (t) => f.get(Number(t.team_size) || 0) ?? 1;
+}
+
 /** Confianza en el promedio de los demás en una posición: partidos de ellos ÷ (partidos + 5). */
 function peerTrust(peerMatches) {
   return peerMatches > 0 ? peerMatches / (peerMatches + BEST_SHRINK_K) : 0;
@@ -2789,14 +2820,20 @@ function bestIndices(people, timeline) {
   // Nivel (v2.13): la misma actuación vale más con una media del Pro más baja.
   // Factor = media del equipo / su media ese día, entre ×0,90 y ×1,10; se combina con la dificultad.
   // Media del partido (022, por arquetipo) si existe; si no, la foto diaria (aproximada).
+  // v2.18: un partido abandonado cuenta según los minutos que duró (el mayor tiempo de
+  // juego de sus jugadores ÷ 90 min). Los datos se siguen mostrando tal cual.
+  const matchSec = new Map();
+  for (const t of timeline) matchSec.set(t.match_id, Math.max(matchSec.get(t.match_id) ?? 0, Number(t.seconds_played ?? 0)));
+  const abandonedWeight = (t) => (t.incomplete ? Math.min(1, Math.max(0.05, (matchSec.get(t.match_id) ?? 0) / 5400)) : 1);
   const withLevel = timeline.map((t) => ({ ...t, _exact: t.pro_overall != null, _ovr: t.pro_overall != null ? Number(t.pro_overall) : levelOn(t.playername, t.played_at) }));
   const meanOvr = avg(withLevel.map((t) => t._ovr).filter((v) => v != null));
   const rows = withLevel.map((t) => {
     const diff = difficultyOf(t, meanSkill);
     const lvl = t._ovr && meanOvr ? Math.min(1 + LEVEL_CAP, Math.max(1 - LEVEL_CAP, meanOvr / t._ovr)) : 1;
-    return { ...t, _diff: diff, _lvl: lvl, _d: diff * lvl, _mw: matchWeight(t) };
+    return { ...t, _diff: diff, _lvl: lvl, _d: diff * lvl, _mw: matchWeight(t) * abandonedWeight(t) };
   });
   const mwOf = new Map(rows.map((t) => [t.match_id, t._mw]));
+  const diffOf = new Map(rows.map((t) => [t.match_id, t._diff])); // división × rival del partido
   const byPerson = new Map();
   for (const t of rows) { if (!byPerson.has(t.person_id)) byPerson.set(t.person_id, []); byPerson.get(t.person_id).push(t); }
 
@@ -2880,9 +2917,11 @@ function bestIndices(people, timeline) {
   for (const p of people) out.get(p.person_id).onlyKeeper = keepers.size === 1 && keepers.has(p.person_id);
   // Impacto: % de victorias con él menos sin él (amistoso = ½). v2.17: se corrige por el
   // menor entre partidos con él y sin él (impactN), y con menos de 5 sin él queda en 100.
+  // v2.18: cada victoria vale según la división y el rival del partido (no el nivel del
+  // jugador: es un resultado del equipo).
   const winPct = (list) => {
     const n = list.reduce((a, m) => a + (mwOf.get(m.id) ?? 1), 0);
-    return { n, pct: n ? (100 * list.reduce((a, m) => a + (m.outcome === 'win' ? mwOf.get(m.id) ?? 1 : 0), 0)) / n : null };
+    return { n, pct: n ? (100 * list.reduce((a, m) => a + (m.outcome === 'win' ? (mwOf.get(m.id) ?? 1) * (diffOf.get(m.id) ?? 1) : 0), 0)) / n : null };
   };
   for (const p of people) {
     const o = out.get(p.person_id);
@@ -2898,7 +2937,8 @@ function bestIndices(people, timeline) {
   const mvpPct = (p) => {
     const mine = byPerson.get(p.person_id) ?? [];
     const n = mine.reduce((a, t) => a + t._mw, 0);
-    return n ? (100 * mine.reduce((a, t) => a + (t.is_mom ? t._mw : 0), 0)) / n : null;
+    // v2.18: cada MVP vale según la dificultad del partido y su nivel (_d).
+    return n ? (100 * mine.reduce((a, t) => a + (t.is_mom ? t._mw * t._d : 0), 0)) / n : null;
   };
   const mvps = new Map(people.map((p) => [p.person_id, mvpPct(p)]));
   const mvpMean = avg([...mvps.values()].filter((v) => v != null));
@@ -2908,7 +2948,8 @@ function bestIndices(people, timeline) {
     const mine = byPerson.get(p.person_id) ?? [];
     const sec = mine.reduce((a, t) => a + t._mw * Number(t.seconds_played ?? 0), 0);
     if (!sec) return null;
-    const pts = mine.reduce((a, t) => a + t._mw * (3 * Number(t.red_cards ?? 0) + Number(t.yellow_cards_exp ?? 0) + Number(t.penalties_conceded_exp ?? 0) + 0.25 * Number(t.fouls_exp ?? 0)), 0);
+    // v2.18: lo malo se divide por la dificultad y el nivel (_d), como en los otros criterios.
+    const pts = mine.reduce((a, t) => a + (t._mw / t._d) * (3 * Number(t.red_cards ?? 0) + Number(t.yellow_cards_exp ?? 0) + Number(t.penalties_conceded_exp ?? 0) + 0.25 * Number(t.fouls_exp ?? 0)), 0);
     return (pts * 5400) / sec;
   };
   const sanctions = new Map(people.map((p) => [p.person_id, sanction(p)]));
@@ -2925,8 +2966,11 @@ function bestIndices(people, timeline) {
     const mine = (byPerson.get(p.person_id) ?? []).filter((t) => t.rating != null);
     const n = mine.reduce((a, t) => a + t._mw, 0);
     if (mine.length < 2 || !n) return null;
-    const m = mine.reduce((a, t) => a + t._mw * Number(t.rating), 0) / n;
-    return Math.sqrt(mine.reduce((a, t) => a + t._mw * (Number(t.rating) - m) ** 2, 0) / n);
+    // v2.18: sobre las calificaciones ajustadas por dificultad y nivel (_d).
+    const m = mine.reduce((a, t) => a + t._mw * Number(t.rating) * t._d, 0) / n;
+    // v2.18: solo cuentan los partidos POR DEBAJO de su media (semidesviación): un
+    // partido excepcional no le resta regularidad.
+    return Math.sqrt(mine.reduce((a, t) => a + t._mw * Math.min(0, Number(t.rating) * t._d - m) ** 2, 0) / n);
   };
   const stds = new Map(people.map((p) => [p.person_id, wStd(p)]));
   const stdMean = avg([...stds.values()].filter((v) => v != null));
