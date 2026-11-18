@@ -3,6 +3,16 @@
 // La fecha es la de Colombia (UTC−5), no la UTC: de noche ya es "mañana" en UTC.
 export const CHANGELOG = [
   {
+    version: '2.16',
+    date: '2026-11-17',
+    title: 'Mejor jugador: más justo con el rol y los pesos',
+    changes: [
+      'Cada uno se compara con los demás jugadores de su posición, ya no consigo mismo. Si nadie más jugó esa posición, esos minutos no cuentan; si los demás jugaron pocos partidos ahí, la comparación cuenta menos.',
+      'Ataque y defensa (30 % entre los dos) se reparten según el arquetipo: ofensivo 20 % / 10 %, equilibrado 15 / 15, defensivo 10 / 20.',
+      'Cada criterio mueve el puntaje según su peso: antes el MVP (10 %) movía más que la calificación (25 %) porque varía mucho más entre jugadores.',
+    ],
+  },
+  {
     version: '2.15',
     date: '2026-11-16',
     title: 'Mejor jugador: ubicación y más datos',

@@ -58,7 +58,7 @@ API no oficial de EA ──► Colector (GitHub Actions, cada 30 min) ──► 
    - Filtros: tipo de partido, fechas, mínimo de partidos y excluir incompletos.
    - Los archivos se versionan con el commit en `pages.yml` (`__V__`), para no mezclar versiones viejas desde la caché de Pages.
    - Probado en Chrome con los datos del club de prueba.
-   - **Migraciones aplicadas en Supabase:** 001–021, cada una verificada después de aplicarla.
+   - **Migraciones aplicadas en Supabase:** 001–022, cada una verificada después de aplicarla.
    - **BETA (decidido con el usuario el 2026-11-16, v2.10):** etiqueta "Beta" junto a la versión.
      - **Qué es beta:** solo la forma de mostrar y analizar (pestañas, gráficas y fórmula). **Los datos de EA no.** El texto lo aclara.
      - **Criterios de salida (las tres condiciones):**
@@ -381,8 +381,12 @@ No hay API oficial. Se usan los endpoints públicos que lee la web de Clubes de 
        - **Se aplica por posición:** los minutos de arquero usan la defensa de arquero y no cuentan en el ataque. Si alguien jugó de arquero y de campo, su defensa combina las dos según sus minutos.
        - Si hay un solo arquero en el club, sus índices dan 100, y la pestaña lo avisa.
      - **Pase (v2.15):** precisión 25, pases/90 15, filtrados*/90 15, pérdidas*/90 (menos es mejor) 15, pase adelante %* 10, pase largo %* 5, primer toque*/90 5, decisiones %* 5, pases a fuera de juego*/90 (menos es mejor) 5.
-   - **Juego limpio:** sanción/90 = 3·roja + amarilla* + penal* + 0,25·falta*. Índice = (media + ε) / (suya + ε) × 100, con ε = máx(0,05; 10 % de la media).
-   - **Cálculo:** índice (100 = promedio) → corrección por pocos partidos `100 + (i − 100) × PJ / (PJ + 5)` → nota `50 + (i − 100)`, recortada a 0–100 → promedio ponderado. Si falta un criterio, su peso se reparte entre los demás, con aviso.
+   - **v2.16 (2026-11-17, pedido y aprobado por el usuario tras revisar su diferencia con AlxCampu):**
+     - **Comparar con los demás:** en calificación, ataque, defensa y pase, el promedio de la posición excluye al propio jugador. Sin nadie más en esa posición, esos minutos no cuentan; si no hay con quién compararlo en ninguna de sus posiciones, el criterio queda en 100 (neutro, `neutral`). Con pocos partidos de los demás, la razón se acerca a 1: `1 + (r − 1) × n / (n + 5)` (`peerTrust`).
+     - **Arquetipo:** ataque + defensa = 30 %, repartido por minutos de campo según la familia (`ARCH_FAMILY`): ofensivo (9, 10, 11, 12, 13) 20/10, equilibrado (6, 8) 15/15, defensivo (3, 4, 5, 7) 10/20; desconocido = equilibrado. Comparar solo contra el mismo arquetipo no sirve: cada persona tiene uno distinto.
+     - **Nota según la dispersión:** `50 + 15 × (adj − 100) / máx(desv. típica del criterio entre los del ranking, 5)`, recortada a 0–100. Antes era `50 + (adj − 100)`, y el MVP (10 %) movía más que la calificación (25 %). Ubicación sigue absoluta.
+     - **Efecto con datos reales:** en 100 D CILANTRO la diferencia con AlxCampu **creció** (de 69,6–55,2 a 74,8–54,8), porque él también tiene más calificación y ahora pesa su 25 %. Antes de aprobar la normalización se le avisó que en CILANTRO agrandaría la diferencia. En FC Aston Huila bajó (de 57,4–49,5 a 54,8–51,7).   - **Juego limpio:** sanción/90 = 3·roja + amarilla* + penal* + 0,25·falta*. Índice = (media + ε) / (suya + ε) × 100, con ε = máx(0,05; 10 % de la media).
+   - **Cálculo:** índice (100 = promedio) → corrección por pocos partidos `100 + (i − 100) × PJ / (PJ + 5)` → nota `50 + 15 × (i − 100) / dispersión` (v2.16; antes `50 + (i − 100)`), recortada a 0–100 → promedio ponderado. Si falta un criterio, su peso se reparte entre los demás, con aviso.
    - **Mínimo para entrar:** 30 % de los partidos del club en el rango filtrado (decisión del usuario).
    - **Efectos observados con 12 partidos (2026-11-16):**
      - A quien jugó todos los partidos le falta "Impacto", porque no hay partidos sin él.

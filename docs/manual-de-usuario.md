@@ -86,7 +86,7 @@ Deja de ser beta cuando se cumplan tres condiciones:
 
 ### Mejor jugador (experimental)
 
-- **Puntaje de 0 a 100** con 9 criterios y pesos fijos, iguales para todos:
+- **Puntaje de 0 a 100** con 9 criterios. Los pesos son fijos, salvo ataque y defensa, que suman 30 % y se reparten según la familia del arquetipo (ofensivo 20/10, equilibrado 15/15, defensivo 10/20):
 
   | Criterio | Peso |
   |---|---|
@@ -116,6 +116,8 @@ Deja de ser beta cuando se cumplan tres condiciones:
   | Vallas invictas | 15 % |
 - **Juego limpio:** puntos de sanción por 90 minutos (roja 3, amarilla* 1, penal cometido* 1, falta* 0,25) frente al promedio del equipo. Menos sanciones = más puntos.
 
+- **Contra los demás:** cada uno se compara con los **demás** jugadores de su posición, nunca consigo mismo. Si nadie más jugó esa posición, esos minutos no cuentan (si pasa en todas, el criterio queda en 100); si los demás jugaron pocos partidos ahí, la comparación cuenta menos.
+- **Pesos reales:** la nota es 50 + 15 × (índice − 100) ÷ la dispersión del criterio entre los jugadores del ranking (mínimo 5). Así cada criterio mueve el puntaje según su peso y no según lo disperso que sea.
 - **Justo para quien rota:** todo se compara con el promedio de su rol. El portero se mide por % de atajadas en vez de por ataque.
 - **Pocos partidos:** con pocos partidos, el resultado se acerca al promedio.
 - **Para entrar:** jugar al menos el 30 % de los partidos del club.

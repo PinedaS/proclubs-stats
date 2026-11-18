@@ -2608,6 +2608,10 @@ function teamPlaceSection(personId) {
 
 const BEST_MIN_SHARE = 0.3; // 30 % de los partidos del club en el rango filtrado
 const BEST_SHRINK_K = 5;
+// Nota (v2.16): 50 + BEST_NOTE_PER_SD × (índice corregido − 100) / dispersión del criterio.
+// La dispersión mínima evita que diferencias mínimas se agranden con pocos jugadores.
+const BEST_NOTE_PER_SD = 15;
+const BEST_MIN_SPREAD = 5;
 const DIV_STEP = 0.05; // +5 % por división sobre la 5ª del juego (API 6)
 const RIVAL_CAP = 0.15; // factor del rival entre ×0,85 y ×1,15
 const LEVEL_CAP = 0.10; // factor de nivel del jugador entre ×0,90 y ×1,10 (v2.13)
@@ -2615,11 +2619,11 @@ const LEVEL_CAP = 0.10; // factor de nivel del jugador entre ×0,90 y ×1,10 (v2
 // Encabezados de la tabla de criterios del mejor jugador, con la explicación
 // que se ve al pasar el cursor (title).
 const BEST_COLS = [
-  ['Criterio', 'Qué se mide. Los datos pequeños de abajo son los que forman el criterio, cada uno con su índice (100 = promedio de su rol). Los marcados con * son experimentales.'],
-  ['Índice', 'Cómo le fue frente al promedio: 100 = igual al promedio de su rol (en MVP, juego limpio y regularidad, al de los jugadores del ranking). 120 = 20 % mejor; 80 = 20 % peor. En Impacto es 100 + (% de victorias con él − % sin él). En Ubicación es su % en posición, tal cual, y no se corrige. En calificación, ataque, defensa y pase ya incluye el ajuste por la dificultad de cada partido y por su nivel.'],
+  ['Criterio', 'Qué se mide. Los datos pequeños de abajo son los que forman el criterio, cada uno con su índice (100 = promedio de los demás en su rol). Los marcados con * son experimentales.'],
+  ['Índice', 'Cómo le fue frente al promedio: 100 = igual al promedio de los DEMÁS jugadores en su rol (no se cuenta a sí mismo; si nadie más jugó esa posición, esos minutos no cuentan, y si los demás jugaron pocos partidos ahí, la comparación pesa menos). En MVP, juego limpio y regularidad, al de los jugadores del ranking). 120 = 20 % mejor; 80 = 20 % peor. En Impacto es 100 + (% de victorias con él − % sin él). En Ubicación es su % en posición, tal cual, y no se corrige. En calificación, ataque, defensa y pase ya incluye el ajuste por la dificultad de cada partido y por su nivel.'],
   ['Con corrección', `El índice acercado a 100 según cuántos partidos jugó, para que pocos partidos no den un número extremo por suerte: 100 + (índice − 100) × PJ / (PJ + ${BEST_SHRINK_K}). Con muchos partidos casi no cambia.`],
-  ['Nota', 'El índice corregido pasado a una nota de 0 a 100: 50 + (índice corregido − 100). 50 = promedio; se recorta a 0 y 100.'],
-  ['Peso', 'Cuánto vale este criterio en el puntaje final. Los pesos son fijos e iguales para todos.'],
+  ['Nota', `El índice corregido pasado a una nota de 0 a 100: 50 + ${BEST_NOTE_PER_SD} × (índice corregido − 100) ÷ dispersión del criterio entre los jugadores del ranking (mínimo ${BEST_MIN_SPREAD}). Así cada criterio mueve el puntaje según su peso y no según lo disperso que sea. 50 = promedio; se recorta a 0 y 100. En Ubicación, la nota es el % tal cual.`],
+  ['Peso', 'Cuánto vale este criterio en el puntaje final. Son fijos, salvo ataque y defensa (30 % entre los dos), que se reparten según la familia de su arquetipo: ofensivo 20/10, equilibrado 15/15, defensivo 10/20.'],
   ['Aporta', 'Puntos que suma este criterio al puntaje final: nota × peso. Si falta algún criterio, su peso se reparte entre los demás, por eso puede dar algo más que nota × peso. La suma de esta columna es el puntaje.'],
 ];
 
@@ -2713,11 +2717,15 @@ function difficultyOf(t, meanSkill) {
  */
 function roleIndex(rows, all, spec) {
   const valid = (t) => (spec.ok ? spec.ok(t) : true) && Number(t.seconds_played ?? 0) > 0;
+  // v2.16: el promedio de la posición es el de los DEMÁS (sin él). Sin nadie más en
+  // esa posición, sus minutos ahí no cuentan; con pocos partidos de los demás, la
+  // comparación se acerca a 1 (peerTrust).
+  const self = rows[0]?.person_id;
   const base = new Map();
   for (const t of all) {
-    if (!valid(t) || !t.position) continue;
-    const b = base.get(t.position) ?? { num: 0, den: 0 };
-    b.num += spec.num(t); b.den += spec.kind === 'p90' ? Number(t.seconds_played) : spec.den(t);
+    if (!valid(t) || !t.position || t.person_id === self) continue;
+    const b = base.get(t.position) ?? { num: 0, den: 0, n: 0 };
+    b.num += spec.num(t); b.den += spec.kind === 'p90' ? Number(t.seconds_played) : spec.den(t); b.n++;
     base.set(t.position, b);
   }
   const mine = new Map();
@@ -2737,9 +2745,22 @@ function roleIndex(rows, all, spec) {
     let r;
     if (spec.low) r = mv === 0 ? (bv === 0 ? 1 : 2.5) : bv / mv;
     else r = bv === 0 ? (mv === 0 ? 1 : 2.5) : mv / bv;
-    acc += m.sec * Math.min(2.5, Math.max(0.25, r)); w += m.sec;
+    r = Math.min(2.5, Math.max(0.25, r));
+    acc += m.sec * (1 + (r - 1) * peerTrust(b.n)); w += m.sec;
   }
   return w ? 100 * (acc / w) : null;
+}
+
+// Familias de arquetipo (v2.16, aprobadas por el usuario) y su reparto de los 30
+// puntos de ataque + defensa. Nombres según la comunidad (ver ARCHETYPES).
+const ARCH_FAMILY = { 9: 'offensive', 10: 'offensive', 11: 'offensive', 12: 'offensive', 13: 'offensive', 6: 'balanced', 8: 'balanced', 3: 'defensive', 4: 'defensive', 5: 'defensive', 7: 'defensive' };
+const ARCH_SPLIT = { offensive: { attack: 20, defense: 10 }, balanced: { attack: 15, defense: 15 }, defensive: { attack: 10, defense: 20 } };
+const ARCH_FAMILY_LABEL = { offensive: 'ofensivo', balanced: 'equilibrado', defensive: 'defensivo' };
+const archFamily = (id) => ARCH_FAMILY[Number(id)] ?? 'balanced';
+
+/** Confianza en el promedio de los demás en una posición: partidos de ellos ÷ (partidos + 5). */
+function peerTrust(peerMatches) {
+  return peerMatches > 0 ? peerMatches / (peerMatches + BEST_SHRINK_K) : 0;
 }
 
 /** Índice compuesto de un criterio: promedio ponderado de sus datos (los que faltan se omiten). */
@@ -2777,12 +2798,21 @@ function bestIndices(people, timeline) {
   }
   for (const p of people) {
     const mine = byPerson.get(p.person_id) ?? [];
+    // v2.16: promedio de los DEMÁS en la posición (se le restan sus propios partidos).
+    const own = new Map();
+    for (const t of mine) {
+      if (t.rating == null || !t.position) continue;
+      const e = own.get(t.position) ?? { s: 0, n: 0 }; e.s += Number(t.rating); e.n++; own.set(t.position, e);
+    }
     let num = 0, den = 0;
     for (const t of mine) {
-      const pa = posAvg.get(t.position);
-      if (t.rating == null || !pa?.n) continue;
+      const pa = posAvg.get(t.position), o = own.get(t.position);
+      if (t.rating == null || !pa || !o) continue;
+      const peerN = pa.n - o.n;
+      if (peerN <= 0) continue; // nadie más jugó esa posición: no cuenta
+      const r = (Number(t.rating) * t._d) / ((pa.s - o.s) / peerN);
       const w = Number(t.seconds_played ?? 0) || 1;
-      num += w * ((Number(t.rating) * t._d) / (pa.s / pa.n)); den += w;
+      num += w * (1 + (r - 1) * peerTrust(peerN)); den += w;
     }
     const o = out.get(p.person_id);
     o.rating = den ? 100 * (num / den) : null;
@@ -2807,8 +2837,24 @@ function bestIndices(people, timeline) {
     o.defense = ws ? parts.reduce((a, [c, s]) => a + c.v * s, 0) / ws : null;
     o.sub.defense = [...(defF?.parts ?? []), ...(defK?.parts ?? [])];
     o.keeperShare = mine.length ? secs(keeper) / (secs(mine) || 1) : 0;
+    // v2.16: ataque y defensa (30 % entre los dos) se reparten según la familia del
+    // arquetipo de cada partido de campo, por minutos. Sin arquetipo conocido: 15/15.
+    const fs = secs(field);
+    const share = (fam) => (fs ? secs(field.filter((t) => archFamily(t.archetype_id) === fam)) / fs : 0);
+    o.families = Object.fromEntries(Object.keys(ARCH_SPLIT).map((f) => [f, share(f)]));
+    o.weights = fs ? Object.fromEntries(['attack', 'defense'].map((k) => [k, Object.entries(o.families).reduce((a, [f, s]) => a + s * ARCH_SPLIT[f][k], 0)])) : null;
     const pas = compositeIndex(mine, rows, SUB.passing);
     o.passing = pas.v; o.sub.passing = pas.parts;
+  }
+  // v2.16: si jugó pero nadie más jugó sus posiciones, el criterio frente al rol queda
+  // neutro (100): ni premia ni castiga. Sin esto, su peso se repartía entre el resto.
+  for (const p of people) {
+    const o = out.get(p.person_id);
+    const mine = byPerson.get(p.person_id) ?? [];
+    const hasField = mine.some((t) => t.position !== 'goalkeeper');
+    const can = { rating: mine.length > 0, passing: mine.length > 0, attack: hasField, defense: mine.length > 0 };
+    o.neutral = Object.keys(can).filter((k) => can[k] && o[k] == null);
+    for (const k of o.neutral) o[k] = 100;
   }
   // Ubicación*: su propio % en posición (en / (en + fuera)), tal cual, sin rol ni dificultad.
   for (const p of people) {
@@ -2858,20 +2904,38 @@ function computeBest() {
   const eligible = state.ranking.filter((r) => r.matches >= min);
   const others = state.ranking.filter((r) => r.matches < min);
   const idx = bestIndices(eligible, state.timeline);
-  const rows = eligible.map((p) => {
+  // 1) Índice y corrección por pocos partidos de cada criterio.
+  const pre = eligible.map((p) => {
     const raw = idx.get(p.person_id);
     const parts = BEST_CRITERIA.map((c) => {
       const v = raw[c.key];
-      if (v == null || !Number.isFinite(v)) return { c, idx: null, adj: null, score: null, sub: raw.sub[c.key] };
-      // Criterio absoluto (Ubicación): el valor ya es la nota, sin corrección.
-      if (c.absolute) return { c, idx: v, adj: v, score: Math.max(0, Math.min(100, v)), sub: raw.sub[c.key] };
-      const adj = 100 + (v - 100) * (p.matches / (p.matches + BEST_SHRINK_K));
-      return { c, idx: v, adj, score: Math.max(0, Math.min(100, 50 + (adj - 100))), sub: raw.sub[c.key] };
+      // Peso de la persona: ataque y defensa según su arquetipo (v2.16); el resto, fijo.
+      const weight = raw.weights?.[c.key] ?? c.weight;
+      if (v == null || !Number.isFinite(v)) return { c, weight, idx: null, adj: null, sub: raw.sub[c.key] };
+      const adj = c.absolute ? v : 100 + (v - 100) * (p.matches / (p.matches + BEST_SHRINK_K));
+      return { c, weight, idx: v, adj, sub: raw.sub[c.key] };
     });
+    return { p, raw, parts };
+  });
+  // 2) Dispersión de cada criterio entre los jugadores del ranking (v2.16): así cada
+  //    criterio mueve el puntaje según su peso y no según lo disperso que sea.
+  const spread = new Map(BEST_CRITERIA.map((c, k) => {
+    const vals = pre.map((r) => r.parts[k].adj).filter((v) => v != null);
+    const m = vals.reduce((a, v) => a + v, 0) / (vals.length || 1);
+    const sd = Math.sqrt(vals.reduce((a, v) => a + (v - m) ** 2, 0) / (vals.length || 1));
+    return [c.key, Math.max(BEST_MIN_SPREAD, sd)];
+  }));
+  const rows = pre.map(({ p, raw, parts }) => {
+    for (const x of parts) {
+      if (x.adj == null) { x.score = null; continue; }
+      // Absoluto (Ubicación): la nota es el % tal cual. El resto: 50 + 15 por cada
+      // desviación típica sobre 100 (el promedio), recortada a 0–100.
+      x.score = Math.max(0, Math.min(100, x.c.absolute ? x.adj : 50 + (BEST_NOTE_PER_SD * (x.adj - 100)) / spread.get(x.c.key)));
+    }
     const used = parts.filter((x) => x.score != null);
-    const wsum = used.reduce((a, x) => a + x.c.weight, 0);
-    for (const x of parts) x.points = x.score == null || !wsum ? null : (x.score * x.c.weight) / wsum;
-    return { p, parts, difficulty: raw.difficulty, level: raw.level, ovr: raw.ovr, meanOvr: raw.meanOvr, exactLevels: raw.exactLevels, levelRows: raw.levelRows, keeperShare: raw.keeperShare, onlyKeeper: raw.onlyKeeper, total: wsum ? used.reduce((a, x) => a + x.points, 0) : null, missing: parts.filter((x) => x.score == null).map((x) => x.c.label) };
+    const wsum = used.reduce((a, x) => a + x.weight, 0);
+    for (const x of parts) x.points = x.score == null || !wsum ? null : (x.score * x.weight) / wsum;
+    return { p, parts, families: raw.families, neutral: BEST_CRITERIA.filter((c) => raw.neutral?.includes(c.key)).map((c) => c.label), difficulty: raw.difficulty, level: raw.level, ovr: raw.ovr, meanOvr: raw.meanOvr, exactLevels: raw.exactLevels, levelRows: raw.levelRows, keeperShare: raw.keeperShare, onlyKeeper: raw.onlyKeeper, total: wsum ? used.reduce((a, x) => a + x.points, 0) : null, missing: parts.filter((x) => x.score == null).map((x) => x.c.label) };
   }).sort((a, b) => (b.total ?? -1) - (a.total ?? -1));
   return { rows, others, min, clubMatches };
 }
@@ -2889,7 +2953,7 @@ async function renderBest() {
   }
   const { rows, others, min, clubMatches } = computeBest();
   const box = $('#best-body');
-  $('#best-weights').replaceChildren(...BEST_CRITERIA.map((c) => el('tr', {}, el('td', { class: 'left' }, c.label), el('td', {}, `${c.weight} %`), el('td', { class: 'left muted small' }, c.help))));
+  $('#best-weights').replaceChildren(...BEST_CRITERIA.map((c) => el('tr', {}, el('td', { class: 'left' }, c.label), el('td', {}, c.key === 'attack' || c.key === 'defense' ? '10–20 %' : `${c.weight} %`), el('td', { class: 'left muted small' }, c.help))));
   $('#best-min').textContent = `${min} partidos (30 % de los ${clubMatches} del club con los filtros actuales)`;
   if (!rows.length) {
     box.replaceChildren(el('p', { class: 'muted', style: 'padding: 0 18px 18px' }, `Nadie tiene todavía el mínimo de ${min} partidos (30 % de los ${clubMatches} del club con estos filtros).`));
@@ -2907,7 +2971,9 @@ async function renderBest() {
       r.levelRows ? el('p', { class: 'muted small' }, r.exactLevels === r.levelRows
         ? 'Media del Pro de cada partido: exacta en todos (la del arquetipo con que jugó).'
         : `Media del Pro exacta del partido en ${r.exactLevels} de ${r.levelRows}; en el resto, aproximada con la foto del día (puede ser la de otro arquetipo).`) : null,
-      r.keeperShare > 0 ? el('p', { class: 'muted small' }, `Jugó de arquero el ${fmtNum(100 * r.keeperShare, 0)} % de sus minutos: esos minutos se miden con la defensa de arquero y no cuentan en el ataque.${r.onlyKeeper ? ' Es el único arquero del club en estos partidos, así que sus índices de arquero dan 100: no hay con quién compararlo.' : ''}`) : null,
+      r.keeperShare > 0 ? el('p', { class: 'muted small' }, `Jugó de arquero el ${fmtNum(100 * r.keeperShare, 0)} % de sus minutos: esos minutos se miden con la defensa de arquero y no cuentan en el ataque.${r.onlyKeeper ? ' Es el único arquero del club en estos partidos: sin nadie con quién compararlo, esos minutos no cuentan en la defensa.' : ''}`) : null,
+      r.neutral?.length ? el('p', { class: 'muted small' }, `Nadie más jugó sus posiciones en estos partidos, así que no hay con quién compararlo en: ${r.neutral.join(', ')}. Quedan en 100 (el promedio): ni premian ni castigan.`) : null,
+      r.families && Object.values(r.families).some((s) => s > 0) ? el('p', { class: 'muted small' }, `Ataque y defensa según su arquetipo: ${Object.entries(r.families).filter(([, s]) => s > 0).map(([f, s]) => `${ARCH_FAMILY_LABEL[f]} ${fmtNum(100 * s, 0)} %`).join(', ')} de sus minutos de campo (ofensivo 20/10, equilibrado 15/15, defensivo 10/20).`) : null,
       el('div', { class: 'table-wrap' }, el('table', { class: 'data' },
         el('thead', {}, el('tr', {}, BEST_COLS.map(([h, tip], k) => el('th', { scope: 'col', class: k === 0 ? 'left has-tip' : 'has-tip', title: tip }, h)))),
         el('tbody', {}, r.parts.map((x) => el('tr', { title: x.c.help },
@@ -2915,7 +2981,7 @@ async function renderBest() {
           el('td', {}, x.idx == null ? '—' : fmtNum(x.idx, 0)),
           el('td', {}, x.adj == null ? '—' : fmtNum(x.adj, 0)),
           el('td', {}, x.score == null ? '—' : fmtNum(x.score, 0)),
-          el('td', {}, `${x.c.weight} %`),
+          el('td', {}, `${fmtNum(x.weight, Number.isInteger(x.weight) ? 0 : 1)} %`),
           el('td', {}, el('strong', {}, x.points == null ? '—' : fmtNum(x.points, 1)))))))),
       r.missing.length ? el('p', { class: 'muted small' }, `Sin dato en: ${r.missing.join(', ')}. Su peso se repartió entre los demás criterios.`) : null,
       // Las explicaciones al pasar el cursor (title) no existen en el celular:
