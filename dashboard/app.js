@@ -2612,6 +2612,13 @@ const BEST_SHRINK_K = 5;
 // La dispersión mínima evita que diferencias mínimas se agranden con pocos jugadores.
 const BEST_NOTE_PER_SD = 15;
 const BEST_MIN_SPREAD = 5;
+// v2.17 (aprobado por el usuario): en la fórmula, un amistoso vale la mitad que un
+// partido de liga o de play-off. Los datos y las demás pestañas no cambian.
+const BEST_FRIENDLY_WEIGHT = 0.5;
+// v2.17: Impacto se corrige por el menor entre partidos con él y sin él, y queda
+// neutro (100) con menos de este número de partidos sin él.
+const BEST_IMPACT_MIN_WITHOUT = 5;
+const matchWeight = (t) => (t.match_type === 'friendlyMatch' ? BEST_FRIENDLY_WEIGHT : 1);
 const DIV_STEP = 0.05; // +5 % por división sobre la 5ª del juego (API 6)
 const RIVAL_CAP = 0.15; // factor del rival entre ×0,85 y ×1,15
 const LEVEL_CAP = 0.10; // factor de nivel del jugador entre ×0,90 y ×1,10 (v2.13)
@@ -2621,7 +2628,7 @@ const LEVEL_CAP = 0.10; // factor de nivel del jugador entre ×0,90 y ×1,10 (v2
 const BEST_COLS = [
   ['Criterio', 'Qué se mide. Los datos pequeños de abajo son los que forman el criterio, cada uno con su índice (100 = promedio de los demás en su rol). Los marcados con * son experimentales.'],
   ['Índice', 'Cómo le fue frente al promedio: 100 = igual al promedio de los DEMÁS jugadores en su rol (no se cuenta a sí mismo; si nadie más jugó esa posición, esos minutos no cuentan, y si los demás jugaron pocos partidos ahí, la comparación pesa menos). En MVP, juego limpio y regularidad, al de los jugadores del ranking). 120 = 20 % mejor; 80 = 20 % peor. En Impacto es 100 + (% de victorias con él − % sin él). En Ubicación es su % en posición, tal cual, y no se corrige. En calificación, ataque, defensa y pase ya incluye el ajuste por la dificultad de cada partido y por su nivel.'],
-  ['Con corrección', `El índice acercado a 100 según cuántos partidos jugó, para que pocos partidos no den un número extremo por suerte: 100 + (índice − 100) × PJ / (PJ + ${BEST_SHRINK_K}). Con muchos partidos casi no cambia.`],
+  ['Con corrección', `El índice acercado a 100 según cuántos partidos jugó, para que pocos partidos no den un número extremo por suerte: 100 + (índice − 100) × PJ / (PJ + ${BEST_SHRINK_K}), donde un amistoso cuenta como medio partido. En Impacto, PJ es el menor entre partidos con él y sin él. Con muchos partidos casi no cambia.`],
   ['Nota', `El índice corregido pasado a una nota de 0 a 100: 50 + ${BEST_NOTE_PER_SD} × (índice corregido − 100) ÷ dispersión del criterio entre los jugadores del ranking (mínimo ${BEST_MIN_SPREAD}). Así cada criterio mueve el puntaje según su peso y no según lo disperso que sea. 50 = promedio; se recorta a 0 y 100. En Ubicación, la nota es el % tal cual.`],
   ['Peso', 'Cuánto vale este criterio en el puntaje final. Son fijos, salvo ataque y defensa (30 % entre los dos), que se reparten según la familia de su arquetipo: ofensivo 20/10, equilibrado 15/15, defensivo 10/20.'],
   ['Aporta', 'Puntos que suma este criterio al puntaje final: nota × peso. Si falta algún criterio, su peso se reparte entre los demás, por eso puede dar algo más que nota × peso. La suma de esta columna es el puntaje.'],
@@ -2648,7 +2655,7 @@ const BEST_CRITERIA = [
   // Ubicación (aprobada por el usuario): su propio % en posición, sin compararlo con el rol
   // ni corregirlo por pocos partidos. La nota es el % tal cual.
   { key: 'positioning', label: 'Ubicación*', weight: 5, absolute: true, help: 'Su % de veces en posición frente a fuera de posición, según los avisos del juego. Se mide por su cuenta, sin compararlo con el rol: la nota es el % tal cual (98 % en posición = nota 98).' },
-  { key: 'impact', label: 'Impacto en el equipo', weight: 10, help: '% de victorias del equipo con él menos % sin él (cada punto de diferencia suma o resta un punto al índice).' },
+  { key: 'impact', label: 'Impacto en el equipo', weight: 10, help: '% de victorias del equipo con él menos % sin él (cada punto de diferencia suma o resta un punto al índice). Se corrige según el menor entre partidos con él y sin él, y con menos de 5 partidos sin él queda en 100.' },
   { key: 'mvp', label: 'MVP', weight: 10, help: 'Su % de MVP frente al promedio de los jugadores que entran al ranking.' },
   { key: 'fairplay', label: 'Juego limpio', weight: 5, help: 'Sanciones por 90 min frente al promedio: roja 3, amarilla* 1, penal cometido* 1, falta* 0,25. Menos sanciones = más puntos.' },
   { key: 'regularity', label: 'Regularidad', weight: 5, help: 'Qué tan estable es su calificación: menos variación que el promedio = índice mayor.' },
@@ -2725,16 +2732,18 @@ function roleIndex(rows, all, spec) {
   for (const t of all) {
     if (!valid(t) || !t.position || t.person_id === self) continue;
     const b = base.get(t.position) ?? { num: 0, den: 0, n: 0 };
-    b.num += spec.num(t); b.den += spec.kind === 'p90' ? Number(t.seconds_played) : spec.den(t); b.n++;
+    const mw = t._mw ?? 1; // v2.17: amistoso = ½
+    b.num += mw * spec.num(t); b.den += mw * (spec.kind === 'p90' ? Number(t.seconds_played) : spec.den(t)); b.n += mw;
     base.set(t.position, b);
   }
   const mine = new Map();
   for (const t of rows) {
     if (!valid(t) || !t.position) continue;
     const m = mine.get(t.position) ?? { num: 0, den: 0, sec: 0 };
-    m.num += spec.low ? spec.num(t) / t._d : spec.num(t) * t._d;
-    m.den += spec.kind === 'p90' ? Number(t.seconds_played) : spec.den(t);
-    m.sec += Number(t.seconds_played);
+    const mw = t._mw ?? 1;
+    m.num += mw * (spec.low ? spec.num(t) / t._d : spec.num(t) * t._d);
+    m.den += mw * (spec.kind === 'p90' ? Number(t.seconds_played) : spec.den(t));
+    m.sec += mw * Number(t.seconds_played);
     mine.set(t.position, m);
   }
   let acc = 0, w = 0;
@@ -2785,8 +2794,9 @@ function bestIndices(people, timeline) {
   const rows = withLevel.map((t) => {
     const diff = difficultyOf(t, meanSkill);
     const lvl = t._ovr && meanOvr ? Math.min(1 + LEVEL_CAP, Math.max(1 - LEVEL_CAP, meanOvr / t._ovr)) : 1;
-    return { ...t, _diff: diff, _lvl: lvl, _d: diff * lvl };
+    return { ...t, _diff: diff, _lvl: lvl, _d: diff * lvl, _mw: matchWeight(t) };
   });
+  const mwOf = new Map(rows.map((t) => [t.match_id, t._mw]));
   const byPerson = new Map();
   for (const t of rows) { if (!byPerson.has(t.person_id)) byPerson.set(t.person_id, []); byPerson.get(t.person_id).push(t); }
 
@@ -2794,7 +2804,7 @@ function bestIndices(people, timeline) {
   const posAvg = new Map();
   for (const t of rows) {
     if (t.rating == null || !t.position) continue;
-    const e = posAvg.get(t.position) ?? { s: 0, n: 0 }; e.s += Number(t.rating); e.n++; posAvg.set(t.position, e);
+    const e = posAvg.get(t.position) ?? { s: 0, n: 0 }; e.s += t._mw * Number(t.rating); e.n += t._mw; posAvg.set(t.position, e);
   }
   for (const p of people) {
     const mine = byPerson.get(p.person_id) ?? [];
@@ -2802,16 +2812,16 @@ function bestIndices(people, timeline) {
     const own = new Map();
     for (const t of mine) {
       if (t.rating == null || !t.position) continue;
-      const e = own.get(t.position) ?? { s: 0, n: 0 }; e.s += Number(t.rating); e.n++; own.set(t.position, e);
+      const e = own.get(t.position) ?? { s: 0, n: 0 }; e.s += t._mw * Number(t.rating); e.n += t._mw; own.set(t.position, e);
     }
     let num = 0, den = 0;
     for (const t of mine) {
       const pa = posAvg.get(t.position), o = own.get(t.position);
       if (t.rating == null || !pa || !o) continue;
       const peerN = pa.n - o.n;
-      if (peerN <= 0) continue; // nadie más jugó esa posición: no cuenta
+      if (peerN <= 1e-9) continue; // nadie más jugó esa posición: no cuenta
       const r = (Number(t.rating) * t._d) / ((pa.s - o.s) / peerN);
-      const w = Number(t.seconds_played ?? 0) || 1;
+      const w = t._mw * (Number(t.seconds_played ?? 0) || 1);
       num += w * (1 + (r - 1) * peerTrust(peerN)); den += w;
     }
     const o = out.get(p.person_id);
@@ -2827,7 +2837,9 @@ function bestIndices(people, timeline) {
     // Si jugó de las dos formas, la defensa combina ambas según sus minutos.
     const field = mine.filter((t) => t.position !== 'goalkeeper');
     const keeper = mine.filter((t) => t.position === 'goalkeeper');
-    const secs = (list) => list.reduce((a, t) => a + Number(t.seconds_played ?? 0), 0);
+    const secs = (list) => list.reduce((a, t) => a + t._mw * Number(t.seconds_played ?? 0), 0);
+    // Partidos efectivos (amistoso = ½) para la corrección por pocos partidos.
+    o.effMatches = [...new Map(mine.map((t) => [t.match_id, t._mw])).values()].reduce((a, v) => a + v, 0);
     const att = field.length ? compositeIndex(field, rows, SUB.attack) : null;
     o.attack = att?.v ?? null; o.sub.attack = att?.parts;
     const defF = field.length ? compositeIndex(field, rows, SUB.defense) : null;
@@ -2859,28 +2871,44 @@ function bestIndices(people, timeline) {
   // Ubicación*: su propio % en posición (en / (en + fuera)), tal cual, sin rol ni dificultad.
   for (const p of people) {
     const mine = (byPerson.get(p.person_id) ?? []).filter((t) => t.in_position_exp != null);
-    const inPos = mine.reduce((a, t) => a + Number(t.in_position_exp), 0);
-    const outPos = mine.reduce((a, t) => a + Number(t.out_of_position_exp ?? 0), 0);
+    const inPos = mine.reduce((a, t) => a + t._mw * Number(t.in_position_exp), 0);
+    const outPos = mine.reduce((a, t) => a + t._mw * Number(t.out_of_position_exp ?? 0), 0);
     out.get(p.person_id).positioning = inPos + outPos > 0 ? (100 * inPos) / (inPos + outPos) : null;
   }
   // Arqueros del club en el rango: con uno solo, sus índices de arquero dan 100 (no hay con quién compararlo).
   const keepers = new Set(rows.filter((t) => t.position === 'goalkeeper').map((t) => t.person_id));
   for (const p of people) out.get(p.person_id).onlyKeeper = keepers.size === 1 && keepers.has(p.person_id);
-  // Impacto: % de victorias con él menos sin él.
+  // Impacto: % de victorias con él menos sin él (amistoso = ½). v2.17: se corrige por el
+  // menor entre partidos con él y sin él (impactN), y con menos de 5 sin él queda en 100.
+  const winPct = (list) => {
+    const n = list.reduce((a, m) => a + (mwOf.get(m.id) ?? 1), 0);
+    return { n, pct: n ? (100 * list.reduce((a, m) => a + (m.outcome === 'win' ? mwOf.get(m.id) ?? 1 : 0), 0)) / n : null };
+  };
   for (const p of people) {
-    const w = teamResults(roster.filter((m) => m.people.has(p.person_id)));
-    const wo = teamResults(roster.filter((m) => !m.people.has(p.person_id)));
-    out.get(p.person_id).impact = w.n && wo.n ? 100 + (w.winPct - wo.winPct) : null;
+    const o = out.get(p.person_id);
+    const w = winPct(roster.filter((m) => m.people.has(p.person_id)));
+    const wo = winPct(roster.filter((m) => !m.people.has(p.person_id)));
+    o.impactWithout = wo.n;
+    o.impactN = Math.min(w.n, wo.n);
+    if (w.n && wo.n >= BEST_IMPACT_MIN_WITHOUT) o.impact = 100 + (w.pct - wo.pct);
+    else if (w.n) { o.impact = 100; o.impactNeutral = true; }
+    else o.impact = null;
   }
-  // MVP frente al promedio de los que entran.
-  const mvpMean = avg(people.map((p) => Number(p.mom_pct ?? 0)));
-  for (const p of people) out.get(p.person_id).mvp = mvpMean ? (100 * Number(p.mom_pct ?? 0)) / mvpMean : null;
+  // MVP frente al promedio de los que entran (amistoso = ½).
+  const mvpPct = (p) => {
+    const mine = byPerson.get(p.person_id) ?? [];
+    const n = mine.reduce((a, t) => a + t._mw, 0);
+    return n ? (100 * mine.reduce((a, t) => a + (t.is_mom ? t._mw : 0), 0)) / n : null;
+  };
+  const mvps = new Map(people.map((p) => [p.person_id, mvpPct(p)]));
+  const mvpMean = avg([...mvps.values()].filter((v) => v != null));
+  for (const p of people) { const v = mvps.get(p.person_id); out.get(p.person_id).mvp = mvpMean && v != null ? (100 * v) / mvpMean : null; }
   // Juego limpio: puntos de sanción por 90 (roja 3, amarilla* 1, penal* 1, falta* 0,25) frente al promedio.
   const sanction = (p) => {
     const mine = byPerson.get(p.person_id) ?? [];
-    const sec = mine.reduce((a, t) => a + Number(t.seconds_played ?? 0), 0);
+    const sec = mine.reduce((a, t) => a + t._mw * Number(t.seconds_played ?? 0), 0);
     if (!sec) return null;
-    const pts = mine.reduce((a, t) => a + 3 * Number(t.red_cards ?? 0) + Number(t.yellow_cards_exp ?? 0) + Number(t.penalties_conceded_exp ?? 0) + 0.25 * Number(t.fouls_exp ?? 0), 0);
+    const pts = mine.reduce((a, t) => a + t._mw * (3 * Number(t.red_cards ?? 0) + Number(t.yellow_cards_exp ?? 0) + Number(t.penalties_conceded_exp ?? 0) + 0.25 * Number(t.fouls_exp ?? 0)), 0);
     return (pts * 5400) / sec;
   };
   const sanctions = new Map(people.map((p) => [p.person_id, sanction(p)]));
@@ -2892,8 +2920,17 @@ function bestIndices(people, timeline) {
     out.get(p.person_id).fairplay = s == null || sMean == null ? null : (100 * (sMean + eps)) / (s + eps);
   }
   // Regularidad: variación media del grupo / la suya (menos variación = más de 100).
-  const stdMean = avg(people.map((p) => p.rating_stddev).filter((v) => v != null).map(Number));
-  for (const p of people) out.get(p.person_id).regularity = p.rating_stddev != null && Number(p.rating_stddev) > 0 && stdMean ? (100 * stdMean) / Number(p.rating_stddev) : null;
+  // v2.17: desviación ponderada (amistoso = ½) de sus calificaciones, calculada aquí.
+  const wStd = (p) => {
+    const mine = (byPerson.get(p.person_id) ?? []).filter((t) => t.rating != null);
+    const n = mine.reduce((a, t) => a + t._mw, 0);
+    if (mine.length < 2 || !n) return null;
+    const m = mine.reduce((a, t) => a + t._mw * Number(t.rating), 0) / n;
+    return Math.sqrt(mine.reduce((a, t) => a + t._mw * (Number(t.rating) - m) ** 2, 0) / n);
+  };
+  const stds = new Map(people.map((p) => [p.person_id, wStd(p)]));
+  const stdMean = avg([...stds.values()].filter((v) => v != null));
+  for (const p of people) { const s = stds.get(p.person_id); out.get(p.person_id).regularity = s != null && s > 0 && stdMean ? (100 * stdMean) / s : null; }
   return out;
 }
 
@@ -2912,7 +2949,9 @@ function computeBest() {
       // Peso de la persona: ataque y defensa según su arquetipo (v2.16); el resto, fijo.
       const weight = raw.weights?.[c.key] ?? c.weight;
       if (v == null || !Number.isFinite(v)) return { c, weight, idx: null, adj: null, sub: raw.sub[c.key] };
-      const adj = c.absolute ? v : 100 + (v - 100) * (p.matches / (p.matches + BEST_SHRINK_K));
+      // v2.17: partidos efectivos (amistoso = ½); Impacto, por el menor entre con y sin él.
+      const n = c.key === 'impact' ? raw.impactN ?? 0 : raw.effMatches ?? p.matches;
+      const adj = c.absolute ? v : 100 + (v - 100) * (n / (n + BEST_SHRINK_K));
       return { c, weight, idx: v, adj, sub: raw.sub[c.key] };
     });
     return { p, raw, parts };
@@ -2935,7 +2974,7 @@ function computeBest() {
     const used = parts.filter((x) => x.score != null);
     const wsum = used.reduce((a, x) => a + x.weight, 0);
     for (const x of parts) x.points = x.score == null || !wsum ? null : (x.score * x.weight) / wsum;
-    return { p, parts, families: raw.families, neutral: BEST_CRITERIA.filter((c) => raw.neutral?.includes(c.key)).map((c) => c.label), difficulty: raw.difficulty, level: raw.level, ovr: raw.ovr, meanOvr: raw.meanOvr, exactLevels: raw.exactLevels, levelRows: raw.levelRows, keeperShare: raw.keeperShare, onlyKeeper: raw.onlyKeeper, total: wsum ? used.reduce((a, x) => a + x.points, 0) : null, missing: parts.filter((x) => x.score == null).map((x) => x.c.label) };
+    return { p, parts, impactNeutral: raw.impactNeutral, impactWithout: raw.impactWithout, families: raw.families, neutral: BEST_CRITERIA.filter((c) => raw.neutral?.includes(c.key)).map((c) => c.label), difficulty: raw.difficulty, level: raw.level, ovr: raw.ovr, meanOvr: raw.meanOvr, exactLevels: raw.exactLevels, levelRows: raw.levelRows, keeperShare: raw.keeperShare, onlyKeeper: raw.onlyKeeper, total: wsum ? used.reduce((a, x) => a + x.points, 0) : null, missing: parts.filter((x) => x.score == null).map((x) => x.c.label) };
   }).sort((a, b) => (b.total ?? -1) - (a.total ?? -1));
   return { rows, others, min, clubMatches };
 }
@@ -2972,6 +3011,7 @@ async function renderBest() {
         ? 'Media del Pro de cada partido: exacta en todos (la del arquetipo con que jugó).'
         : `Media del Pro exacta del partido en ${r.exactLevels} de ${r.levelRows}; en el resto, aproximada con la foto del día (puede ser la de otro arquetipo).`) : null,
       r.keeperShare > 0 ? el('p', { class: 'muted small' }, `Jugó de arquero el ${fmtNum(100 * r.keeperShare, 0)} % de sus minutos: esos minutos se miden con la defensa de arquero y no cuentan en el ataque.${r.onlyKeeper ? ' Es el único arquero del club en estos partidos: sin nadie con quién compararlo, esos minutos no cuentan en la defensa.' : ''}`) : null,
+      r.impactNeutral ? el('p', { class: 'muted small' }, `Impacto en el equipo queda en 100 (ni premia ni castiga): el club jugó ${fmtNum(r.impactWithout ?? 0, Number.isInteger(r.impactWithout ?? 0) ? 0 : 1)} partidos sin él y hacen falta al menos ${BEST_IMPACT_MIN_WITHOUT} para comparar.`) : null,
       r.neutral?.length ? el('p', { class: 'muted small' }, `Nadie más jugó sus posiciones en estos partidos, así que no hay con quién compararlo en: ${r.neutral.join(', ')}. Quedan en 100 (el promedio): ni premian ni castigan.`) : null,
       r.families && Object.values(r.families).some((s) => s > 0) ? el('p', { class: 'muted small' }, `Ataque y defensa según su arquetipo: ${Object.entries(r.families).filter(([, s]) => s > 0).map(([f, s]) => `${ARCH_FAMILY_LABEL[f]} ${fmtNum(100 * s, 0)} %`).join(', ')} de sus minutos de campo (ofensivo 20/10, equilibrado 15/15, defensivo 10/20).`) : null,
       el('div', { class: 'table-wrap' }, el('table', { class: 'data' },

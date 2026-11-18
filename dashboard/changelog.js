@@ -3,6 +3,15 @@
 // La fecha es la de Colombia (UTC−5), no la UTC: de noche ya es "mañana" en UTC.
 export const CHANGELOG = [
   {
+    version: '2.17',
+    date: '2026-11-17',
+    title: 'Mejor jugador: impacto y amistosos',
+    changes: [
+      'Impacto en el equipo se corrige según los partidos sin el jugador, que es lo que lo vuelve poco confiable. Con menos de 5 partidos sin él, queda en el promedio: ni premia ni castiga.',
+      'En el mejor jugador, cada amistoso vale la mitad que un partido de liga o de play-off. Los datos y las demás pestañas no cambian.',
+    ],
+  },
+  {
     version: '2.16',
     date: '2026-11-17',
     title: 'Mejor jugador: más justo con el rol y los pesos',

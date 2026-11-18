@@ -131,7 +131,7 @@ const BEST_FIELDS = [
   'dribbles_exp', 'interceptions_exp', 'possession_won_exp', 'possession_lost_exp', 'aerial_duels_won_exp', 'fouls_exp',
   'yellow_cards_exp', 'second_assists_exp', 'shots_on_target_exp', 'shots_off_target_exp', 'through_passes_exp',
   'forward_passes_ok_exp', 'forward_passes_failed_exp', 'best_option_exp', 'should_have_passed_exp', 'penalties_conceded_exp',
-  'in_position_exp', 'out_of_position_exp', 'fouls_won_exp',
+  'in_position_exp', 'out_of_position_exp', 'fouls_won_exp', 'match_type', 'is_mom',
 ];
 
 /** Temporadas del club (migración 020), de la más reciente a la más vieja. */
