@@ -1279,18 +1279,68 @@ const SPLIT_HELP = {
   team_size: 'Cuántos jugadores del club estaban en cancha en ese partido.',
   division: 'División del club el día del partido, según la foto diaria del club (aproximada; los partidos anteriores a la primera foto salen como "Sin dato"). Mira los PJ de cada celda: pocos partidos en una división no son comparables con muchos en otra.',
 };
+// Datos de Comparar. Los 4 "General" los calcula la base (person_split_stats); el resto
+// (v2.23, elegidos por el usuario) se calculan en el navegador con la línea de tiempo y
+// los mismos grupos (splitBucket). p90: suma × 5400 / segundos; ratio: num / den en %.
+const n0 = (k) => (t) => Number(t[k] ?? 0);
 const METRIC = {
-  avg_rating: { label: 'Calificación', digits: 2 },
-  ga_per90: { label: 'G+A / 90', digits: 2 },
-  win_pct: { label: '% Victorias', digits: 1 },
-  mom_pct: { label: '% MVP', digits: 1 },
+  avg_rating: { label: 'Calificación', digits: 2, theme: 'General' },
+  ga_per90: { label: 'G+A / 90', digits: 2, theme: 'General' },
+  win_pct: { label: '% Victorias', digits: 1, theme: 'General' },
+  mom_pct: { label: '% MVP', digits: 1, theme: 'General' },
+  goals_p90: { label: 'Goles / 90', digits: 2, theme: 'Ataque', p90: n0('goals') },
+  assists_p90: { label: 'Asistencias / 90', digits: 2, theme: 'Ataque', p90: n0('assists') },
+  shots_p90: { label: 'Tiros / 90', digits: 2, theme: 'Ataque', p90: n0('shots') },
+  conversion_pct: { label: 'Conversión %', digits: 1, theme: 'Ataque', num: n0('goals'), den: n0('shots') },
+  dribbles_p90: { label: 'Regates / 90*', digits: 2, theme: 'Ataque', p90: n0('dribbles_exp'), exp: 'dribbles_exp' },
+  pass_pct: { label: 'Precisión de pase %', digits: 1, theme: 'Pase', num: n0('passes_made'), den: n0('pass_attempts') },
+  passes_p90: { label: 'Pases / 90', digits: 1, theme: 'Pase', p90: n0('passes_made') },
+  through_p90: { label: 'Filtrados / 90*', digits: 2, theme: 'Pase', p90: n0('through_passes_exp'), exp: 'through_passes_exp' },
+  lost_p90: { label: 'Pérdidas / 90* (menos es mejor)', digits: 2, theme: 'Pase', p90: n0('possession_lost_exp'), exp: 'possession_lost_exp', low: true },
+  tackles_p90: { label: 'Entradas / 90', digits: 2, theme: 'Defensa', p90: n0('tackles_made') },
+  tackle_pct: { label: '% de entradas', digits: 1, theme: 'Defensa', num: n0('tackles_made'), den: n0('tackle_attempts') },
+  interceptions_p90: { label: 'Intercepciones / 90*', digits: 2, theme: 'Defensa', p90: n0('interceptions_exp'), exp: 'interceptions_exp' },
+  recoveries_p90: { label: 'Recuperaciones / 90*', digits: 2, theme: 'Defensa', p90: n0('possession_won_exp'), exp: 'possession_won_exp' },
 };
+
+/** Grupo de un partido, igual que person_split_stats en la base (misma etiqueta). */
+function splitBucket(t, split, median) {
+  if (split === 'rival') return t.opponent_skill_rating == null ? 'Sin dato' : Number(t.opponent_skill_rating) >= median ? 'Rival fuerte' : 'Rival débil';
+  if (split === 'type') return t.match_type === 'leagueMatch' ? 'Liga' : t.match_type === 'playoffMatch' ? 'Play-off' : 'Amistoso';
+  if (split === 'team_size') return t.team_size == null ? null : `${t.team_size} jugadores`;
+  if (split === 'division') return t.club_division == null ? 'Sin dato' : `División ${t.club_division}`;
+  return null;
+}
+
+/** Calcula en el navegador un dato de Comparar por persona y grupo: Map("persona|grupo" → valor). */
+function splitExtra(metric, split) {
+  const m = METRIC[metric];
+  const opps = [...new Map(state.timeline.filter((t) => t.opponent_skill_rating != null).map((t) => [t.match_id, Number(t.opponent_skill_rating)])).values()].sort((a, b) => a - b);
+  const median = opps.length ? (opps.length % 2 ? opps[(opps.length - 1) / 2] : (opps[opps.length / 2 - 1] + opps[opps.length / 2]) / 2) : 0;
+  const acc = new Map();
+  for (const t of state.timeline) {
+    if (m.exp && t[m.exp] == null) continue; // dato experimental que falta en ese partido
+    const b = splitBucket(t, split, median);
+    if (b == null) continue;
+    const k = `${t.person_id}|${b}`;
+    const a = acc.get(k) ?? { num: 0, den: 0 };
+    if (m.p90) { a.num += m.p90(t); a.den += Number(t.seconds_played ?? 0); } else { a.num += m.num(t); a.den += m.den(t); }
+    acc.set(k, a);
+  }
+  return new Map([...acc].map(([k, a]) => [k, a.den ? (m.p90 ? (a.num * 5400) / a.den : (100 * a.num) / a.den) : null]));
+}
 
 async function renderCompare(filters, requestId) {
   const rows = filters.types.length ? await api.getSplitStats(state.split, filters) : [];
   if (requestId !== state.requestId) return;
   $('#split-help').textContent = SPLIT_HELP[state.split];
-  const metric = state.splitMetric;
+  const metric = METRIC[state.splitMetric] ? state.splitMetric : 'avg_rating';
+  // Datos calculados en el navegador: se agregan a cada fila de la base como una columna más.
+  if (!(metric in (rows[0] ?? {})) && METRIC[metric].theme !== 'General') {
+    const extra = splitExtra(metric, state.split);
+    for (const r of rows) r[metric] = extra.get(`${r.person_id}|${r.bucket}`) ?? null;
+  }
+  const low = Boolean(METRIC[metric].low);
   const buckets = [...new Map(rows.map((r) => [r.bucket, r.bucket_order])).entries()].sort((a, b) => a[1] - b[1]).map(([b]) => b);
   const people = new Map();
   for (const r of rows) {
@@ -1312,13 +1362,14 @@ async function renderCompare(filters, requestId) {
     buckets.map((b) => el('th', { scope: 'col', title: bucketLabel(b).title }, bucketLabel(b).text))));
   const body = el('tbody', {}, list.length ? list.map(([id, p]) => {
     const values = buckets.map((b) => p.cells[b]?.[metric]).filter((v) => v != null).map(Number);
-    const best = values.length > 1 ? Math.max(...values) : null;
+    const best = values.length > 1 ? (low ? Math.min(...values) : Math.max(...values)) : null;
     return el('tr', { class: 'clickable', ...onActivate(() => openPerson(id)) },
       el('td', {}, playerCell(p.name)),
       buckets.map((b) => {
         const c = p.cells[b];
         if (!c) return el('td', { class: 'muted' }, '—');
         const v = c[metric];
+        if (v == null) return el('td', { class: 'muted', title: 'Sin este dato en esos partidos' }, el('span', { class: 'muted small' }, `${c.matches} PJ · —`));
         return el('td', {}, el('span', { class: `bar-cell ${best != null && Number(v) === best ? 'best' : ''}` },
           el('span', { class: 'muted small' }, `${c.matches} PJ`),
           el('span', { class: 'bar', 'aria-hidden': 'true' }, el('i', { style: `width:${Math.max(0, Math.min(100, (Number(v ?? 0) / max) * 100))}%` })),
@@ -2521,7 +2572,7 @@ function renderSlope(list, buckets, metric, bucketLabel) {
     g.addEventListener('click', () => openPerson(se.id));
     s.append(g);
   }
-  box.replaceChildren(s, el('p', { class: 'muted small' }, 'Una línea por jugador. Si baja de izquierda a derecha, rinde menos en el grupo de la derecha. El punto más grande = más partidos ahí; con pocos partidos la diferencia puede ser casualidad.'));
+  box.replaceChildren(s, el('p', { class: 'muted small' }, `Una línea por jugador. ${METRIC[metric]?.low ? 'En este dato menos es mejor: si sube de izquierda a derecha, rinde peor en el grupo de la derecha.' : 'Si baja de izquierda a derecha, rinde menos en el grupo de la derecha.'} El punto más grande = más partidos ahí; con pocos partidos la diferencia puede ser casualidad.`));
 }
 
 /** 6. Matriz de duplas: % de victorias cuando dos juegan juntos (gris = menos de 3 partidos juntos). */
@@ -3526,7 +3577,15 @@ async function init() {
   if (startH2h) state.h2h = { a: Number(qs.get('a')), b: pickerValue(qs.get('b')) };
   $('#pairs-person').addEventListener('change', (e) => { state.pairsPerson = Number(e.target.value); renderPairs(); });
   bindSegmented('#split-buttons', 'split', (v) => { state.split = v; refresh(); });
-  bindSegmented('#split-metric', 'metric', (v) => { state.splitMetric = v; refresh(); });
+  // Comparar: menú de datos agrupado por tema (v2.23). * = experimental.
+  {
+    const sel = $('#split-metric');
+    const themes = [...new Set(Object.values(METRIC).map((m) => m.theme))];
+    sel.replaceChildren(...themes.map((th) => el('optgroup', { label: th },
+      Object.entries(METRIC).filter(([, m]) => m.theme === th).map(([k, m]) => el('option', { value: k }, m.label)))));
+    sel.value = state.splitMetric;
+    sel.addEventListener('change', () => { state.splitMetric = sel.value; refresh(); });
+  }
   bindSegmented('#position-buttons', 'pos', (v) => { state.position = v; refresh(); });
 
   renderStatus();

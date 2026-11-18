@@ -3,6 +3,15 @@
 // La fecha es la de Colombia (UTC−5), no la UTC: de noche ya es "mañana" en UTC.
 export const CHANGELOG = [
   {
+    version: '2.23',
+    date: '2026-11-18',
+    title: 'Comparar con más datos',
+    changes: [
+      'Comparar: además de calificación, G+A, % de victorias y % MVP, ahora puedes ver datos de ataque (goles, asistencias, tiros, conversión, regates*), pase (precisión, pases, filtrados*, pérdidas*) y defensa (entradas, % de entradas, intercepciones*, recuperaciones*) en cada grupo.',
+      'Los datos se eligen en un menú "Dato", ordenado por tema, que también cabe en el celular.',
+    ],
+  },
+  {
     version: '2.22',
     date: '2026-11-18',
     title: '"Posición" en vez de "rol"',

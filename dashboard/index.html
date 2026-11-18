@@ -228,12 +228,7 @@
             <button type="button" data-split="team_size" aria-pressed="false">Jugadores en cancha</button>
             <button type="button" data-split="division" aria-pressed="false">División</button>
           </div>
-          <div class="segmented" role="group" aria-label="Métrica" id="split-metric">
-            <button type="button" data-metric="avg_rating" aria-pressed="true">Calificación</button>
-            <button type="button" data-metric="ga_per90" aria-pressed="false">G+A / 90</button>
-            <button type="button" data-metric="win_pct" aria-pressed="false">% Victorias</button>
-            <button type="button" data-metric="mom_pct" aria-pressed="false">% MVP</button>
-          </div>
+          <label class="field">Dato <select id="split-metric" aria-label="Dato a comparar"></select></label>
           <p class="muted small" id="split-help"></p>
         </div>
         <div id="compare-chart" data-chart class="viz"></div>
@@ -344,7 +339,7 @@
       <p><strong>Índice:</strong> su calificación en cada posición que jugó frente al promedio del club ahí (solo con 3 o más partidos). <strong>Perfil:</strong> cuánto de su forma de jugar (goles, asistencias, tiros, pases, entradas…) se parece a cada posición, comparado con los demás jugadores; suma 100 %. Es una pista, no una orden.</p>
 
       <h3>Comparar</h3>
-      <p>El mismo jugador en distintas situaciones: rival fuerte o débil, liga o amistoso, cuántos estábamos en cancha y en qué división. Fíjate en los <strong>PJ</strong> de cada celda: 2 partidos no se comparan con 30.</p>
+      <p>El mismo jugador en distintas situaciones: rival fuerte o débil, liga o amistoso, cuántos estábamos en cancha y en qué división. En <strong>Dato</strong> eliges qué comparar: calificación, G+A, % de victorias o MVP, o datos de ataque, pase y defensa (en pérdidas, menos es mejor). Fíjate en los <strong>PJ</strong> de cada celda: 2 partidos no se comparan con 30.</p>
 
       <h3>Duplas</h3>
       <p>Arriba, cómo le va al equipo <strong>con y sin</strong> cada jugador (% de victorias y goles). Abajo eliges un jugador: a un lado, los partidos <strong>con él</strong>, junto a cada compañero; al otro, los partidos <strong>sin él</strong>, y cuánto cambia la calificación de cada compañero con y sin él. Muestra que las cosas van juntas, no que uno cause el rendimiento del otro: también influyen el rival, la posición y la suerte.</p>

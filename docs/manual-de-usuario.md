@@ -149,6 +149,8 @@ Deja de ser beta cuando se cumplan tres condiciones:
 
 ### Comparar
 
+- **Dato:** un menú con los datos por tema: general (calificación, G+A/90, % de victorias, % MVP), ataque, pase y defensa. Todos son por partido, por 90 minutos o en %, para no favorecer a quien jugó más. En pérdidas, menos es mejor.
+
 El mismo jugador en distintas situaciones:
 - rival fuerte o débil;
 - liga o amistoso;
