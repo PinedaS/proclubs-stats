@@ -116,10 +116,10 @@ Deja de ser beta cuando se cumplan tres condiciones:
   | Vallas invictas | 15 % |
 - **Juego limpio:** puntos de sanción por 90 minutos (roja 3, amarilla* 1, penal cometido* 1, falta* 0,25) frente al promedio del equipo. Menos sanciones = más puntos.
 
-- **Contra los demás:** cada uno se compara con los **demás** jugadores de su posición, nunca consigo mismo. Si nadie más jugó esa posición, esos minutos no cuentan (si pasa en todas, el criterio queda en 100); si los demás jugaron pocos partidos ahí, la comparación cuenta menos.
+- **Contra los demás:** cada uno se compara con los **demás** jugadores de su posición que entran al ranking, nunca consigo mismo. Si nadie más jugó esa posición, esos minutos no cuentan (si pasa en todas, el criterio queda en 100); si los demás jugaron pocos partidos ahí, la comparación cuenta menos.
 - **Amistosos:** en esta fórmula, cada amistoso vale la mitad que un partido de liga o de play-off.
 - **Abandonos:** un partido abandonado cuenta según los minutos que duró.
-- **Jugadores en cancha:** los datos por 90 minutos se ajustan según cuántos humanos jugaron, porque con menos humanos cada uno toca más el balón.
+- **Jugadores en cancha:** la calificación y los datos por 90 minutos se ajustan según cuántos humanos jugaron, porque con menos humanos cada uno toca más el balón.
 - **Dificultad en todo:** MVP, juego limpio y regularidad también usan la división, el rival y el nivel; impacto, la división y el rival.
 - **Regularidad:** solo cuentan los partidos por debajo de su media.
 - **MVP y humanos en cancha:** cada MVP vale según los humanos que había (con 3 vale 1,5 veces lo que con 2), porque con menos humanos es más fácil ganarlo.

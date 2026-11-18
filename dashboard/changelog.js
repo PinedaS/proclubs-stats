@@ -3,6 +3,15 @@
 // La fecha es la de Colombia (UTC−5), no la UTC: de noche ya es "mañana" en UTC.
 export const CHANGELOG = [
   {
+    version: '2.21',
+    date: '2026-11-18',
+    title: 'Mejor jugador: calificación según humanos y promedios más justos',
+    changes: [
+      'La calificación de EA sube cuando juegan menos humanos (con 2 es casi un punto más alta que con 3). Ahora se ajusta según cuántos humanos jugaron, igual que los demás datos.',
+      'Cada uno se compara solo con los jugadores que entran al ranking (al menos el 30 % de los partidos del club). Un jugador ocasional ya no cambia el promedio de su posición.',
+    ],
+  },
+  {
     version: '2.20',
     date: '2026-11-18',
     title: 'Mejor jugador: impacto con empates',

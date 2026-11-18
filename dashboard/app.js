@@ -2722,7 +2722,7 @@ function difficultyOf(t, meanSkill) {
  * dificultad de cada partido) dividido por el promedio del club en esa posición;
  * luego se promedian las posiciones por sus minutos. Recortado a ×0,25–×2,5 por dato.
  */
-function roleIndex(rows, all, spec) {
+function roleIndex(rows, all, spec, peers = all) {
   const valid = (t) => (spec.ok ? spec.ok(t) : true) && Number(t.seconds_played ?? 0) > 0;
   // v2.16: el promedio de la posición es el de los DEMÁS (sin él). Sin nadie más en
   // esa posición, sus minutos ahí no cuentan; con pocos partidos de los demás, la
@@ -2731,7 +2731,8 @@ function roleIndex(rows, all, spec) {
   const sizeF = teamSizeFactors(all, spec, valid);
   const num = (t) => spec.num(t) / sizeF(t);
   const base = new Map();
-  for (const t of all) {
+  // v2.21: el promedio de la posición sale solo de los jugadores del ranking (peers).
+  for (const t of peers) {
     if (!valid(t) || !t.position || t.person_id === self) continue;
     const b = base.get(t.position) ?? { num: 0, den: 0, n: 0 };
     const mw = t._mw ?? 1; // v2.17: amistoso = ½
@@ -2804,8 +2805,8 @@ function peerTrust(peerMatches) {
 }
 
 /** Índice compuesto de un criterio: promedio ponderado de sus datos (los que faltan se omiten). */
-function compositeIndex(rows, all, specs) {
-  const parts = specs.map((s) => ({ label: s.label, w: s.w, v: roleIndex(rows, all, s) }));
+function compositeIndex(rows, all, specs, peers = all) {
+  const parts = specs.map((s) => ({ label: s.label, w: s.w, v: roleIndex(rows, all, s, peers) }));
   const ok = parts.filter((x) => x.v != null);
   const ws = ok.reduce((a, x) => a + x.w, 0);
   return { v: ws ? ok.reduce((a, x) => a + x.v * x.w, 0) / ws : null, parts };
@@ -2832,16 +2833,46 @@ function bestIndices(people, timeline) {
     const lvl = t._ovr && meanOvr ? Math.min(1 + LEVEL_CAP, Math.max(1 - LEVEL_CAP, meanOvr / t._ovr)) : 1;
     return { ...t, _diff: diff, _lvl: lvl, _d: diff * lvl, _mw: matchWeight(t) * abandonedWeight(t) };
   });
+  // v2.21 (aprobado por el usuario): la calificación de EA sube con menos humanos en
+  // cancha (8,13 con 2 frente a 7,17 con 3 al 18-nov). Factor por número de humanos =
+  // calificación media del club con ese número ÷ la general, acercado a 1 con
+  // n ÷ (n + 5) partidos y recortado a ×0,8–×1,25. _rat = calificación ÷ factor.
+  {
+    const by = new Map();
+    let s = 0, w = 0;
+    for (const t of rows) {
+      if (t.rating == null) continue;
+      const k = Number(t.team_size) || 0;
+      const b = by.get(k) ?? { s: 0, w: 0, ids: new Set() };
+      b.s += t._mw * Number(t.rating); b.w += t._mw; b.ids.add(t.match_id); by.set(k, b);
+      s += t._mw * Number(t.rating); w += t._mw;
+    }
+    const overall = w ? s / w : 0;
+    const f = new Map([...by].map(([k, b]) => {
+      const raw = overall && b.w ? b.s / b.w / overall : 1;
+      const n = b.ids.size;
+      return [k, Math.min(1.25, Math.max(0.8, 1 + (raw - 1) * (n / (n + BEST_SHRINK_K))))];
+    }));
+    for (const t of rows) {
+      t._sizeF = f.get(Number(t.team_size) || 0) ?? 1;
+      t._rat = t.rating == null ? null : Number(t.rating) / t._sizeF;
+    }
+  }
   const mwOf = new Map(rows.map((t) => [t.match_id, t._mw]));
   const diffOf = new Map(rows.map((t) => [t.match_id, t._diff])); // división × rival del partido
   const byPerson = new Map();
   for (const t of rows) { if (!byPerson.has(t.person_id)) byPerson.set(t.person_id, []); byPerson.get(t.person_id).push(t); }
 
   // Calificación frente al rol, con dificultad: Σ seg × (calif × d / promedio de la posición) / Σ seg.
+  // v2.21 (aprobado por el usuario): los promedios por posición salen solo de los
+  // jugadores que entran al ranking (30 % de los partidos del club), para que un
+  // jugador ocasional no baje ni suba el promedio contra el que se comparan los demás.
+  const eligibleIds = new Set(people.map((p) => p.person_id));
+  const peerRows = rows.filter((t) => eligibleIds.has(t.person_id));
   const posAvg = new Map();
-  for (const t of rows) {
+  for (const t of peerRows) {
     if (t.rating == null || !t.position) continue;
-    const e = posAvg.get(t.position) ?? { s: 0, n: 0 }; e.s += t._mw * Number(t.rating); e.n += t._mw; posAvg.set(t.position, e);
+    const e = posAvg.get(t.position) ?? { s: 0, n: 0 }; e.s += t._mw * t._rat; e.n += t._mw; posAvg.set(t.position, e);
   }
   for (const p of people) {
     const mine = byPerson.get(p.person_id) ?? [];
@@ -2849,7 +2880,7 @@ function bestIndices(people, timeline) {
     const own = new Map();
     for (const t of mine) {
       if (t.rating == null || !t.position) continue;
-      const e = own.get(t.position) ?? { s: 0, n: 0 }; e.s += t._mw * Number(t.rating); e.n += t._mw; own.set(t.position, e);
+      const e = own.get(t.position) ?? { s: 0, n: 0 }; e.s += t._mw * t._rat; e.n += t._mw; own.set(t.position, e);
     }
     let num = 0, den = 0;
     for (const t of mine) {
@@ -2857,7 +2888,7 @@ function bestIndices(people, timeline) {
       if (t.rating == null || !pa || !o) continue;
       const peerN = pa.n - o.n;
       if (peerN <= 1e-9) continue; // nadie más jugó esa posición: no cuenta
-      const r = (Number(t.rating) * t._d) / ((pa.s - o.s) / peerN);
+      const r = (t._rat * t._d) / ((pa.s - o.s) / peerN);
       const w = t._mw * (Number(t.seconds_played ?? 0) || 1);
       num += w * (1 + (r - 1) * peerTrust(peerN)); den += w;
     }
@@ -2877,10 +2908,10 @@ function bestIndices(people, timeline) {
     const secs = (list) => list.reduce((a, t) => a + t._mw * Number(t.seconds_played ?? 0), 0);
     // Partidos efectivos (amistoso = ½) para la corrección por pocos partidos.
     o.effMatches = [...new Map(mine.map((t) => [t.match_id, t._mw])).values()].reduce((a, v) => a + v, 0);
-    const att = field.length ? compositeIndex(field, rows, SUB.attack) : null;
+    const att = field.length ? compositeIndex(field, rows, SUB.attack, peerRows) : null;
     o.attack = att?.v ?? null; o.sub.attack = att?.parts;
-    const defF = field.length ? compositeIndex(field, rows, SUB.defense) : null;
-    const defK = keeper.length ? compositeIndex(keeper, rows, SUB.defenseGk) : null;
+    const defF = field.length ? compositeIndex(field, rows, SUB.defense, peerRows) : null;
+    const defK = keeper.length ? compositeIndex(keeper, rows, SUB.defenseGk, peerRows) : null;
     const parts = [[defF, secs(field)], [defK, secs(keeper)]].filter(([c, s]) => c?.v != null && s > 0);
     const ws = parts.reduce((a, [, s]) => a + s, 0);
     o.defense = ws ? parts.reduce((a, [c, s]) => a + c.v * s, 0) / ws : null;
@@ -2892,7 +2923,7 @@ function bestIndices(people, timeline) {
     const share = (fam) => (fs ? secs(field.filter((t) => archFamily(t.archetype_id) === fam)) / fs : 0);
     o.families = Object.fromEntries(Object.keys(ARCH_SPLIT).map((f) => [f, share(f)]));
     o.weights = fs ? Object.fromEntries(['attack', 'defense'].map((k) => [k, Object.entries(o.families).reduce((a, [f, s]) => a + s * ARCH_SPLIT[f][k], 0)])) : null;
-    const pas = compositeIndex(mine, rows, SUB.passing);
+    const pas = compositeIndex(mine, rows, SUB.passing, peerRows);
     o.passing = pas.v; o.sub.passing = pas.parts;
   }
   // v2.16: si jugó pero nadie más jugó sus posiciones, el criterio frente al rol queda
@@ -2973,10 +3004,10 @@ function bestIndices(people, timeline) {
     const n = mine.reduce((a, t) => a + t._mw, 0);
     if (mine.length < 2 || !n) return null;
     // v2.18: sobre las calificaciones ajustadas por dificultad y nivel (_d).
-    const m = mine.reduce((a, t) => a + t._mw * Number(t.rating) * t._d, 0) / n;
+    const m = mine.reduce((a, t) => a + t._mw * t._rat * t._d, 0) / n;
     // v2.18: solo cuentan los partidos POR DEBAJO de su media (semidesviación): un
     // partido excepcional no le resta regularidad.
-    return Math.sqrt(mine.reduce((a, t) => a + t._mw * Math.min(0, Number(t.rating) * t._d - m) ** 2, 0) / n);
+    return Math.sqrt(mine.reduce((a, t) => a + t._mw * Math.min(0, t._rat * t._d - m) ** 2, 0) / n);
   };
   const stds = new Map(people.map((p) => [p.person_id, wStd(p)]));
   const stdMean = avg([...stds.values()].filter((v) => v != null));
