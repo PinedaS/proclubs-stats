@@ -38,7 +38,7 @@ const state = {
   splitMetric: 'avg_rating',
   position: 'forward',
   roleGroup: 'position',
-  roleMode: 'relative', // 'relative' (índices vs. el rol) | 'real' (valores por posición)
+  roleMode: 'relative', // 'relative' (índices vs. la posición) | 'real' (valores por posición)
   h2h: { a: null, b: null }, // Cara a cara: person_id de cada lado
   trend: new Map(), // person_id -> calificaciones por partido (de más vieja a más nueva)
   personTab: 'resumen', // pestaña abierta en el detalle del jugador
@@ -903,7 +903,7 @@ function sparkline(values) {
 }
 
 // ---------------------------------------------------------------------------
-// Por rol: rendimiento relativo al promedio del club en cada posición/arquetipo
+// Por posición: rendimiento relativo al promedio del club en cada posición/arquetipo
 // ---------------------------------------------------------------------------
 
 /**
@@ -943,22 +943,22 @@ const archetypeTitle = (id) => {
 
 const roleLabel = (group, key) => (group === 'archetype' ? archetypeName(key) : POS_LABEL[key] ?? key);
 
-/** Índice relativo: valor + flecha y color. 100 = promedio del rol. */
+/** Índice relativo: valor + flecha y color. 100 = promedio de la posición. */
 function idxCell(v, extraClass = '') {
   if (v == null) return el('td', { class: `muted ${extraClass}`.trim() }, '—');
   const n = Number(v);
   const dir = n >= 105 ? 'up' : n <= 95 ? 'down' : '';
-  return el('td', { class: extraClass || null, title: `${fmtNum(n, 1)} (100 = promedio del rol)` },
+  return el('td', { class: extraClass || null, title: `${fmtNum(n, 1)} (100 = promedio de la posición)` },
     el('span', { class: `idx ${dir}` }, fmtNum(n, 0), dir ? el('span', { class: 'arrow', 'aria-hidden': 'true' }, dir === 'up' ? '▲' : '▼') : null));
 }
 
 const ROLE_COLUMNS = [
-  { key: 'rating_idx', label: 'Calificación', title: 'Calificación media vs. la media del rol' },
-  { key: 'ga90_idx', label: 'G+A / 90', title: 'Goles + asistencias por 90 min vs. el rol' },
-  { key: 'pass_idx', label: 'Pases %', title: 'Precisión de pase vs. el rol' },
-  { key: 'tackles90_idx', label: 'Entradas / 90', title: 'Entradas ganadas por 90 min vs. el rol (clave para roles defensivos)' },
+  { key: 'rating_idx', label: 'Calificación', title: 'Calificación media vs. la media de la posición' },
+  { key: 'ga90_idx', label: 'G+A / 90', title: 'Goles + asistencias por 90 min vs. la posición' },
+  { key: 'pass_idx', label: 'Pases %', title: 'Precisión de pase vs. la posición' },
+  { key: 'tackles90_idx', label: 'Entradas / 90', title: 'Entradas ganadas por 90 min vs. la posición (clave para posiciones defensivas)' },
   { key: 'save_idx', label: '% Atajadas', title: 'Solo porteros: % de atajadas vs. otros porteros' },
-  { key: 'interceptions90_idx_exp', label: 'Intercep. / 90*', title: 'Experimental: intercepciones por 90 min vs. el rol', exp: true },
+  { key: 'interceptions90_idx_exp', label: 'Intercep. / 90*', title: 'Experimental: intercepciones por 90 min vs. la posición', exp: true },
 ];
 
 async function renderRoles(filters, requestId) {
@@ -978,7 +978,7 @@ async function renderRoles(filters, requestId) {
   }
 
   const head = el('tr', {}, el('th', { scope: 'col', class: 'rank' }, '#'), el('th', { scope: 'col', class: 'left' }, 'Jugador'),
-    el('th', { scope: 'col', class: 'left' }, group === 'archetype' ? 'Arquetipos jugados' : 'Roles jugados'),
+    el('th', { scope: 'col', class: 'left' }, group === 'archetype' ? 'Arquetipos jugados' : 'Posiciones jugadas'),
     el('th', { scope: 'col' }, 'PJ'), el('th', { scope: 'col' }, 'Min.'),
     cols.map((c) => {
       const active = key === c.key;
@@ -1006,7 +1006,7 @@ async function renderRoles(filters, requestId) {
       const parts = (byPerson.get(r.person_id) ?? []).sort((a, b) => b.seconds - a.seconds);
       row.after(el('tr', { class: 'role-detail' }, el('td', { colspan },
         el('table', { class: 'data' },
-          el('thead', {}, el('tr', {}, ['Rol', 'PJ', 'Calif. (él / rol)', 'G+A/90 (él / rol)', 'Pases % (él / rol)', 'Entradas/90 (él / rol)', 'Partidos del rol']
+          el('thead', {}, el('tr', {}, [group === 'archetype' ? 'Arquetipo' : 'Posición', 'PJ', 'Calif. (él / promedio)', 'G+A/90 (él / promedio)', 'Pases % (él / promedio)', 'Entradas/90 (él / promedio)', 'Partidos de referencia']
             .map((h, k) => el('th', { scope: 'col', class: k === 0 ? 'left' : null }, h)))),
           el('tbody', {}, parts.map((d) => el('tr', {},
             el('td', { class: 'left' }, group === 'position' ? posBadge(d.group_key) : roleLabel(group, d.group_key)),
@@ -1015,7 +1015,7 @@ async function renderRoles(filters, requestId) {
             el('td', {}, `${fmtNum(d.ga90, 2)} / ${fmtNum(d.group_ga90, 2)}`),
             el('td', {}, `${fmtNum(d.pass_pct, 1)} / ${fmtNum(d.group_pass_pct, 1)}`),
             el('td', {}, `${fmtNum(d.tackles90, 2)} / ${fmtNum(d.group_tackles90, 2)}`),
-            el('td', { title: 'Registros del club en ese rol: con pocos, el promedio es menos confiable' }, fmtNum(d.group_rows)))))))));
+            el('td', { title: 'Registros del club en esa posición: con pocos, el promedio es menos confiable' }, fmtNum(d.group_rows)))))))));
     };
     Object.entries(onActivate(toggle)).forEach(([k, v]) => (k.startsWith('on') ? row.addEventListener(k.slice(2), v) : row.setAttribute(k, v)));
     body.append(row);
@@ -1027,7 +1027,7 @@ async function renderRoles(filters, requestId) {
 // ---------------------------------------------------------------------------
 // Cara a cara: dos jugadores, dato por dato, con quién es mejor en cada uno.
 // Solo se juzgan tasas (por partido, por 90 min, %), nunca totales: así no gana
-// quien jugó más. Los índices relativos al rol van primero (justos si rotan).
+// quien jugó más. Los índices relativos a la posición van primero (justos si rotan).
 // ---------------------------------------------------------------------------
 
 const per90 = (r, key) => (r[key] == null || !Number(r.minutes_played) ? null : (Number(r[key]) * 90) / Number(r.minutes_played));
@@ -1036,18 +1036,18 @@ const perMatch = (r, key) => (r[key] == null || !r.matches ? null : Number(r[key
 /**
  * better: 'high' (más es mejor), 'low' (menos es mejor) o null (solo contexto).
  * Orden por importancia (decisión del usuario, 2026-11-15): rendimiento primero,
- * luego relativo a su rol, experimentales y contexto.
+ * luego relativo a su posición, experimentales y contexto.
  */
 const H2H_RELATIVE = {
-  title: 'Relativo a su rol (100 = promedio de su posición)',
+  title: 'Relativo a su posición (100 = promedio de esa posición)',
   source: 'relative',
   rows: [
-    { label: 'Calificación vs. su rol', key: 'rating_idx', better: 'high' },
-    { label: 'G+A/90 vs. su rol', key: 'ga90_idx', better: 'high' },
-    { label: 'Pases % vs. su rol', key: 'pass_idx', better: 'high' },
-    { label: 'Entradas/90 vs. su rol', key: 'tackles90_idx', better: 'high' },
+    { label: 'Calificación vs. su posición', key: 'rating_idx', better: 'high' },
+    { label: 'G+A/90 vs. su posición', key: 'ga90_idx', better: 'high' },
+    { label: 'Pases % vs. su posición', key: 'pass_idx', better: 'high' },
+    { label: 'Entradas/90 vs. su posición', key: 'tackles90_idx', better: 'high' },
     { label: '% Atajadas vs. porteros', key: 'save_idx', better: 'high' },
-    { label: 'Intercepciones/90 vs. su rol*', key: 'interceptions90_idx_exp', better: 'high', exp: true },
+    { label: 'Intercepciones/90 vs. su posición*', key: 'interceptions90_idx_exp', better: 'high', exp: true },
   ],
 };
 const H2H_GROUPS = [
@@ -1156,7 +1156,7 @@ function teamAverageRow(people) {
   return deriveRow(row);
 }
 
-/** Índices relativos al rol del "equipo": promedio ponderado por partidos (≈100). */
+/** Índices relativos a la posición del "equipo": promedio ponderado por partidos (≈100). */
 function teamRelative(people) {
   const out = {};
   for (const k of ['rating_idx', 'ga90_idx', 'pass_idx', 'tackles90_idx', 'save_idx', 'interceptions90_idx_exp']) {
@@ -1250,7 +1250,7 @@ function renderH2h() {
   box.replaceChildren(...[
     el('div', { class: 'h2h-heads' }, card(A, relA, 'a'), el('div', { class: 'vs' }, 'vs'), card(B, relB, 'b')),
     scoreboard,
-    differentRoles ? el('p', { class: 'h2h-note' }, `Juegan en posiciones distintas (${POS_LABEL[A.main_position] ?? '—'} y ${POS_LABEL[B.main_position] ?? '—'}): para compararlos de forma justa, fíjate también en "Relativo a su rol".`) : null,
+    differentRoles ? el('p', { class: 'h2h-note' }, `Juegan en posiciones distintas (${POS_LABEL[A.main_position] ?? '—'} y ${POS_LABEL[B.main_position] ?? '—'}): para compararlos de forma justa, fíjate también en "Relativo a su posición".`) : null,
     lowSample ? el('p', { class: 'h2h-note' }, `Alguno tiene menos de ${MIN_FIT_MATCHES} partidos: las diferencias pueden ser casualidad.`) : null,
     ...groups,
   ].filter(Boolean));
@@ -2160,11 +2160,11 @@ async function renderPerson(filters, requestId) {
     tile('Pases', fmtPct(summary?.pass_accuracy_pct)));
   const rel = state.relative.get(state.personId);
   const relTiles = rel ? el('div', { class: 'tiles' },
-    tile('Calificación vs. su rol', fmtNum(rel.rating_idx, 0)),
-    tile('G+A/90 vs. su rol', fmtNum(rel.ga90_idx, 0)),
-    tile('Pases vs. su rol', fmtNum(rel.pass_idx, 0)),
-    tile('Entradas/90 vs. su rol', fmtNum(rel.tackles90_idx, 0)),
-    tile('Roles jugados', el('span', { class: 'badges' }, (rel.roles ?? '').split(', ').filter(Boolean).map(posBadge)))) : null;
+    tile('Calificación vs. su posición', fmtNum(rel.rating_idx, 0)),
+    tile('G+A/90 vs. su posición', fmtNum(rel.ga90_idx, 0)),
+    tile('Pases vs. su posición', fmtNum(rel.pass_idx, 0)),
+    tile('Entradas/90 vs. su posición', fmtNum(rel.tackles90_idx, 0)),
+    tile('Posiciones jugadas', el('span', { class: 'badges' }, (rel.roles ?? '').split(', ').filter(Boolean).map(posBadge)))) : null;
   const advanced = summary ? el('div', { class: 'tiles' },
     tile('G+A por 90 min', fmtNum(summary?.ga_per90, 2)),
     tile('Forma (últ. 5)', fmtNum(summary?.form_rating, 2)),
@@ -2234,12 +2234,12 @@ async function renderPerson(filters, requestId) {
   const sec = (title, content) => (content ? [el('p', { class: 'section-title' }, title), content] : null);
   const panels = {
     resumen: [basics, el('div', { class: 'grid-2' }, chartBox, overallBox)],
-    // Orden por importancia (decisión del usuario): rendimiento, relativo al rol,
+    // Orden por importancia (decisión del usuario): rendimiento, relativo a la posición,
     // evolución y, al final, la posición recomendada (orientativa).
     rendimiento: [
       sec('Su lugar en el equipo', teamPlaceSection(state.personId)),
       sec('Avanzadas', advanced),
-      sec('Relativo a su rol (100 = promedio de su posición)', relTiles),
+      sec('Relativo a su posición (100 = promedio de esa posición)', relTiles),
       el('div', { class: 'grid-2' }, rivalSlot, distSlot),
       weeklyBox,
       sec('Posición recomendada', fit),
@@ -2442,15 +2442,15 @@ function renderRace(rows) {
   box.replaceChildren(s, el('p', { class: 'muted small' }, 'Cada punto es su calificación media hasta ese partido (el eje cuenta sus partidos, no fechas). Al principio la línea salta mucho; con más partidos se estabiliza.'));
 }
 
-/** 4. Por rol: cada índice como un punto por jugador alrededor de la línea 100. */
+/** 4. Por posición: cada índice como un punto por jugador alrededor de la línea 100. */
 function renderRoleDots(rows) {
   const box = $('#roles-chart');
   const cols = ROLE_COLUMNS.filter((c) => state.showExp || !c.exp);
   const people = rows.filter((r) => r.matches >= state.minMatches);
   const vals = people.flatMap((r) => cols.map((c) => r[c.key]).filter((v) => v != null).map(Number));
   if (!vals.length) { box.replaceChildren(el('p', { class: 'muted small chart-empty' }, 'Sin índices para estos filtros.')); return; }
-  // Si todos dan 100, nadie comparte rol con otro (p. ej. cada uno con un arquetipo
-  // distinto): cada uno ES el promedio de su rol y no hay con quién compararlo.
+  // Si todos dan 100, nadie comparte posición con otro (p. ej. cada uno con un arquetipo
+  // distinto): cada uno ES el promedio de su posición y no hay con quién compararlo.
   if (vals.every((v) => Math.abs(v - 100) < 0.5)) {
     box.replaceChildren(el('p', { class: 'muted small' }, state.roleGroup === 'archetype'
       ? 'Todos dan 100 porque nadie comparte arquetipo con otro jugador del club: cada uno es el promedio de su propio arquetipo y no hay con quién compararlo. Usa "Por posición", o espera a que más jugadores usen el mismo arquetipo.'
@@ -2464,10 +2464,10 @@ function renderRoleDots(rows) {
   const W = widthOf(box), L = 120, R = 44, rowH = 34, T = 10, H = T + cols.length * rowH + 26;
   const sxRaw = (v) => L + ((v - (100 - span)) / (2 * span)) * (W - L - R);
   const sx = (v) => sxRaw(Math.max(100 - span, Math.min(100 + span, v)));
-  const s = svg('svg', { viewBox: `0 0 ${W} ${H}`, width: W, height: H, class: 'pchart-svg', role: 'img', 'aria-label': 'Índices relativos al rol de cada jugador alrededor de 100' });
+  const s = svg('svg', { viewBox: `0 0 ${W} ${H}`, width: W, height: H, class: 'pchart-svg', role: 'img', 'aria-label': 'Índices relativos a la posición de cada jugador alrededor de 100' });
   // En pantallas angostas, textos cortos para que no se pisen.
   const narrow = W < 460;
-  s.append(svg('line', { x1: sx(100), x2: sx(100), y1: T - 4, y2: H - 24, class: 'axis-line' }), svgText(sx(100), H - 8, narrow ? '100' : '100 = promedio del rol', { class: 'axis', 'text-anchor': 'middle' }));
+  s.append(svg('line', { x1: sx(100), x2: sx(100), y1: T - 4, y2: H - 24, class: 'axis-line' }), svgText(sx(100), H - 8, narrow ? '100' : '100 = promedio de la posición', { class: 'axis', 'text-anchor': 'middle' }));
   s.append(svgText(L, H - 8, narrow ? `${fmtNum(100 - span)}` : `${fmtNum(100 - span)} peor`, { class: 'axis' }), svgText(W - R, H - 8, narrow ? `${fmtNum(100 + span)}` : `mejor ${fmtNum(100 + span)}`, { class: 'axis', 'text-anchor': 'end' }));
   cols.forEach((c, i) => {
     const y = T + i * rowH + rowH / 2;
@@ -2593,7 +2593,7 @@ function teamPlaceSection(personId) {
 // mismo ranking) y mínimo del 30 % de los partidos del club. No cambia ningún
 // dato de EA: es un cálculo encima.
 //
-//   1. Cada criterio es un índice: 100 = promedio (del rol, cuando aplica).
+//   1. Cada criterio es un índice: 100 = promedio (de la posición, cuando aplica).
 //      Calificación, ataque, defensa y pase se comparan con el promedio del club
 //      en las posiciones que jugó, ponderado por sus minutos en cada una.
 //   2. Dificultad (v2.12): en esos cuatro, cada partido pesa según la división
@@ -2630,8 +2630,8 @@ const LEVEL_CAP = 0.10; // factor de nivel del jugador entre ×0,90 y ×1,10 (v2
 // Encabezados de la tabla de criterios del mejor jugador, con la explicación
 // que se ve al pasar el cursor (title).
 const BEST_COLS = [
-  ['Criterio', 'Qué se mide. Los datos pequeños de abajo son los que forman el criterio, cada uno con su índice (100 = promedio de los demás en su rol). Los marcados con * son experimentales.'],
-  ['Índice', 'Cómo le fue frente al promedio: 100 = igual al promedio de los DEMÁS jugadores en su rol (no se cuenta a sí mismo; si nadie más jugó esa posición, esos minutos no cuentan, y si los demás jugaron pocos partidos ahí, la comparación pesa menos). En MVP, juego limpio y regularidad, al de los jugadores del ranking). 120 = 20 % mejor; 80 = 20 % peor. En Impacto es 100 + (% de victorias con él − % sin él). En Ubicación es su % en posición, tal cual, y no se corrige. En calificación, ataque, defensa y pase ya incluye el ajuste por la dificultad de cada partido y por su nivel.'],
+  ['Criterio', 'Qué se mide. Los datos pequeños de abajo son los que forman el criterio, cada uno con su índice (100 = promedio de los demás en su posición). Los marcados con * son experimentales.'],
+  ['Índice', 'Cómo le fue frente al promedio: 100 = igual al promedio de los DEMÁS jugadores en su posición (la general que da EA: delantero, medio, defensa o arquero; no distingue extremo de delantero centro) (no se cuenta a sí mismo; si nadie más jugó esa posición, esos minutos no cuentan, y si los demás jugaron pocos partidos ahí, la comparación pesa menos). En MVP, juego limpio y regularidad, al de los jugadores del ranking). 120 = 20 % mejor; 80 = 20 % peor. En Impacto es 100 + (% de victorias con él − % sin él). En Ubicación es su % en posición, tal cual, y no se corrige. En calificación, ataque, defensa y pase ya incluye el ajuste por la dificultad de cada partido y por su nivel.'],
   ['Con corrección', `El índice acercado a 100 según cuántos partidos jugó, para que pocos partidos no den un número extremo por suerte: 100 + (índice − 100) × PJ / (PJ + ${BEST_SHRINK_K}), donde un amistoso cuenta como medio partido. En Impacto, PJ es el menor entre partidos con él y sin él. Con muchos partidos casi no cambia.`],
   ['Nota', `El índice corregido pasado a una nota de 0 a 100: 50 + ${BEST_NOTE_PER_SD} × (índice corregido − 100) ÷ dispersión del criterio entre los jugadores del ranking (mínimo ${BEST_MIN_SPREAD}). Así cada criterio mueve el puntaje según su peso y no según lo disperso que sea. 50 = promedio; se recorta a 0 y 100. En Ubicación, la nota es el % tal cual.`],
   ['Peso', 'Cuánto vale este criterio en el puntaje final. Son fijos, salvo ataque y defensa (30 % entre los dos), que se reparten según la familia de su arquetipo: ofensivo 20/10, equilibrado 15/15, defensivo 10/20.'],
@@ -2652,20 +2652,20 @@ function levelOn(playername, playedAt) {
   return Number(best.pro_overall);
 }
 const BEST_CRITERIA = [
-  { key: 'rating', label: 'Calificación frente a su rol', weight: 25, help: 'Su calificación de EA frente al promedio del club en las posiciones que jugó, ajustada por la dificultad de cada partido.' },
-  { key: 'attack', label: 'Ataque frente a su rol', weight: 15, help: 'G+A, conversión, regates*, rival superado*, segundas asistencias*, tiros, tiros a puerta*, conducciones* y faltas recibidas* frente a su rol, ajustados por dificultad.' },
-  { key: 'defense', label: 'Defensa frente a su rol', weight: 15, help: 'Entradas, % de entradas, intercepciones*, recuperaciones*, balones quitados*, duelos aéreos*, % de entradas limpias* y entradas peligrosas* (menos es mejor) frente a su rol, ajustados por dificultad. Sus minutos de arquero se miden con % de atajadas, goles recibidos (menos es mejor), atajadas y vallas invictas.' },
-  { key: 'passing', label: 'Pase frente a su rol', weight: 10, help: 'Precisión, pases completados, filtrados*, pérdidas* (menos es mejor), pase adelante*, pase largo*, primer toque*, decisiones* y pases a fuera de juego* (menos es mejor) frente a su rol, ajustados por dificultad.' },
-  // Ubicación (aprobada por el usuario): su propio % en posición, sin compararlo con el rol
+  { key: 'rating', label: 'Calificación frente a su posición', weight: 25, help: 'Su calificación de EA frente al promedio del club en las posiciones que jugó, ajustada por la dificultad de cada partido.' },
+  { key: 'attack', label: 'Ataque frente a su posición', weight: 15, help: 'G+A, conversión, regates*, rival superado*, segundas asistencias*, tiros, tiros a puerta*, conducciones* y faltas recibidas* frente a su posición, ajustados por dificultad.' },
+  { key: 'defense', label: 'Defensa frente a su posición', weight: 15, help: 'Entradas, % de entradas, intercepciones*, recuperaciones*, balones quitados*, duelos aéreos*, % de entradas limpias* y entradas peligrosas* (menos es mejor) frente a su posición, ajustados por dificultad. Sus minutos de arquero se miden con % de atajadas, goles recibidos (menos es mejor), atajadas y vallas invictas.' },
+  { key: 'passing', label: 'Pase frente a su posición', weight: 10, help: 'Precisión, pases completados, filtrados*, pérdidas* (menos es mejor), pase adelante*, pase largo*, primer toque*, decisiones* y pases a fuera de juego* (menos es mejor) frente a su posición, ajustados por dificultad.' },
+  // Ubicación (aprobada por el usuario): su propio % en posición, sin compararlo con los demás de su posición
   // ni corregirlo por pocos partidos. La nota es el % tal cual.
-  { key: 'positioning', label: 'Ubicación*', weight: 5, absolute: true, help: 'Su % de veces en posición frente a fuera de posición, según los avisos del juego. Se mide por su cuenta, sin compararlo con el rol: la nota es el % tal cual (98 % en posición = nota 98).' },
+  { key: 'positioning', label: 'Ubicación*', weight: 5, absolute: true, help: 'Su % de veces en posición frente a fuera de posición, según los avisos del juego. Se mide por su cuenta, sin compararlo con los demás de su posición: la nota es el % tal cual (98 % en posición = nota 98).' },
   { key: 'impact', label: 'Impacto en el equipo', weight: 10, help: '% de puntos que gana el equipo con él (victoria 3, empate 1, derrota 0) menos el % sin él; cada punto de diferencia suma o resta un punto al índice. Se corrige según el menor entre partidos con él y sin él, y con menos de 5 partidos sin él queda en 100.' },
   { key: 'mvp', label: 'MVP', weight: 10, help: 'Su % de MVP frente al promedio de los jugadores que entran al ranking. Cada MVP vale según la dificultad del partido, su nivel y los humanos en cancha (con 3 humanos vale 1,5 veces lo que con 2, porque con menos humanos es más fácil ganarlo).' },
   { key: 'fairplay', label: 'Juego limpio', weight: 5, help: 'Sanciones por 90 min frente al promedio: roja 3, amarilla* 1, penal cometido* 1, falta* 0,25. Menos sanciones = más puntos.' },
   { key: 'regularity', label: 'Regularidad', weight: 5, help: 'Qué tan estable es su calificación (ajustada por dificultad y nivel): solo cuentan los partidos por debajo de su media, así un partido excepcional no le resta. Menos caídas que el promedio = índice mayor.' },
 ];
 
-// Datos de cada criterio por rol. kind: 'p90' = por 90 min; 'ratio' = num / den.
+// Datos de cada criterio por posición. kind: 'p90' = por 90 min; 'ratio' = num / den.
 // low: menos es mejor. w: peso dentro del criterio (aprobado por el usuario).
 const n = (k) => (t) => Number(t[k] ?? 0);
 const sum = (...ks) => (t) => ks.reduce((a, k) => a + Number(t[k] ?? 0), 0);
@@ -2722,7 +2722,7 @@ function difficultyOf(t, meanSkill) {
 }
 
 /**
- * Índice de un dato frente al rol: para cada posición que jugó, su valor (con la
+ * Índice de un dato frente a la posición: para cada posición que jugó, su valor (con la
  * dificultad de cada partido) dividido por el promedio del club en esa posición;
  * luego se promedian las posiciones por sus minutos. Recortado a ×0,25–×2,5 por dato.
  */
@@ -2867,7 +2867,7 @@ function bestIndices(people, timeline, peerIds = new Set(people.map((p) => p.per
   const byPerson = new Map();
   for (const t of rows) { if (!byPerson.has(t.person_id)) byPerson.set(t.person_id, []); byPerson.get(t.person_id).push(t); }
 
-  // Calificación frente al rol, con dificultad: Σ seg × (calif × d / promedio de la posición) / Σ seg.
+  // Calificación frente a la posición, con dificultad: Σ seg × (calif × d / promedio de la posición) / Σ seg.
   // v2.21 (aprobado por el usuario): los promedios por posición salen solo de los
   // jugadores con al menos el 15 % de los partidos del club y 5 PJ (peerIds), para que
   // un jugador ocasional no baje ni suba el promedio contra el que se comparan los demás.
@@ -2929,7 +2929,7 @@ function bestIndices(people, timeline, peerIds = new Set(people.map((p) => p.per
     const pas = compositeIndex(mine, rows, SUB.passing, peerRows);
     o.passing = pas.v; o.sub.passing = pas.parts;
   }
-  // v2.16: si jugó pero nadie más jugó sus posiciones, el criterio frente al rol queda
+  // v2.16: si jugó pero nadie más jugó sus posiciones, el criterio frente a la posición queda
   // neutro (100): ni premia ni castiga. Sin esto, su peso se repartía entre el resto.
   for (const p of people) {
     const o = out.get(p.person_id);
@@ -2939,7 +2939,7 @@ function bestIndices(people, timeline, peerIds = new Set(people.map((p) => p.per
     o.neutral = Object.keys(can).filter((k) => can[k] && o[k] == null);
     for (const k of o.neutral) o[k] = 100;
   }
-  // Ubicación*: su propio % en posición (en / (en + fuera)), tal cual, sin rol ni dificultad.
+  // Ubicación*: su propio % en posición (en / (en + fuera)), tal cual, sin comparar con la posición ni dificultad.
   for (const p of people) {
     const mine = (byPerson.get(p.person_id) ?? []).filter((t) => t.in_position_exp != null);
     const inPos = mine.reduce((a, t) => a + t._mw * Number(t.in_position_exp), 0);

@@ -208,7 +208,7 @@ Todas reciben los mismos filtros: tipos de partido, fechas, club y excluir aband
 |---|---|
 | `v_player_match_stats` | Un jugador en un partido, con contexto (división, nivel del rival, abandono, experimentales). |
 | `person_stats` | Totales y tasas por persona (Ranking). |
-| `relative_stats`, `relative_stats_detail` | Índices relativos al rol: 100 = promedio de la posición o arquetipo. |
+| `relative_stats`, `relative_stats_detail` | Índices relativos a la posición: 100 = promedio de la posición o arquetipo. |
 | `person_split_stats` | Comparar: rival fuerte/débil, tipo, jugadores en cancha, división. |
 | `position_stats`, `position_fit` | Valores por posición y posición recomendada. |
 | `person_records` | Récords y rachas. |

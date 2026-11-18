@@ -76,7 +76,7 @@ Deja de ser beta cuando se cumplan tres condiciones:
   - **Mapa de calor:** cada dato coloreado según el puesto en el equipo (más intenso = mejor).
   - **Carrera por el mejor:** la calificación media acumulada de cada jugador, partido a partido.
 - Otras secciones también tienen gráficas:
-  - **Por rol:** puntos alrededor del 100.
+  - **Por posición:** puntos alrededor del 100.
   - **Comparar:** una línea por jugador entre los grupos.
   - **Duplas:** matriz de % de victorias por pareja.
   - **Partidos:** nivel del rival contra la diferencia de goles.
@@ -90,17 +90,17 @@ Deja de ser beta cuando se cumplan tres condiciones:
 
   | Criterio | Peso |
   |---|---|
-  | Calificación frente a su rol | 25 % |
-  | Ataque frente a su rol | 15 % |
-  | Defensa frente a su rol | 15 % |
-  | Pase frente a su rol | 10 % |
+  | Calificación frente a su posición | 25 % |
+  | Ataque frente a su posición | 15 % |
+  | Defensa frente a su posición | 15 % |
+  | Pase frente a su posición | 10 % |
   | Impacto en el equipo | 10 % |
   | MVP | 10 % |
   | Juego limpio | 5 % |
   | Regularidad | 5 % |
   | Ubicación* | 5 % |
 
-- **Ubicación\*:** el % de veces en posición, según los avisos del juego. Es el único criterio que no se compara con el rol: la nota es el % tal cual. Ojo: los delanteros suelen tener un % más bajo que los medios y defensas.
+- **Ubicación\*:** el % de veces en posición, según los avisos del juego. Es el único criterio que no se compara con la posición: la nota es el % tal cual. Ojo: los delanteros suelen tener un % más bajo que los medios y defensas.
 
 - **Dificultad:** en calificación, ataque, defensa y pase, cada partido vale más en divisiones altas (+5 % por división sobre la 5ª) y contra rivales de más nivel (entre −15 % y +15 %).
 - **Ataque, defensa y pase combinan varios datos:** G+A, conversión, regates*, tiros, conducciones*, faltas recibidas*; entradas, intercepciones*, recuperaciones*, duelos aéreos*, % de entradas limpias*; precisión, pases filtrados*, pérdidas*, primer toque*, pases a fuera de juego*, entre otros.
@@ -125,16 +125,17 @@ Deja de ser beta cuando se cumplan tres condiciones:
 - **MVP y humanos en cancha:** cada MVP vale según los humanos que había (con 3 vale 1,5 veces lo que con 2), porque con menos humanos es más fácil ganarlo.
 - **Impacto en el equipo:** compara el % de puntos (victoria 3, empate 1, derrota 0) con y sin el jugador. Se corrige según el menor entre partidos con él y sin él. Con menos de 5 partidos sin él, queda en 100.
 - **Pesos reales:** la nota es 50 + 15 × (índice − 100) ÷ la dispersión del criterio entre los jugadores del ranking (mínimo 5). Así cada criterio mueve el puntaje según su peso y no según lo disperso que sea.
-- **Justo para quien rota:** todo se compara con el promedio de su rol. El portero se mide por % de atajadas en vez de por ataque.
+- **Justo para quien rota:** todo se compara con el promedio de su posición. El portero se mide por % de atajadas en vez de por ataque.
 - **Pocos partidos:** con pocos partidos, el resultado se acerca al promedio.
 - **Para entrar:** jugar al menos el 30 % de los partidos del club.
 - **Desglose:** al tocar un jugador se ve cuánto aporta cada criterio. "¿Cómo se calcula?" explica la fórmula.
 - **No cambia ningún dato de EA:** es un cálculo encima.
 
-### Por rol
+### Por posición
 
 - Compara a cada jugador con el **promedio del club en su misma posición** (o arquetipo).
-- **100 = promedio del rol**; 120 = 20 % mejor. Así un defensa no queda abajo por marcar pocos goles.
+- **Posición** es la general que da EA: delantero, medio, defensa o arquero. EA no distingue, por ejemplo, un extremo de un delantero centro.
+- **100 = promedio de la posición**; 120 = 20 % mejor. Así un defensa no queda abajo por marcar pocos goles.
 - Si alguien jugó varias posiciones, cada una cuenta según sus minutos.
 - "Valores reales por posición" muestra los números sin comparar.
 
@@ -143,7 +144,7 @@ Deja de ser beta cuando se cumplan tres condiciones:
 - Dos jugadores, o un jugador contra el **promedio del equipo**, dato por dato, con barras enfrentadas. La barra fuerte es la de quien gana ese dato.
 - Arriba, un marcador cuenta cuántos datos gana cada uno.
 - Solo se comparan tasas (por partido, por 90 min, %), nunca totales.
-- Primero va el rendimiento y después los índices relativos al rol.
+- Primero va el rendimiento y después los índices relativos a la posición.
 - El enlace de la página sirve para compartir la comparación.
 
 ### Comparar
@@ -175,7 +176,7 @@ Fíjate en los partidos (PJ) de cada celda: 2 partidos no se comparan con 30.
 
 Se abre al tocar un jugador. Tiene cuatro pestañas:
 - **Resumen.**
-- **Rendimiento:** datos avanzados, relativo a su rol, calificación contra el nivel del rival, regularidad, evolución semanal y posición recomendada.
+- **Rendimiento:** datos avanzados, relativo a su posición, calificación contra el nivel del rival, regularidad, evolución semanal y posición recomendada.
 - **Contexto:** media del Pro al entrar y actual, división en que entró, rendimiento por división, dónde juega, calendario, récords y rachas.
 - **Partidos.**
 

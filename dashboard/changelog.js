@@ -3,6 +3,14 @@
 // La fecha es la de Colombia (UTC−5), no la UTC: de noche ya es "mañana" en UTC.
 export const CHANGELOG = [
   {
+    version: '2.22',
+    date: '2026-11-18',
+    title: '"Posición" en vez de "rol"',
+    changes: [
+      'La pestaña "Por rol" pasa a llamarse "Por posición", y los criterios dicen "frente a su posición": se compara con la posición general que da EA (delantero, medio, defensa o arquero), que no distingue, por ejemplo, un extremo de un delantero centro. Ningún número cambia.',
+    ],
+  },
+  {
     version: '2.21',
     date: '2026-11-18',
     title: 'Mejor jugador: calificación según humanos y promedios más justos',
