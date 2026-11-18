@@ -792,7 +792,9 @@ dialog.guide::backdrop { background: rgb(0 0 0 / .55); }
 .viz { padding: 0 18px 16px; position: relative; }
 .viz .pchart-svg { max-width: 100%; }
 .sc-axes { display: flex; flex-wrap: wrap; gap: 12px; margin-top: 8px; }
-.sc-axes select { font: inherit; text-transform: none; letter-spacing: normal; font-weight: 500; color: var(--ink); background: var(--bg); border: 1px solid var(--border); border-radius: 10px; padding: 6px 8px; max-width: 280px; }
+/* min-width: 0 deja que el campo se achique en pantallas angostas (si no, toma el ancho del texto más largo y se sale). */
+.sc-axes .field { min-width: 0; max-width: min(280px, 100%); }
+.sc-axes select { font: inherit; text-transform: none; letter-spacing: normal; font-weight: 500; color: var(--ink); background: var(--bg); border: 1px solid var(--border); border-radius: 10px; padding: 6px 8px; width: 100%; max-width: 100%; min-width: 0; text-overflow: ellipsis; }
 .sc-ylabel { margin: 0 0 4px; }
 .median-line { stroke: var(--ink-3); stroke-width: 1; stroke-dasharray: 4 4; }
 .axis-line { stroke: var(--ink-3); stroke-width: 1.5; }
