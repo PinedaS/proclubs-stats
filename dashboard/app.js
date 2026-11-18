@@ -2655,7 +2655,7 @@ const BEST_CRITERIA = [
   // Ubicación (aprobada por el usuario): su propio % en posición, sin compararlo con el rol
   // ni corregirlo por pocos partidos. La nota es el % tal cual.
   { key: 'positioning', label: 'Ubicación*', weight: 5, absolute: true, help: 'Su % de veces en posición frente a fuera de posición, según los avisos del juego. Se mide por su cuenta, sin compararlo con el rol: la nota es el % tal cual (98 % en posición = nota 98).' },
-  { key: 'impact', label: 'Impacto en el equipo', weight: 10, help: '% de victorias del equipo con él menos % sin él (cada punto de diferencia suma o resta un punto al índice). Se corrige según el menor entre partidos con él y sin él, y con menos de 5 partidos sin él queda en 100.' },
+  { key: 'impact', label: 'Impacto en el equipo', weight: 10, help: '% de puntos que gana el equipo con él (victoria 3, empate 1, derrota 0) menos el % sin él; cada punto de diferencia suma o resta un punto al índice. Se corrige según el menor entre partidos con él y sin él, y con menos de 5 partidos sin él queda en 100.' },
   { key: 'mvp', label: 'MVP', weight: 10, help: 'Su % de MVP frente al promedio de los jugadores que entran al ranking. Cada MVP vale según la dificultad del partido, su nivel y los humanos en cancha (con 3 humanos vale 1,5 veces lo que con 2, porque con menos humanos es más fácil ganarlo).' },
   { key: 'fairplay', label: 'Juego limpio', weight: 5, help: 'Sanciones por 90 min frente al promedio: roja 3, amarilla* 1, penal cometido* 1, falta* 0,25. Menos sanciones = más puntos.' },
   { key: 'regularity', label: 'Regularidad', weight: 5, help: 'Qué tan estable es su calificación (ajustada por dificultad y nivel): solo cuentan los partidos por debajo de su media, así un partido excepcional no le resta. Menos caídas que el promedio = índice mayor.' },
@@ -2919,9 +2919,11 @@ function bestIndices(people, timeline) {
   // menor entre partidos con él y sin él (impactN), y con menos de 5 sin él queda en 100.
   // v2.18: cada victoria vale según la división y el rival del partido (no el nivel del
   // jugador: es un resultado del equipo).
+  // v2.20: % de puntos posibles (victoria 3, empate 1, derrota 0), no solo victorias.
+  const POINTS = { win: 3, draw: 1, loss: 0 };
   const winPct = (list) => {
     const n = list.reduce((a, m) => a + (mwOf.get(m.id) ?? 1), 0);
-    return { n, pct: n ? (100 * list.reduce((a, m) => a + (m.outcome === 'win' ? (mwOf.get(m.id) ?? 1) * (diffOf.get(m.id) ?? 1) : 0), 0)) / n : null };
+    return { n, pct: n ? (100 * list.reduce((a, m) => a + (POINTS[m.outcome] ?? 0) * (mwOf.get(m.id) ?? 1) * (diffOf.get(m.id) ?? 1), 0)) / (3 * n) : null };
   };
   for (const p of people) {
     const o = out.get(p.person_id);

@@ -123,7 +123,7 @@ Deja de ser beta cuando se cumplan tres condiciones:
 - **Dificultad en todo:** MVP, juego limpio y regularidad también usan la división, el rival y el nivel; impacto, la división y el rival.
 - **Regularidad:** solo cuentan los partidos por debajo de su media.
 - **MVP y humanos en cancha:** cada MVP vale según los humanos que había (con 3 vale 1,5 veces lo que con 2), porque con menos humanos es más fácil ganarlo.
-- **Impacto en el equipo:** se corrige según el menor entre partidos con él y sin él. Con menos de 5 partidos sin él, queda en 100.
+- **Impacto en el equipo:** compara el % de puntos (victoria 3, empate 1, derrota 0) con y sin el jugador. Se corrige según el menor entre partidos con él y sin él. Con menos de 5 partidos sin él, queda en 100.
 - **Pesos reales:** la nota es 50 + 15 × (índice − 100) ÷ la dispersión del criterio entre los jugadores del ranking (mínimo 5). Así cada criterio mueve el puntaje según su peso y no según lo disperso que sea.
 - **Justo para quien rota:** todo se compara con el promedio de su rol. El portero se mide por % de atajadas en vez de por ataque.
 - **Pocos partidos:** con pocos partidos, el resultado se acerca al promedio.

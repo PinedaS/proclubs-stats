@@ -3,6 +3,14 @@
 // La fecha es la de Colombia (UTC−5), no la UTC: de noche ya es "mañana" en UTC.
 export const CHANGELOG = [
   {
+    version: '2.20',
+    date: '2026-11-18',
+    title: 'Mejor jugador: impacto con empates',
+    changes: [
+      'Impacto en el equipo compara puntos (victoria 3, empate 1, derrota 0) con y sin cada jugador, en vez de solo victorias: un empate ya no cuenta como una derrota.',
+    ],
+  },
+  {
     version: '2.19',
     date: '2026-11-18',
     title: 'Mejor jugador: MVP según humanos en cancha',
