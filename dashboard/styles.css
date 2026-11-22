@@ -36,11 +36,14 @@
      Validadas con dataviz/validate_palette.js contra --surface en los dos modos. */
   --pa: #3987e5;
   --pb: #d95926;
-  /* Un color fijo por jugador en las gráficas (orden fijo, nunca por puesto).
-     Validada con validate_palette.js (oscuro: pasa todo; claro: aviso de contraste,
-     por eso cada marca lleva el nombre del jugador al lado). */
-  --s1: #3987e5; --s2: #d95926; --s3: #199e70; --s4: #c98500;
-  --s5: #d55181; --s6: #008300; --s7: #9085e9; --s8: #e66767;
+  /* v2.38 (pedido del usuario: nunca dos colores parecidos en una gráfica). Un color fijo
+     por jugador del club: azul, naranja, verde, rosa y aguamarina. Validada con
+     validate_palette.js en TODOS los pares (no solo vecinos), porque las líneas se cruzan:
+     oscuro, peor par a simple vista ΔE 18,6 (piso 15) y daltonismo ΔE 8,0 (meta 8); claro,
+     19,2 y 9,8. Más de 5 colores no pasan esos pisos, así que del 6.º en adelante va gris.
+     Excepción aceptada: el aguamarina oscuro queda más claro que la banda (L 0,80): uno
+     más oscuro se confundía con el verde. Cada marca lleva además el nombre al lado. */
+  --s1: #3987e5; --s2: #bb3f00; --s3: #51aa3c; --s4: #d462b2; --s5: #5fd3c8;
   color-scheme: dark;
 }
 @media (prefers-color-scheme: light) {
@@ -74,8 +77,7 @@
     --shadow: 0 8px 24px rgb(18 21 27 / .08);
     --pa: #2a78d6;
     --pb: #eb6834;
-    --s1: #2a78d6; --s2: #eb6834; --s3: #1baf7a; --s4: #eda100;
-    --s5: #e87ba4; --s6: #008300; --s7: #6250d6; --s8: #e34948;
+    --s1: #2a78d6; --s2: #e16c10; --s3: #23690d; --s4: #971c65; --s5: #29a895;
     color-scheme: light;
   }
 }

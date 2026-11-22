@@ -3,6 +3,15 @@
 // La fecha es la de Colombia (UTC−5), no la UTC: de noche ya es "mañana" en UTC.
 export const CHANGELOG = [
   {
+    version: '2.38',
+    date: '2026-11-22',
+    title: 'Colores bien distintos en las gráficas',
+    changes: [
+      'Cada jugador tiene un color propio en todas las gráficas: azul, naranja, verde, rosa y aguamarina, elegidos para que ningún par se parezca, tampoco para quien no distingue bien los colores. Antes un club podía quedar con dos verdes.',
+      'Los colores se asignan dentro de cada club y no cambian con los filtros. Desde el 6.º jugador en una misma gráfica se usa gris, siempre con el nombre al lado.',
+    ],
+  },
+  {
     version: '2.37',
     date: '2026-11-22',
     title: 'Filtros de datos también para lo agregado',

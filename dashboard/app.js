@@ -3264,11 +3264,25 @@ async function renderPerson(filters, requestId) {
 // lado de la marca, porque en modo claro algunos colores tienen poco contraste.
 // ---------------------------------------------------------------------------
 
-const colorSlots = new Map(); // person_id -> 1..8 (se asigna una vez por sesión)
+// v2.38: los colores se asignan POR CLUB y en un orden que no depende de los filtros
+// (más partidos según EA primero, luego por id). Antes se asignaban en orden de aparición
+// en toda la sesión, mezclando los dos clubes, y un club podía quedar con dos verdes.
+const SERIES_SLOTS = 5; // ver --s1..--s5 en styles.css: más de 5 colores no se distinguen bien
+const colorSlots = new Map(); // person_id -> 1..n, del club actual
+let colorClub = null, colorMembers = null;
 function personColor(id) {
+  // Se rehace al cambiar de club o cuando llegan los miembros (una vez por club).
+  if (colorClub !== state.clubId || colorMembers !== state.members) {
+    colorSlots.clear();
+    colorClub = state.clubId;
+    colorMembers = state.members;
+    const games = new Map();
+    for (const m of state.members ?? []) if (m.person_id != null) games.set(m.person_id, (games.get(m.person_id) ?? 0) + Number(m.games_played ?? 0));
+    [...games].sort((a, b) => b[1] - a[1] || a[0] - b[0]).forEach(([pid]) => colorSlots.set(pid, colorSlots.size + 1));
+  }
   if (!colorSlots.has(id)) colorSlots.set(id, colorSlots.size + 1);
   const n = colorSlots.get(id);
-  return n <= 8 ? `var(--s${n})` : 'var(--ink-3)';
+  return n <= SERIES_SLOTS ? `var(--s${n})` : 'var(--ink-3)';
 }
 /** Ancho real del contenedor para dibujar a escala (texto legible en el celular). */
 const widthOf = (box, min = 280) => Math.max(min, Math.floor(box.clientWidth || 600));
