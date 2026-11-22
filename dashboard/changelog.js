@@ -3,6 +3,14 @@
 // La fecha es la de Colombia (UTC−5), no la UTC: de noche ya es "mañana" en UTC.
 export const CHANGELOG = [
   {
+    version: '2.25',
+    date: '2026-11-22',
+    title: 'Mejor jugador: impacto según humanos en cancha',
+    changes: [
+      'Impacto en el equipo compara con y sin cada jugador solo entre partidos con el mismo número de humanos. Cuando alguien falta hay menos humanos en cancha, y eso cambia los resultados: antes, parte del impacto era efecto de eso y no del jugador.',
+    ],
+  },
+  {
     version: '2.24',
     date: '2026-11-18',
     title: 'Pestaña "Compañeros"',

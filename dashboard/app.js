@@ -2710,7 +2710,7 @@ const BEST_CRITERIA = [
   // Ubicación (aprobada por el usuario): su propio % en posición, sin compararlo con los demás de su posición
   // ni corregirlo por pocos partidos. La nota es el % tal cual.
   { key: 'positioning', label: 'Ubicación*', weight: 5, absolute: true, help: 'Su % de veces en posición frente a fuera de posición, según los avisos del juego. Se mide por su cuenta, sin compararlo con los demás de su posición: la nota es el % tal cual (98 % en posición = nota 98).' },
-  { key: 'impact', label: 'Impacto en el equipo', weight: 10, help: '% de puntos que gana el equipo con él (victoria 3, empate 1, derrota 0) menos el % sin él; cada punto de diferencia suma o resta un punto al índice. Se corrige según el menor entre partidos con él y sin él, y con menos de 5 partidos sin él queda en 100.' },
+  { key: 'impact', label: 'Impacto en el equipo', weight: 10, help: '% de puntos que gana el equipo con él (victoria 3, empate 1, derrota 0) menos el % sin él, comparando solo partidos con el mismo número de humanos (cuando alguien falta hay menos humanos, y eso cambia los resultados); cada punto de diferencia suma o resta un punto al índice. Se corrige según el menor entre partidos con él y sin él, y con menos de 5 partidos sin él queda en 100.' },
   { key: 'mvp', label: 'MVP', weight: 10, help: 'Su % de MVP frente al promedio de los jugadores que entran al ranking. Cada MVP vale según la dificultad del partido, su nivel y los humanos en cancha (con 3 humanos vale 1,5 veces lo que con 2, porque con menos humanos es más fácil ganarlo).' },
   { key: 'fairplay', label: 'Juego limpio', weight: 5, help: 'Sanciones por 90 min frente al promedio: roja 3, amarilla* 1, penal cometido* 1, falta* 0,25. Menos sanciones = más puntos.' },
   { key: 'regularity', label: 'Regularidad', weight: 5, help: 'Qué tan estable es su calificación (ajustada por dificultad y nivel): solo cuentan los partidos por debajo de su media, así un partido excepcional no le resta. Menos caídas que el promedio = índice mayor.' },
@@ -3010,14 +3010,30 @@ function bestIndices(people, timeline, peerIds = new Set(people.map((p) => p.per
     const n = list.reduce((a, m) => a + (mwOf.get(m.id) ?? 1), 0);
     return { n, pct: n ? (100 * list.reduce((a, m) => a + (POINTS[m.outcome] ?? 0) * (mwOf.get(m.id) ?? 1) * (diffOf.get(m.id) ?? 1), 0)) / (3 * n) : null };
   };
+  // v2.25 (aprobado por el usuario): con y sin él se compara SOLO entre partidos con el
+  // mismo número de humanos. Cuando alguien falta hay menos humanos, y eso cambia los
+  // resultados del equipo (en CILANTRO se ganaban más puntos con 2 que con 3): sin esto,
+  // parte del impacto era efecto del tamaño y no del jugador. Cada tamaño pesa
+  // n_con × n_sin / (n_con + n_sin); "partidos sin él" cuenta solo los comparables.
+  const sizeOf = new Map(rows.map((t) => [t.match_id, Number(t.team_size) || 0]));
+  const sizes = [...new Set(roster.map((m) => sizeOf.get(m.id) ?? 0))];
   for (const p of people) {
     const o = out.get(p.person_id);
-    const w = winPct(roster.filter((m) => m.people.has(p.person_id)));
-    const wo = winPct(roster.filter((m) => !m.people.has(p.person_id)));
-    o.impactWithout = wo.n;
-    o.impactN = Math.min(w.n, wo.n);
-    if (w.n && wo.n >= BEST_IMPACT_MIN_WITHOUT) o.impact = 100 + (w.pct - wo.pct);
-    else if (w.n) { o.impact = 100; o.impactNeutral = true; }
+    let num = 0, den = 0, nWith = 0, nWithout = 0, nMin = 0;
+    for (const k of sizes) {
+      const same = roster.filter((m) => (sizeOf.get(m.id) ?? 0) === k);
+      const w = winPct(same.filter((m) => m.people.has(p.person_id)));
+      const wo = winPct(same.filter((m) => !m.people.has(p.person_id)));
+      if (!w.n || !wo.n) continue; // sin partidos con y sin él de ese tamaño: no hay comparación
+      const weight = (w.n * wo.n) / (w.n + wo.n);
+      num += weight * (w.pct - wo.pct); den += weight;
+      nWith += w.n; nWithout += wo.n; nMin += Math.min(w.n, wo.n);
+    }
+    const playedAny = roster.some((m) => m.people.has(p.person_id));
+    o.impactWithout = nWithout;
+    o.impactN = nMin;
+    if (den && nWithout >= BEST_IMPACT_MIN_WITHOUT) o.impact = 100 + num / den;
+    else if (playedAny) { o.impact = 100; o.impactNeutral = true; }
     else o.impact = null;
   }
   // Humanos en cancha promedio de los partidos del rango (para el MVP, v2.19).
@@ -3149,7 +3165,7 @@ async function renderBest() {
         ? 'Media del Pro de cada partido: exacta en todos (la del arquetipo con que jugó).'
         : `Media del Pro exacta del partido en ${r.exactLevels} de ${r.levelRows}; en el resto, aproximada con la foto del día (puede ser la de otro arquetipo).`) : null,
       r.keeperShare > 0 ? el('p', { class: 'muted small' }, `Jugó de arquero el ${fmtNum(100 * r.keeperShare, 0)} % de sus minutos: esos minutos se miden con la defensa de arquero y no cuentan en el ataque.${r.onlyKeeper ? ' Es el único arquero del club en estos partidos: sin nadie con quién compararlo, esos minutos no cuentan en la defensa.' : ''}`) : null,
-      r.impactNeutral ? el('p', { class: 'muted small' }, `Impacto en el equipo queda en 100 (ni premia ni castiga): el club jugó ${fmtNum(r.impactWithout ?? 0, Number.isInteger(r.impactWithout ?? 0) ? 0 : 1)} partidos sin él y hacen falta al menos ${BEST_IMPACT_MIN_WITHOUT} para comparar.`) : null,
+      r.impactNeutral ? el('p', { class: 'muted small' }, `Impacto en el equipo queda en 100 (ni premia ni castiga): el club jugó ${fmtNum(r.impactWithout ?? 0, Number.isInteger(r.impactWithout ?? 0) ? 0 : 1)} partidos sin él con el mismo número de humanos que cuando juega él, y hacen falta al menos ${BEST_IMPACT_MIN_WITHOUT} para comparar.`) : null,
       r.neutral?.length ? el('p', { class: 'muted small' }, `Nadie más jugó sus posiciones en estos partidos, así que no hay con quién compararlo en: ${r.neutral.join(', ')}. Quedan en 100 (el promedio): ni premian ni castigan.`) : null,
       r.families && Object.values(r.families).some((s) => s > 0) ? el('p', { class: 'muted small' }, `Ataque y defensa según su arquetipo: ${Object.entries(r.families).filter(([, s]) => s > 0).map(([f, s]) => `${ARCH_FAMILY_LABEL[f]} ${fmtNum(100 * s, 0)} %`).join(', ')} de sus minutos de campo (ofensivo 20/10, equilibrado 15/15, defensivo 10/20).`) : null,
       el('div', { class: 'table-wrap' }, el('table', { class: 'data' },
