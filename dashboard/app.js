@@ -3083,7 +3083,7 @@ function levelOn(playername, playedAt) {
 }
 const BEST_CRITERIA = [
   { key: 'rating', label: 'Calificación frente a su posición', weight: 25, help: 'Su calificación de EA frente al promedio del club en las posiciones que jugó, ajustada por la dificultad de cada partido.' },
-  { key: 'attack', label: 'Ataque frente a su posición', weight: 15, help: 'G+A, conversión, regates*, rival superado*, segundas asistencias*, tiros, tiros a puerta*, conducciones* y faltas recibidas* frente a su posición, ajustados por dificultad.' },
+  { key: 'attack', label: 'Ataque frente a su posición', weight: 15, help: 'G+A, conversión, regates*, rival superado*, segundas asistencias*, tiros, tiros a puerta*, conducciones*, faltas recibidas* y tiros desde el área %* frente a su posición, ajustados por dificultad.' },
   { key: 'defense', label: 'Defensa frente a su posición', weight: 15, help: 'Entradas, % de entradas, intercepciones*, recuperaciones*, balones quitados* y duelos aéreos* frente a su posición, ajustados por dificultad. Sus minutos de arquero se miden con % de atajadas, goles recibidos (menos es mejor), atajadas y vallas invictas.' },
   { key: 'passing', label: 'Pase frente a su posición', weight: 10, help: 'Precisión, pases completados, filtrados*, pérdidas* (menos es mejor), pase adelante*, pase largo*, primer toque*, decisiones* y pases a fuera de juego* (menos es mejor) frente a su posición, ajustados por dificultad.' },
   // Ubicación (aprobada por el usuario): su propio % en posición, sin compararlo con los demás de su posición
@@ -3111,6 +3111,10 @@ const SUB = {
     { label: 'Tiros a puerta %*', w: 5, kind: 'ratio', num: n('shots_on_target_exp'), den: sum('shots_on_target_exp', 'shots_off_target_exp'), ok: has('shots_on_target_exp') },
     { label: 'Conducciones por 90*', w: 5, kind: 'p90', num: n('carries_exp'), ok: has('carries_exp') },
     { label: 'Faltas recibidas por 90*', w: 5, kind: 'p90', num: n('fouls_won_exp'), ok: has('fouls_won_exp') },
+    // v2.33 (aprobado por el usuario): selección de tiro, qué parte de sus tiros fueron desde el
+    // área. Con los datos del 2026-11-22 se relaciona con los puntos del equipo (r 0,20) y casi
+    // no repite lo que ya se cuenta (0,21 con G+A/90). Tiros por zona verificados (166/176).
+    { label: 'Tiros desde el área %*', w: 5, kind: 'ratio', num: sum('box_shots_on_exp', 'box_shots_off_exp'), den: sum('box_shots_on_exp', 'box_shots_off_exp', 'outside_shots_on_exp', 'outside_shots_off_exp'), ok: has('box_shots_on_exp') },
   ],
   defense: [
     { label: 'Entradas por 90', w: 20, kind: 'p90', num: n('tackles_made') },

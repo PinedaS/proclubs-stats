@@ -3,6 +3,14 @@
 // La fecha es la de Colombia (UTC−5), no la UTC: de noche ya es "mañana" en UTC.
 export const CHANGELOG = [
   {
+    version: '2.33',
+    date: '2026-11-22',
+    title: 'Mejor jugador: selección de tiro',
+    changes: [
+      'Ataque suma "Tiros desde el área %*": qué parte de los tiros de cada uno fueron desde dentro del área, frente a los demás de su posición. Es el único dato nuevo que se relaciona con que el equipo sume puntos. Cambio pequeño: menos de 0,4 puntos para cada uno.',
+    ],
+  },
+  {
     version: '2.32',
     date: '2026-11-22',
     title: 'Datos experimentales revisados',
