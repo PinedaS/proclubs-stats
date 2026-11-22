@@ -126,7 +126,23 @@ export const EXTRA_COUNTERS = [
   // 024 (verificados contra los datos oficiales el 2026-11-22; ver docs/datos-ea.md)
   'outside_goals_exp', 'first_time_goals_exp', 'corner_assists_exp', 'aerial_won_att_exp', 'aerial_won_def_exp',
   'backward_passes_ok_exp', 'sideways_passes_ok_exp',
+  // 025 (pedido del usuario): pases fallidos por dirección (verificado) y datos SIN CONFIRMAR
+  // que el usuario quiere ver igual: malos pases, penales y goles de cabeza.
+  'backward_passes_failed_exp', 'sideways_passes_failed_exp', 'bad_passes_exp', 'penalties_taken_exp', 'penalty_goals_exp', 'headed_goals_exp',
 ];
+
+/** Carrera total de cada miembro según EA (todos sus clubes), 025. */
+export const getCareer = (clubId) => request(`v_member_career?select=member_name,games_played,goals,assists,rating_avg,man_of_the_match,favorite_position,snapshot_date${clubParam(clubId)}`);
+/** Perfil del Pro de cada miembro (nombre, altura, posición favorita, nacionalidad), 025. */
+export const getProfiles = (clubId) => request(`v_member_profile?select=member_name,pro_name,pro_height,favorite_position,nationality,snapshot_date${clubParam(clubId)}`);
+/** Logros en play-off del club, tal cual EA (un elemento por fila), 025. */
+export const getPlayoffs = (clubId) => request(`v_playoff_achievements?select=entry,ord,snapshot_date&order=ord.asc${clubParam(clubId)}`);
+/** Foto de cada rival el día que lo enfrentamos, 025. */
+export function getOpponentSnapshots(clubId) {
+  const p = new URLSearchParams({ select: 'opponent_club_id,snapshot_date,name,skill_rating,current_division,season_points,games_played,wins,ties,losses,goals,goals_against,promotions,relegations', order: 'snapshot_date.asc' });
+  if (clubId != null) p.set('for_club_id', `eq.${clubId}`);
+  return request(`v_opponent_snapshots?${p}`);
+}
 
 /** Datos por partido que usa la fórmula del mejor jugador (dificultad, criterios ampliados y juego limpio). */
 const BEST_FIELDS = [

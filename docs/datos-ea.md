@@ -54,6 +54,8 @@ Trae nombre del jugador, partidos, % de victorias, goles, asistencias, vallas in
 
 Totales históricos por jugador: partidos, goles, asistencias, calificación y MVP.
 
+**Verificado el 2026-11-22:** es la carrera **total del jugador en el juego**, de todos sus clubes, no solo de este. PinedaDS: 56 partidos = 34 en 100 D CILANTRO + 22 en FC Aston Huila; goles 40 = 19 + 21; asistencias 33 = 21 + 12; MVP 12 = 8 + 4. Se muestra desde la v2.34 (vista `v_member_career`, migración 025), con la aclaración de que incluye partidos no capturados.
+
 ### `clubs/overallStats`: el club en el tiempo ✅
 
 - **`skillRating`:** nivel del club (p. ej. 1595).
@@ -102,6 +104,8 @@ Mejor resultado por temporada de play-off, con su división y posición final.
 1. Tabla `ea_snapshots`: JSON completo de `clubs/info`, `club/playoffAchievements` y `members/career/stats` (una foto por día), y de cada **rival** (`clubs/overallStats` y su fila del ranking) al capturar el partido. anon no la lee. Lo crudo de nuestro `overallStats`, ranking y `members/stats` ya estaba en `club_snapshots.raw` y `member_snapshots.raw`.
 2. `matches.opponent_division`: división del rival, solo en partidos nuevos de menos de 6 h (como la nuestra). Se muestra en Partidos cuando esté en más de la mitad de los partidos; antes, la columna queda oculta. Con algunos faltantes, lleva la etiqueta "Parcial".
 3. La guía del dashboard ("Cómo leer esto") tiene la sección "Datos guardados que no se muestran".
+
+**Hecho (2026-11-22, migración 025 y v2.34):** vistas de solo lectura `v_member_career`, `v_member_profile` (nacionalidad desde `member_snapshots.raw`), `v_playoff_achievements` (hoy vacía) y `v_opponent_snapshots` (53 fotos de rivales). Exponen solo esas columnas; `ea_snapshots` y `member_snapshots.raw` siguen cerrados para anon (verificado: 401).
 
 **Pendiente (opcional):** mostrar las atajadas por tipo y algunos contadores nuevos (pases por distancia, entradas de pie y barridas, tiros dentro y fuera del área).
 

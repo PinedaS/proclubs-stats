@@ -174,7 +174,7 @@ Antes se llamaba "Duplas". Reúne cómo le va al equipo con y sin cada jugador, 
 - **Rivales repetidos:** los equipos que enfrentamos 2 veces o más. Al tocar uno se ven sus partidos (marcador, nivel del rival, humanos de cada lado y división) y cómo rindió cada jugador contra ese rival frente a su calificación media. Se agrupan por el ID del club rival, no por el nombre, que puede cambiar.
 
 - Cada partido con el rival, su nivel, la división, cuántos jugamos, el marcador, los goleadores, el MVP y las etiquetas.
-- Toca un partido para ver a cada jugador.
+- Toca un partido para ver a cada jugador y, arriba, los datos del rival según EA el día del partido: nivel, división, récord en FC 27 y puntos de la temporada. Solo hay foto del rival desde el 16 de noviembre de 2026.
 
 ### Club
 
@@ -182,12 +182,15 @@ Antes se llamaba "Duplas". Reúne cómo le va al equipo con y sin cada jugador, 
 - **División partido a partido:** en qué división se jugó cada partido, con el color del resultado. EA no da un puesto en una tabla general, sino la división y los puntos.
 - **Para mejorar como equipo:** qué datos cambian entre victorias y derrotas (por jugador humano y por 90 minutos, sin abandonos) y en qué situaciones nos va peor y mejor (humanos propios y rivales, rival fuerte o débil, división, tipo de partido; solo con 4+ partidos). Son relaciones, no causas.
 - **El equipo según los humanos rivales:** puntos por partido y goles según cuántos humanos tenía el rival.
+- **Logros en play-off:** lo que EA registra de los play-offs del club, tal cual. Está vacío hasta que el club juegue unos play-offs.
 
 ### Detalle de un jugador
 
 Se abre al tocar un jugador. Tiene cuatro pestañas:
 - **Resumen.**
 - **Resumen → Puntos fuertes y para mejorar:** sus 3 datos más altos y más bajos frente a los demás que juegan habitualmente en su posición principal (solo con 5+ partidos suyos y de los demás). Va primero lo que más se relaciona con ganar: ataque y defensa según su arquetipo, después pase. Si la referencia es una sola persona, lo dice.
+- **Resumen → En todo FC 27:** sus partidos, goles, asistencias, calificación y MVP en **todos sus clubes**, según EA. Incluye partidos que no capturamos, por eso no coincide con el resto del dashboard.
+- **Resumen → Su Pro:** nombre del Pro, altura, posición favorita y nacionalidad, según EA.
 - **Rendimiento:** datos avanzados, relativo a su posición, calificación contra el nivel del rival, regularidad, evolución semanal y posición recomendada.
 - **Contexto:** media del Pro al entrar y actual, división en que entró, rendimiento por división, dónde juega, calendario, récords y rachas.
 - **Partidos.**
@@ -199,10 +202,10 @@ Cualquiera puede poner, cambiar o quitar la foto de cualquier jugador.
 Se guarda **todo** lo que da EA, para poder usarlo después:
 - atajadas por tipo;
 - unos 120 contadores del juego por jugador y partido;
-- los jugadores y la ficha de cada rival;
-- la carrera de cada miembro;
-- los logros de play-off;
+- los jugadores de cada rival (su ficha de club sí se muestra en Partidos);
 - la ficha del club.
+
+Desde la v2.34 se muestran la carrera de cada miembro, el perfil del Pro, los logros de play-off y la ficha de cada rival.
 
 EA **no** da:
 - goles de penal (solo penales cometidos);

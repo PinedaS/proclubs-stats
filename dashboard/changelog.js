@@ -3,6 +3,17 @@
 // La fecha es la de Colombia (UTC−5), no la UTC: de noche ya es "mañana" en UTC.
 export const CHANGELOG = [
   {
+    version: '2.34',
+    date: '2026-11-22',
+    title: 'Más datos de EA a la vista',
+    changes: [
+      'Detalle del jugador: "En todo FC 27", con sus partidos, goles, asistencias, calificación y MVP en todos sus clubes según EA, y "Su Pro", con nombre, altura, posición favorita y nacionalidad.',
+      'Partidos: al abrir un partido se ven los datos del rival según EA ese día (nivel, división, récord y puntos), y en "Rivales repetidos" su última foto.',
+      'Club: "Logros en play-off", vacío hasta que el club juegue unos play-offs.',
+      '"+ Añadir dato": pases hacia atrás y hacia los lados (completados y %), conducciones por 90 min, y, marcados "sin confirmar", malos pases, penales tirados, goles de penal y goles de cabeza.',
+    ],
+  },
+  {
     version: '2.33',
     date: '2026-11-22',
     title: 'Mejor jugador: selección de tiro',

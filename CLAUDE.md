@@ -58,7 +58,8 @@ API no oficial de EA ──► Colector (GitHub Actions, cada 30 min) ──► 
    - Filtros: tipo de partido, fechas, mínimo de partidos y excluir incompletos.
    - Los archivos se versionan con el commit en `pages.yml` (`__V__`), para no mezclar versiones viejas desde la caché de Pages.
    - Probado en Chrome con los datos del club de prueba.
-   - **Migraciones aplicadas en Supabase:** 001–024, cada una verificada después de aplicarla.
+   - **Migraciones aplicadas en Supabase:** 001–025, cada una verificada después de aplicarla.
+   - **v2.34 (2026-11-22, pedido del usuario: "1, 6, 9, 10, 11, 12, 13, 14" + conducciones):** migración **025** con vistas de solo lectura (`v_member_career`, `v_member_profile`, `v_playoff_achievements`, `v_opponent_snapshots`); detalle del jugador → "En todo FC 27" (carrera de EA, **de todos sus clubes**, verificado: PinedaDS 56 = 34 + 22) y "Su Pro"; Partidos → foto de EA del rival al abrir un partido y en "Rivales repetidos" (solo hay fotos desde el 16-nov); Club → "Logros en play-off" (EA aún no da ninguno; se muestra cada campo tal cual hasta conocer su forma); "+ Añadir dato" → pases hacia atrás y hacia los lados, conducciones/90, y "sin confirmar": malos pases (151), penales tirados (203), goles de penal (46), goles de cabeza (125). Nada entra en la fórmula.
    - **BETA (decidido con el usuario el 2026-11-16, v2.10):** etiqueta "Beta" junto a la versión.
      - **Qué es beta:** solo la forma de mostrar y analizar (pestañas, gráficas y fórmula). **Los datos de EA no.** El texto lo aclara.
      - **Criterios de salida (las tres condiciones):**

@@ -49,6 +49,9 @@ const state = {
   relative: new Map(),
   clubs: [],
   clubId: null, // club seleccionado (todas las consultas se filtran por él)
+  career: [], profiles: [], extrasClub: null, // v2.34: carrera y perfil según EA (por club)
+  oppSnaps: [], oppSnapsClub: null, matchById: new Map(), // v2.34: fotos de los rivales
+  playoffs: null, // v2.34: logros en play-off del club
   requestId: 0,
 };
 
@@ -485,6 +488,17 @@ const RANKING_COLUMNS = [
   { theme: 'Ataque', key: 'first_time_goals_exp', label: 'Goles al primer toque*', kind: 'abs', title: 'Goles con remate al primer toque', exp: true },
   { theme: 'Pase', key: 'corner_assists_exp', label: 'Asist. de córner*', kind: 'abs', title: 'Asistencias desde un córner', exp: true },
   { theme: 'Pase', key: 'forward_share_pct_exp', label: 'Pases hacia adelante %*', kind: 'rate', title: 'De los pases completados, qué parte fue hacia adelante (el resto, hacia atrás o a los lados)', digits: 1, exp: true },
+  // 025 (pedido del usuario): pases por dirección (verificado: adelante + atrás + lados = pases completados)
+  { theme: 'Pase', key: 'backward_passes_ok_exp', label: 'Pases hacia atrás*', kind: 'abs', title: 'Pases hacia atrás completados', exp: true },
+  { theme: 'Pase', key: 'backward_pass_pct_exp', label: 'Pase hacia atrás %*', kind: 'rate', title: 'Pases hacia atrás completados ÷ intentados', digits: 1, exp: true },
+  { theme: 'Pase', key: 'sideways_passes_ok_exp', label: 'Pases a los lados*', kind: 'abs', title: 'Pases hacia los lados completados', exp: true },
+  { theme: 'Pase', key: 'sideways_pass_pct_exp', label: 'Pase a los lados %*', kind: 'rate', title: 'Pases hacia los lados completados ÷ intentados', digits: 1, exp: true },
+  { theme: 'Ataque', key: 'carries_exp_p90', label: 'Conducciones/90*', kind: 'rate', title: 'Conducciones con el balón por cada 90 minutos', digits: 2, exp: true },
+  // 025: SIN CONFIRMAR con nuestros datos; el usuario los quiere ver igual. El título lo dice.
+  { theme: 'Pase', key: 'bad_passes_exp', label: 'Malos pases* (sin confirmar)', kind: 'abs', title: 'Pases malos o arriesgados según la comunidad. SIN CONFIRMAR: no hay un dato oficial con qué comprobarlo.', exp: true, better: 'low' },
+  { theme: 'Ataque', key: 'penalties_taken_exp', label: 'Penales tirados* (sin confirmar)', kind: 'abs', title: 'Penales tirados según una propuesta reciente de la comunidad. SIN CONFIRMAR: muy pocos casos en nuestros partidos.', exp: true },
+  { theme: 'Ataque', key: 'penalty_goals_exp', label: 'Goles de penal* (sin confirmar)', kind: 'abs', title: 'Goles de penal según una propuesta de la comunidad. SIN CONFIRMAR: muy pocos casos, y a veces aparece sin un penal tirado.', exp: true },
+  { theme: 'Ataque', key: 'headed_goals_exp', label: 'Goles de cabeza* (sin confirmar)', kind: 'abs', title: 'Goles de cabeza según una propuesta de la comunidad. SIN CONFIRMAR: todavía no aparece en ninguno de nuestros partidos.', exp: true },
   { theme: 'Pase', key: 'short_pass_pct_exp', label: 'Pase corto %*', kind: 'rate', title: 'Pases cortos completados', digits: 1, exp: true },
   { theme: 'Pase', key: 'medium_pass_pct_exp', label: 'Pase medio %*', kind: 'rate', title: 'Pases de media distancia completados', digits: 1, exp: true },
   { theme: 'Pase', key: 'long_pass_pct_exp', label: 'Pase largo %*', kind: 'rate', title: 'Pases largos completados', digits: 1, exp: true },
@@ -563,6 +577,8 @@ function addExtraCounters(rows, timeline) {
     if (t.forward_passes_ok_exp != null) s.fwd_ok = (s.fwd_ok ?? 0) + Number(t.forward_passes_ok_exp);
     // Goles solo de los partidos con contadores, para que "goles en el área" no mezcle partidos sin dato.
     if (t.outside_goals_exp != null) s.goals_with_counters = (s.goals_with_counters ?? 0) + Number(t.goals ?? 0);
+    // Segundos solo de los partidos con conducciones (para el por 90 sin mezclar partidos sin dato).
+    if (t.carries_exp != null) s.carries_sec = (s.carries_sec ?? 0) + Number(t.seconds_played ?? 0);
   }
   const add = (a, b) => (a == null && b == null ? null : (a ?? 0) + (b ?? 0));
   const pct = (ok, ko) => (ok == null || ok + (ko ?? 0) === 0 ? null : Math.round((1000 * ok) / (ok + (ko ?? 0))) / 10);
@@ -579,6 +595,10 @@ function addExtraCounters(rows, timeline) {
       inside_goals_exp: s.outside_goals_exp == null ? null : (s.goals_with_counters ?? 0) - s.outside_goals_exp,
       // 024: de los pases completados, qué parte fue hacia adelante (adelante + atrás + lados = completados, verificado).
       forward_share_pct_exp: pct(s.fwd_ok, add(s.backward_passes_ok_exp, s.sideways_passes_ok_exp)),
+      // 025
+      backward_pass_pct_exp: pct(s.backward_passes_ok_exp, s.backward_passes_failed_exp),
+      sideways_pass_pct_exp: pct(s.sideways_passes_ok_exp, s.sideways_passes_failed_exp),
+      carries_exp_p90: s.carries_exp == null || !s.carries_sec ? null : (5400 * s.carries_exp) / s.carries_sec,
     };
   });
 }
@@ -1640,6 +1660,13 @@ async function renderMatches(filters, requestId) {
   const [hl, times] = await Promise.all([api.getMatchHighlights(ids).catch(() => []), api.getPlayerTimes(ids).catch(() => [])]);
   if (requestId !== state.requestId) return;
   const tflags = playerTimeFlags(times);
+  // v2.34: foto de EA de cada rival (se pide una vez por club).
+  if (state.oppSnapsClub !== state.clubId) {
+    state.oppSnaps = await api.getOpponentSnapshots(state.clubId).catch(() => []);
+    state.oppSnapsClub = state.clubId;
+    if (requestId !== state.requestId) return;
+  }
+  state.matchById = new Map(shown.map((m) => [m.match_id, m]));
   renderRivalScatter(shown, flags);
   renderRepeatRivals($('#rivals-repeat'), shown, flags);
   const byMatch = new Map();
@@ -1781,10 +1808,44 @@ function renderRepeatRivals(box, matches, flags) {
           ` · goles ${gf}–${ga}`),
         el('span', { class: 'muted small' }, `último: ${fmtDate(last.played_at, false)}`)),
       el('div', { class: 'rival-body' },
+        opponentLine(opponentSnapshot(last.opponent_club_id), 'Última foto de EA')
+          ?? el('p', { class: 'muted small opp-line' }, 'Sin foto de EA de este rival: se guarda al enfrentarlo, desde el 16 de noviembre de 2026.'),
         el('p', { class: 'section-title' }, 'Partidos'), el('div', { class: 'table-wrap' }, matchRows),
         el('p', { class: 'section-title' }, 'Nuestros jugadores contra este rival'), el('div', { class: 'table-wrap' }, playersTable),
         el('p', { class: 'muted small' }, 'Con pocos partidos contra un mismo rival, las diferencias pueden ser casualidad.')));
   }));
+}
+
+/**
+ * v2.34: foto de EA del rival (`v_opponent_snapshots`): la del día del partido o la
+ * anterior más cercana; sin `before`, la más reciente. Lista ordenada de vieja a nueva.
+ */
+function opponentSnapshot(oppId, before) {
+  if (oppId == null) return null;
+  const day = before ? before.slice(0, 10) : null;
+  let best = null;
+  for (const s of state.oppSnaps ?? []) {
+    if (String(s.opponent_club_id) !== String(oppId)) continue;
+    if (day && s.snapshot_date > day) continue;
+    best = s;
+  }
+  return best;
+}
+
+/** Línea con los datos de EA del rival: nivel, división, récord en el juego y puntos de la temporada. */
+function opponentLine(s, prefix) {
+  if (!s) return null;
+  const parts = [];
+  if (s.skill_rating != null) parts.push(`nivel ${fmtNum(s.skill_rating)}`);
+  if (s.current_division != null) parts.push(el('span', { class: 'div-value', title: divisionTitle(s.current_division) }, divisionIcon(s.current_division), gameDivision(s.current_division)));
+  if (s.games_played != null) parts.push(`${fmtNum(s.games_played)} PJ en FC 27: ${fmtNum(s.wins)} V · ${fmtNum(s.ties)} E · ${fmtNum(s.losses)} D`);
+  if (s.goals != null) parts.push(`goles ${fmtNum(s.goals)}–${fmtNum(s.goals_against)}`);
+  if (s.season_points != null) parts.push(`${fmtNum(s.season_points)} pts en la temporada`);
+  if (s.promotions != null || s.relegations != null) parts.push(`${fmtNum(s.promotions ?? 0)} ascensos · ${fmtNum(s.relegations ?? 0)} descensos`);
+  if (!parts.length) return null;
+  return el('p', { class: 'muted small opp-line', title: 'Datos del club rival según EA, en la foto que guarda el colector al enfrentarlo' },
+    el('span', { class: 'hl-tag' }, prefix), ' ', parts.flatMap((p, i) => (i ? [' · ', p] : [p])),
+    ` (foto del ${fmtDate(`${s.snapshot_date}T12:00:00`, false)})`);
 }
 
 async function toggleMatchPlayers(row, matchId, colspan) {
@@ -1800,7 +1861,8 @@ async function toggleMatchPlayers(row, matchId, colspan) {
   try {
     const [players, times] = await Promise.all([api.getMatchPlayers(matchId), api.getPlayerTimes([matchId]).catch(() => [])]);
     const tf = playerTimeFlags(times);
-    cell.replaceChildren(el('table', { class: 'data' },
+    const m = state.matchById?.get(matchId);
+    cell.replaceChildren(m ? opponentLine(opponentSnapshot(m.opponent_club_id, m.played_at), 'Rival según EA') ?? '' : '', el('table', { class: 'data' },
       el('thead', {}, el('tr', {},
         ['Jugador', 'Pos.', 'Calif.', 'G', 'A', 'Tiros', 'Pases', 'Entradas', 'Atajadas', 'MVP'].map((h, i) => el('th', { scope: 'col', class: i < 2 ? 'left' : null }, h)),
         state.showExp ? ['Regates*', 'Intercep.*'].map((h) => el('th', { scope: 'col', class: 'exp' }, h)) : null)),
@@ -1921,6 +1983,7 @@ function renderClub() {
   renderDivisionPath($('#club-division'), games, state.timeline);
   renderTeamByOppHumans($('#club-opp-humans'), games, state.timeline);
   renderTeamImprove($('#club-improve'), games, state.timeline);
+  renderPlayoffs($('#club-playoffs'));
   const last = snaps.at(-1);
   $('#club-season-card').replaceChildren(last
     // Sin lo que ya está en la cabecera (división, V-E-D y puntos de la temporada).
@@ -1932,6 +1995,32 @@ function renderClub() {
         tile('Ascensos', fmtNum(last.promotions)), tile('Descensos', fmtNum(last.relegations)),
         tile('Histórico V-E-D', last.wins != null ? `${last.wins}-${last.draws}-${last.losses}` : '—'))
     : el('p', { class: 'muted', style: 'padding: 0 18px 18px' }, 'Sin fotos del club todavía.'));
+}
+
+/**
+ * v2.34: logros en play-off (`clubs/playoffAchievements` de EA, vista 025). Al 2026-11-22
+ * EA no devuelve ninguno para nuestros clubes, así que no se conoce la forma de cada
+ * elemento: se muestra cada campo tal cual (nombre y valor) hasta ver uno real.
+ */
+async function renderPlayoffs(box) {
+  const clubId = state.clubId;
+  if (state.playoffsClub !== clubId) {
+    box.replaceChildren(el('p', { class: 'muted small', style: 'padding: 0 18px 18px' }, 'Cargando…'));
+    state.playoffs = await api.getPlayoffs(clubId).catch(() => null);
+    state.playoffsClub = clubId;
+    if (state.clubId !== clubId) return;
+  }
+  const rows = state.playoffs;
+  const msg = (t) => el('p', { class: 'muted small', style: 'padding: 0 18px 18px' }, t);
+  if (rows == null) { box.replaceChildren(msg('No se pudieron leer los logros en play-off.')); return; }
+  if (!rows.length) { box.replaceChildren(msg('EA todavía no registra logros en play-off para este club. Aparecerán aquí cuando el club juegue unos play-offs (la última semana de la temporada).')); return; }
+  const fmtVal = (v) => (v == null ? '—' : typeof v === 'object' ? JSON.stringify(v) : String(v));
+  box.replaceChildren(el('div', { class: 'table-wrap' }, el('table', { class: 'data' },
+    el('thead', {}, el('tr', {}, el('th', { scope: 'col', class: 'left' }, '#'), el('th', { scope: 'col', class: 'left' }, 'Datos según EA'))),
+    el('tbody', {}, rows.map((r, i) => el('tr', {},
+      el('td', { class: 'left' }, String(i + 1)),
+      el('td', { class: 'left' }, Object.entries(r.entry ?? {}).map(([k, v]) => el('div', { class: 'small' }, el('span', { class: 'muted' }, `${k}: `), fmtVal(v))))))))),
+    msg(`Foto del ${fmtDate(`${rows[0].snapshot_date}T12:00:00`, false)}.`));
 }
 
 /**
@@ -2558,6 +2647,35 @@ function photoControls(personId, name) {
     input, status);
 }
 
+/**
+ * v2.34: carrera total del jugador en el juego según EA (members/career/stats), sumando
+ * sus cuentas. Verificado el 2026-11-22: es de TODOS sus clubes (PinedaDS: 56 = 34 en
+ * CILANTRO + 22 en Aston), así que incluye partidos que no capturamos.
+ */
+function careerTiles(rows) {
+  if (!rows.length) return null;
+  const s = (k) => rows.reduce((a, r) => a + Number(r[k] ?? 0), 0);
+  const games = s('games_played');
+  const rating = games ? rows.reduce((a, r) => a + Number(r.rating_avg ?? 0) * Number(r.games_played ?? 0), 0) / games : null;
+  return el('div', {},
+    el('div', { class: 'tiles' },
+      tile('Partidos', fmtNum(games)), tile('Goles', fmtNum(s('goals'))), tile('Asistencias', fmtNum(s('assists'))),
+      tile('Calif. media', fmtNum(rating, 1)), tile('MVP', fmtNum(s('man_of_the_match')))),
+    el('p', { class: 'muted small' }, `Totales que lleva EA de todos sus clubes en FC 27, también partidos que no capturamos. Foto del ${fmtDate(`${rows[0].snapshot_date}T12:00:00`, false)}.`));
+}
+
+/** v2.34: perfil del Pro (nombre, altura, posición favorita y nacionalidad), según EA. */
+function profileTiles(rows) {
+  if (!rows.length) return null;
+  const posName = (p) => POS_LABEL[p] ?? p ?? '—';
+  return el('div', { class: 'tiles' }, rows.flatMap((p) => [
+    tile(rows.length > 1 ? `Pro (${p.member_name})` : 'Nombre del Pro', p.pro_name ?? '—'),
+    tile('Altura', p.pro_height ? `${p.pro_height} cm` : '—'),
+    tile('Posición favorita', posName(p.favorite_position)),
+    tile('Nacionalidad', p.nationality ?? '—'),
+  ]));
+}
+
 async function renderPerson(filters, requestId) {
   const box = $('#person-detail');
   if (state.personId == null) { box.hidden = true; return; }
@@ -2571,6 +2689,15 @@ async function renderPerson(filters, requestId) {
   const personTimes = playerTimeFlags(await api.getPlayerTimes([...new Set(matches.map((m) => m.match_id))]).catch(() => []));
   if (requestId !== state.requestId) return;
   const fit = positionFitSection(fitAll.filter((f) => f.person_id === state.personId));
+  // 025: carrera total según EA y perfil del Pro (se piden una vez por club).
+  if (state.extrasClub !== state.clubId) {
+    const [career, profiles] = await Promise.all([api.getCareer(state.clubId).catch(() => []), api.getProfiles(state.clubId).catch(() => [])]);
+    state.career = career; state.profiles = profiles; state.extrasClub = state.clubId;
+    if (requestId !== state.requestId) return;
+  }
+  const accountNames = new Set(matches.map((m) => m.playername).filter(Boolean));
+  const careerSection = careerTiles(state.career.filter((c) => accountNames.has(c.member_name)));
+  const profileSection = profileTiles(state.profiles.filter((p) => accountNames.has(p.member_name)));
 
   const name = summary?.person_name ?? matches.at(-1)?.playername ?? 'Jugador';
   const platforms = [...new Set(matches.map((m) => m.platform).filter(Boolean))];
@@ -2658,7 +2785,8 @@ async function renderPerson(filters, requestId) {
   // Pestañas internas: menos desplazamiento, sobre todo en el celular.
   const sec = (title, content) => (content ? [el('p', { class: 'section-title' }, title), content] : null);
   const panels = {
-    resumen: [basics, sec('Puntos fuertes y para mejorar', improveSection(state.personId)), el('div', { class: 'grid-2' }, chartBox, overallBox)],
+    resumen: [basics, sec('Puntos fuertes y para mejorar', improveSection(state.personId)),
+      sec('En todo FC 27 (todos sus clubes, según EA)', careerSection), sec('Su Pro', profileSection), el('div', { class: 'grid-2' }, chartBox, overallBox)],
     // Orden por importancia (decisión del usuario): rendimiento, relativo a la posición,
     // evolución y, al final, la posición recomendada (orientativa).
     rendimiento: [
