@@ -3,6 +3,16 @@
 // La fecha es la de Colombia (UTC−5), no la UTC: de noche ya es "mañana" en UTC.
 export const CHANGELOG = [
   {
+    version: '2.35',
+    date: '2026-11-22',
+    title: 'Alineación sugerida (experimental)',
+    changes: [
+      '"Por posición" estrena la alineación sugerida para el 4-3-3 (2): cada humano aparece en la cancha en el puesto que mejor le va según los datos, y la IA cubre el resto. Eliges quiénes juegan.',
+      'La posición sale de su calificación frente a los demás que juegan ahí y de cómo le ha ido al equipo con él en cada posición. El puesto dentro de la línea (extremo o 9, pivote o interior) sale de sus datos en cantidad y en % de acierto; con pocos intentos, el % pesa menos.',
+      'Es experimental: EA no da la formación, el puesto exacto ni el lado de la cancha, así que todo se deduce de los datos.',
+    ],
+  },
+  {
     version: '2.34',
     date: '2026-11-22',
     title: 'Más datos de EA a la vista',

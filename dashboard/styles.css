@@ -947,3 +947,75 @@ circle.dot-win { fill: var(--win); } circle.dot-draw { fill: var(--draw); } circ
 .rival-record { font-variant-numeric: tabular-nums; color: var(--ink-2); }
 .rec-w { color: var(--win); font-weight: 700; } .rec-d { color: var(--ink-2); font-weight: 700; } .rec-l { color: var(--loss); font-weight: 700; }
 .rival-body { padding: 4px 12px 12px; }
+
+/* v2.35: alineación sugerida (4-3-3 (2)). */
+.lineup-chips { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; padding: 0 18px 12px; }
+.lineup-chip {
+  font: inherit; font-size: .85rem; font-weight: 600; padding: 5px 12px; border-radius: 999px; cursor: pointer;
+  border: 1px solid var(--border); background: var(--surface-2); color: var(--ink-3);
+}
+.lineup-chip[aria-pressed="true"] { background: var(--accent-soft); border-color: var(--accent); color: var(--ink); }
+.lineup-chip:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.lineup-grid { display: grid; grid-template-columns: minmax(280px, 420px) 1fr; gap: 18px; padding: 0 18px 12px; align-items: start; }
+/* Cancha vertical, como la pantalla de alineación del juego. Colores fijos (es una
+   cancha): se leen igual en modo claro y oscuro. */
+.pitch {
+  position: relative; aspect-ratio: 3 / 4; border-radius: 14px; overflow: hidden;
+  background: repeating-linear-gradient(180deg, #1f6b3a 0 12.5%, #1b6135 12.5% 25%);
+  box-shadow: inset 0 0 0 2px rgb(255 255 255 / .18);
+}
+.pitch-lines span { position: absolute; border: 2px solid rgb(255 255 255 / .22); pointer-events: none; }
+.pitch-lines .pl-half { left: 0; right: 0; top: 50%; border-width: 2px 0 0; }
+.pitch-lines .pl-circle { left: 50%; top: 50%; width: 26%; aspect-ratio: 1; border-radius: 50%; transform: translate(-50%, -50%); }
+.pitch-lines .pl-box { left: 22%; right: 22%; height: 14%; }
+.pitch-lines .pl-box.top { top: -2px; border-top: 0; }
+.pitch-lines .pl-box.bottom { bottom: -2px; border-bottom: 0; }
+.pitch-spot {
+  position: absolute; transform: translate(-50%, -50%); display: grid; justify-items: center; gap: 2px;
+  width: 92px; max-width: 26%; font: inherit; color: #fff; text-align: center; background: none; border: 0; padding: 0;
+}
+button.pitch-spot { cursor: pointer; }
+button.pitch-spot:focus-visible { outline: 2px solid #fff; outline-offset: 3px; border-radius: 10px; }
+.pitch-avatar { position: relative; display: inline-grid; }
+.pitch-avatar .avatar { width: 48px; height: 48px; font-size: .95rem; box-shadow: 0 0 0 2px #fff, 0 4px 10px rgb(0 0 0 / .4); }
+.pitch-rating {
+  position: absolute; top: -6px; right: -16px; min-width: 26px; padding: 1px 5px; border-radius: 6px;
+  background: #0f1115; color: #fff; font-size: .72rem; font-weight: 700; box-shadow: 0 0 0 1px rgb(255 255 255 / .35);
+}
+.pitch-name {
+  max-width: 100%; padding: 2px 6px; border-radius: 6px; background: rgb(10 12 16 / .78);
+  font-size: .76rem; font-weight: 700; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.pitch-pos { font-size: .64rem; font-weight: 700; letter-spacing: .06em; color: rgb(255 255 255 / .85); text-shadow: 0 1px 2px rgb(0 0 0 / .6); }
+.pitch-spot.ai { opacity: .55; }
+.pitch-ai {
+  width: 34px; height: 34px; border-radius: 50%; display: grid; place-items: center; font-size: .62rem; font-weight: 700;
+  border: 2px dashed rgb(255 255 255 / .6); background: rgb(0 0 0 / .15);
+}
+.pitch-spot.ai .pitch-name { background: none; font-weight: 600; font-size: .7rem; }
+/* Explicación por jugador, al lado de la cancha. */
+.lineup-side { display: grid; gap: 10px; min-width: 0; }
+.lineup-why { border: 1px solid var(--border); border-radius: 12px; padding: 10px 12px; background: var(--surface-2); transition: box-shadow .3s; }
+.lineup-why.flash { box-shadow: 0 0 0 2px var(--accent); }
+.lineup-why header { display: flex; align-items: center; gap: 10px; }
+.lineup-why header > div { flex: 1; min-width: 0; }
+.lineup-why ul { margin: 8px 0 0; padding-left: 18px; display: grid; gap: 4px; font-size: .86rem; color: var(--ink-2); }
+.why-good { color: var(--good); font-weight: 600; }
+.why-bad { color: var(--warning); font-weight: 600; }
+.why-more { margin-top: 6px; font-size: .8rem; }
+.why-more summary { cursor: pointer; color: var(--ink-3); }
+.why-more > div { margin: 6px 0; display: grid; gap: 3px; }
+.exp-note { margin: 6px 0; padding: 8px 10px; border-radius: 10px; background: var(--exp-tint); border: 1px solid color-mix(in srgb, #a78bfa 35%, transparent); color: var(--ink-2); }
+.lineup-how { padding: 0 18px 16px; }
+.lineup-how summary { cursor: pointer; color: var(--ink-3); font-size: .85rem; }
+.badge.conf-alta { background: color-mix(in srgb, var(--good) 18%, transparent); color: var(--good); }
+.badge.conf-media { background: color-mix(in srgb, var(--warning) 18%, transparent); color: var(--warning); }
+.badge.conf-baja { background: color-mix(in srgb, var(--critical) 16%, transparent); color: var(--critical); }
+@media (max-width: 760px) {
+  .lineup-grid { grid-template-columns: 1fr; padding: 0 12px 12px; }
+  .lineup-chips { padding: 0 12px 12px; }
+  .lineup-how { padding: 0 12px 14px; }
+  .pitch-avatar .avatar { width: 40px; height: 40px; font-size: .85rem; }
+  .pitch-name { font-size: .7rem; padding: 2px 4px; }
+  .pitch-rating { right: -14px; font-size: .66rem; }
+}

@@ -1058,6 +1058,355 @@ async function renderRoles(filters, requestId) {
   });
   $('#roles-table').replaceChildren(el('thead', {}, head), body);
   renderRoleDots(list);
+  renderLineup($('#lineup'));
+}
+
+// ---------------------------------------------------------------------------
+// v2.35 (pedido del usuario): alineación sugerida para el 4-3-3 (2).
+// Verificado el 2026-11-22: el JSON de EA no trae la formación, el puesto exacto ni
+// el lado de la cancha; solo 4 posiciones generales. Por eso:
+//  - la línea (delantera, medio, defensa, portero) sale de dónde rinde mejor cada uno
+//    frente a los DEMÁS que juegan ahí (calificación, con la corrección por pocos PJ);
+//  - el puesto dentro de la línea (extremo o 9; pivote o interior) es una deducción por
+//    perfil, sin confirmar: centros y % de tiros desde el área en la delantera;
+//    intercepciones*, entradas, tiros y centros en el medio, frente a sus compañeros
+//    de línea. No se puede saber izquierda o derecha.
+// ---------------------------------------------------------------------------
+
+const LINEUP_SLOTS = [
+  { id: 'wing', label: 'Extremo', short: 'EXT', line: 'forward', cap: 2, sub: 1 },
+  { id: 'st', label: 'Delantero centro', short: 'DC', line: 'forward', cap: 1, sub: -1 },
+  { id: 'cm', label: 'Interior', short: 'MC', line: 'midfielder', cap: 2, sub: -1 },
+  { id: 'cdm', label: 'Pivote', short: 'MCD', line: 'midfielder', cap: 1, sub: 1 },
+  { id: 'def', label: 'Defensa', short: 'DEF', line: 'defender', cap: 4, sub: 0 },
+  { id: 'gk', label: 'Portero', short: 'POR', line: 'goalkeeper', cap: 1, sub: 0 },
+];
+const LINEUP_MIN = 3; // PJ mínimos en una línea para poder sugerirla
+const LINEUP_CTX_WEIGHT = 8; // puntos de índice por cada punto por partido de diferencia del equipo con él en esa línea
+const LINEUP_MIN_SD = 0.6; // piso de la dispersión de la calificación por partido (con pocos PJ casi no se puede medir)
+const LINEUP_LINES = [ // cupos por línea del 4-3-3 (2)
+  { id: 'forward', cap: 3 }, { id: 'midfielder', cap: 3 }, { id: 'defender', cap: 4 }, { id: 'goalkeeper', cap: 1 },
+];
+// Datos de cada puesto (pedido del usuario: volumen Y eficacia, todos los útiles).
+// p90: cantidad por 90 min; num/den: proporción, acercada al promedio de la línea con
+// k intentos de "peso"; low: menos es mejor; w: importancia. * = experimental (contador
+// sin documentar, ver docs/datos-ea.md).
+const sumOf = (...ks) => (s) => ks.reduce((x, k) => x + (s[k] ?? 0), 0);
+const LINEUP_METRICS = {
+  wing: [
+    { key: 'cross_ok90', label: 'Centros completados*', p90: sumOf('crosses_ok_exp'), w: 2 },
+    { key: 'cross_pct', label: 'Centros acertados*', num: sumOf('crosses_ok_exp'), den: sumOf('crosses_ok_exp', 'crosses_failed_exp'), k: 20, unit: 'centros', w: 1.5 },
+    { key: 'beats90', label: 'Rivales superados*', p90: sumOf('beats_exp'), w: 2 },
+    { key: 'carry90', label: 'Conducciones*', p90: sumOf('carries_exp'), w: 1 },
+    { key: 'ast90', label: 'Asistencias', p90: sumOf('assists'), w: 1.5 },
+    { key: 'thr90', label: 'Pases filtrados*', p90: sumOf('through_passes_exp'), w: 1 },
+    { key: 'fwon90', label: 'Faltas recibidas*', p90: sumOf('fouls_won_exp'), w: 0.5 },
+    { key: 'lost90', label: 'Balones perdidos*', p90: sumOf('possession_lost_exp'), low: true, w: 1 },
+  ],
+  st: [
+    { key: 'goals90', label: 'Goles', p90: sumOf('goals'), w: 2 },
+    { key: 'conv', label: 'Conversión', num: sumOf('goals'), den: sumOf('shots'), k: 15, unit: 'tiros', w: 2 },
+    { key: 'ontarget', label: 'Tiros a puerta*', num: sumOf('box_shots_on_exp', 'outside_shots_on_exp'), den: sumOf('box_shots_on_exp', 'box_shots_off_exp', 'outside_shots_on_exp', 'outside_shots_off_exp'), k: 15, unit: 'tiros', w: 1 },
+    { key: 'box', label: 'Tiros desde el área*', num: sumOf('box_shots_on_exp', 'box_shots_off_exp'), den: sumOf('box_shots_on_exp', 'box_shots_off_exp', 'outside_shots_on_exp', 'outside_shots_off_exp'), k: 10, unit: 'tiros', w: 1.5 },
+    { key: 'shots90', label: 'Tiros', p90: sumOf('shots'), w: 1 },
+    { key: 'aerAtt90', label: 'Aéreos ganados en ataque*', p90: sumOf('aerial_won_att_exp'), w: 1.5 },
+    { key: 'ftg90', label: 'Goles al primer toque*', p90: sumOf('first_time_goals_exp'), w: 0.5 },
+    { key: 'lost90', label: 'Balones perdidos*', p90: sumOf('possession_lost_exp'), low: true, w: 0.5 },
+  ],
+  cdm: [
+    { key: 'int90', label: 'Intercepciones*', p90: sumOf('interceptions_exp'), w: 2 },
+    { key: 'tk90', label: 'Entradas ganadas', p90: sumOf('tackles_made'), w: 1.5 },
+    { key: 'tk_pct', label: 'Entradas ganadas', num: sumOf('tackles_made'), den: sumOf('tackle_attempts'), k: 20, unit: 'entradas', w: 1.5 },
+    { key: 'won90', label: 'Balones recuperados*', p90: sumOf('possession_won_exp'), w: 1.5 },
+    { key: 'aerDef90', label: 'Aéreos ganados en defensa*', p90: sumOf('aerial_won_def_exp'), w: 1 },
+    { key: 'pass_pct', label: 'Pases completados', num: sumOf('passes_made'), den: sumOf('pass_attempts'), k: 50, unit: 'pases', w: 1 },
+    { key: 'long_pct', label: 'Pases largos completados*', num: sumOf('long_passes_ok_exp'), den: sumOf('long_passes_ok_exp', 'long_passes_failed_exp'), k: 20, unit: 'pases largos', w: 0.5 },
+    { key: 'lost90', label: 'Balones perdidos*', p90: sumOf('possession_lost_exp'), low: true, w: 1 },
+    { key: 'fouls90', label: 'Faltas cometidas*', p90: sumOf('fouls_exp'), low: true, w: 0.5 },
+  ],
+  cm: [
+    { key: 'fwd90', label: 'Pases hacia adelante completados*', p90: sumOf('forward_passes_ok_exp'), w: 1.5 },
+    { key: 'fwd_pct', label: 'Pases hacia adelante acertados*', num: sumOf('forward_passes_ok_exp'), den: sumOf('forward_passes_ok_exp', 'forward_passes_failed_exp'), k: 40, unit: 'pases adelante', w: 1.5 },
+    { key: 'pass_pct', label: 'Pases completados', num: sumOf('passes_made'), den: sumOf('pass_attempts'), k: 50, unit: 'pases', w: 1 },
+    { key: 'ast90', label: 'Asistencias', p90: sumOf('assists'), w: 1 },
+    { key: 'ast2_90', label: '2ª asistencias*', p90: sumOf('second_assists_exp'), w: 1 },
+    { key: 'thr90', label: 'Pases filtrados*', p90: sumOf('through_passes_exp'), w: 1 },
+    { key: 'goals90', label: 'Goles', p90: sumOf('goals'), w: 1 },
+    { key: 'shots90', label: 'Tiros', p90: sumOf('shots'), w: 1 },
+    { key: 'beats90', label: 'Rivales superados*', p90: sumOf('beats_exp'), w: 0.5 },
+    { key: 'won90', label: 'Balones recuperados*', p90: sumOf('possession_won_exp'), w: 0.5 },
+    { key: 'lost90', label: 'Balones perdidos*', p90: sumOf('possession_lost_exp'), low: true, w: 1 },
+  ],
+};
+// Sin 'dribbles_exp' (174): verificado el 2026-11-22 que no se comporta como regates
+// (19 por 90 min, más que los pases completados en 133 de 176 registros, r 0,82 con pases).
+const LINEUP_FIELDS = ['goals', 'assists', 'shots', 'passes_made', 'pass_attempts', 'tackles_made', 'tackle_attempts',
+  'interceptions_exp', 'possession_won_exp', 'possession_lost_exp', 'beats_exp', 'carries_exp',
+  'through_passes_exp', 'second_assists_exp', 'fouls_exp', 'fouls_won_exp', 'crosses_ok_exp', 'crosses_failed_exp',
+  'box_shots_on_exp', 'box_shots_off_exp', 'outside_shots_on_exp', 'outside_shots_off_exp',
+  'forward_passes_ok_exp', 'forward_passes_failed_exp', 'aerial_won_att_exp', 'aerial_won_def_exp',
+  'first_time_goals_exp', 'long_passes_ok_exp', 'long_passes_failed_exp'];
+const fmtSigned2 = (v) => (v == null ? '—' : `${v > 0 ? '+' : ''}${fmtNum(v, 2)}`);
+
+function lineupData(timeline) {
+  const n = (t, k) => Number(t[k] ?? 0);
+  const per = new Map(); // person_id -> { name, lines: Map(line -> acc) }
+  for (const t of timeline) {
+    if (!t.position || !(Number(t.seconds_played) > 0)) continue;
+    const p = per.get(t.person_id) ?? { name: t.person_name, lines: new Map(), ids: new Set() };
+    p.ids.add(t.match_id);
+    const a = p.lines.get(t.position) ?? { n: 0, sec: 0, r: 0, r2: 0, rn: 0, s: {} };
+    a.n++; a.sec += n(t, 'seconds_played');
+    if (t.rating != null) { a.r += Number(t.rating); a.r2 += Number(t.rating) ** 2; a.rn++; }
+    for (const k of LINEUP_FIELDS) a.s[k] = (a.s[k] ?? 0) + n(t, k);
+    // Contexto: cómo le fue al equipo con él en esa línea (puntos 3/1/0).
+    a.w = (a.w ?? 0) + (t.outcome === 'win' ? 1 : 0); a.d = (a.d ?? 0) + (t.outcome === 'draw' ? 1 : 0); a.l = (a.l ?? 0) + (t.outcome === 'loss' ? 1 : 0);
+    p.lines.set(t.position, a);
+    per.set(t.person_id, p);
+  }
+  // Puntos por partido del club en el rango (cada partido una vez).
+  const games = new Map();
+  for (const t of timeline) if (t.outcome) games.set(t.match_id, t.outcome);
+  const clubPpm = games.size ? [...games.values()].reduce((x, o) => x + (o === 'win' ? 3 : o === 'draw' ? 1 : 0), 0) / games.size : null;
+  // Índice de calificación en cada línea frente a los demás de esa línea (sin él).
+  const tot = new Map();
+  for (const p of per.values()) for (const [l, a] of p.lines) { const s = tot.get(l) ?? { r: 0, rn: 0 }; s.r += a.r; s.rn += a.rn; tot.set(l, s); }
+  for (const p of per.values()) for (const [l, a] of p.lines) {
+    const s = tot.get(l); const orn = s.rn - a.rn;
+    const own = a.rn ? a.r / a.rn : null, others = orn ? (s.r - a.r) / orn : null;
+    a.rating = own;
+    a.alone = others == null;
+    a.idx = own == null || others == null ? 100 : (100 * own) / others;
+    a.others = others;
+    // Estimación prudente: el índice menos un error típico. Así, con el mismo índice,
+    // gana la línea donde tiene más partidos (con 5 PJ el margen es mayor que con 25).
+    const sd = a.rn > 1 ? Math.sqrt(Math.max(0, (a.r2 - (a.r * a.r) / a.rn) / (a.rn - 1))) : 0;
+    a.se = own ? (100 * Math.max(sd, LINEUP_MIN_SD)) / (others ?? own) / Math.sqrt(Math.max(a.rn, 1)) : 0;
+    // Contexto (pedido del usuario): puntos por partido del equipo con él en esa línea
+    // frente al promedio del club, acercado a 0 con pocos partidos (n / (n + 5)). Cada
+    // punto por partido de diferencia vale LINEUP_CTX_WEIGHT puntos de índice.
+    const played = a.w + a.d + a.l;
+    a.ppm = played ? (3 * a.w + a.d) / played : null;
+    a.ctx = a.ppm != null && clubPpm != null ? LINEUP_CTX_WEIGHT * (a.ppm - clubPpm) * (played / (played + 5)) : 0;
+    a.score = a.idx - a.se + a.ctx;
+  }
+  // Ajuste al puesto (extremo/9, pivote/interior): cada dato del puesto frente a los
+  // compañeros de línea con LINEUP_MIN+ PJ (z, recortado a ±2), promedio ponderado.
+  // Los % se acercan al promedio de la línea con pocos intentos: (aciertos + k·prom) / (intentos + k).
+  const lineAvg = new Map(); // `${line}|${metric}` -> % promedio de la línea
+  const valueOf = (line, a, mt) => {
+    const s = a.s;
+    if (mt.p90) { const m90 = a.sec / 5400; return m90 > 0 ? mt.p90(s) / m90 : null; }
+    const num = mt.num(s), den = mt.den(s);
+    const avg = lineAvg.get(`${line}|${mt.key}`);
+    if (avg == null) return den ? num / den : null;
+    return (num + mt.k * avg) / (den + mt.k);
+  };
+  for (const [slotId, metrics] of Object.entries(LINEUP_METRICS)) {
+    const line = LINEUP_SLOTS.find((x) => x.id === slotId).line;
+    const accs = [...per.values()].map((p) => p.lines.get(line)).filter((a) => a && a.n >= LINEUP_MIN);
+    for (const mt of metrics) if (!mt.p90) {
+      const num = accs.reduce((x, a) => x + mt.num(a.s), 0), den = accs.reduce((x, a) => x + mt.den(a.s), 0);
+      lineAvg.set(`${line}|${mt.key}`, den ? num / den : null);
+    }
+    const zs = metrics.map((mt) => {
+      const vals = accs.map((a) => valueOf(line, a, mt)).filter((v) => v != null);
+      if (vals.length < 2) return () => 0;
+      const m = vals.reduce((x, y) => x + y, 0) / vals.length;
+      const sd = Math.sqrt(vals.reduce((x, y) => x + (y - m) ** 2, 0) / vals.length);
+      return (v) => (v == null || sd < 1e-9 ? 0 : Math.max(-2, Math.min(2, ((v - m) / sd) * (mt.low ? -1 : 1))));
+    });
+    for (const p of per.values()) {
+      const a = p.lines.get(line);
+      if (!a) continue;
+      a.fit ??= {}; a.detail ??= {};
+      const det = metrics.map((mt, i) => {
+        const v = valueOf(line, a, mt);
+        return { mt, v, z: zs[i](v), raw: mt.p90 ? null : { num: mt.num(a.s), den: mt.den(a.s) } };
+      });
+      const wsum = metrics.reduce((x, mt) => x + mt.w, 0);
+      a.fit[slotId] = det.reduce((x, d) => x + d.mt.w * d.z, 0) / wsum;
+      a.detail[slotId] = det;
+    }
+  }
+  const peersIn = (line) => [...per.values()].filter((p) => (p.lines.get(line)?.n ?? 0) >= LINEUP_MIN).length;
+  return { per, peersIn, clubPpm };
+}
+
+/**
+ * Reparte a los elegidos en `slots` ({cap}) maximizando la suma de `score(id, slot)`
+ * (null = no puede ir ahí). Programación dinámica por cupos; quien no cabe queda fuera.
+ */
+function assignLineup(players, slots, score) {
+  const caps0 = slots.map((s) => s.cap);
+  const memo = new Map();
+  const solve = (i, caps) => {
+    if (i === players.length) return { total: 0, picks: [] };
+    const key = `${i}|${caps.join(',')}`;
+    if (memo.has(key)) return memo.get(key);
+    let best = null;
+    slots.forEach((s, j) => {
+      if (!caps[j]) return;
+      const sc = score(players[i], s);
+      if (sc == null) return;
+      const next = caps.slice(); next[j]--;
+      const rest = solve(i + 1, next);
+      if (rest && (!best || sc + rest.total > best.total)) best = { total: sc + rest.total, picks: [{ id: players[i], slot: s, score: sc }, ...rest.picks] };
+    });
+    // Sin lugar en sus líneas: queda fuera (muy penalizado, solo si no hay otra opción).
+    const rest = solve(i + 1, caps);
+    if (rest && (!best || rest.total - 1000 > best.total)) best = { total: rest.total - 1000, picks: [{ id: players[i], slot: null, score: null }, ...rest.picks] };
+    memo.set(key, best);
+    return best;
+  };
+  return solve(0, caps0)?.picks ?? [];
+}
+
+function renderLineup(box) {
+  if (!box) return;
+  const { per, peersIn, clubPpm } = lineupData(state.timeline);
+  const clubMatches = new Set(state.timeline.map((t) => t.match_id)).size;
+  const eligible = [...per].filter(([, p]) => [...p.lines.values()].some((a) => a.n >= LINEUP_MIN))
+    .sort((a, b) => b[1].ids.size - a[1].ids.size);
+  if (!eligible.length) { box.replaceChildren(el('p', { class: 'muted small', style: 'padding: 0 18px 18px' }, `Hace falta que alguien tenga ${LINEUP_MIN}+ partidos en una posición con estos filtros.`)); return; }
+  // Quiénes juegan: por defecto los habituales (15 %+ de los partidos del club).
+  if (state.lineupClub !== state.clubId || !state.lineupOn) {
+    state.lineupOn = new Set(eligible.filter(([, p]) => p.ids.size >= BEST_PEER_SHARE * clubMatches).map(([id]) => id));
+    state.lineupClub = state.clubId;
+  }
+  const chosen = eligible.filter(([id]) => state.lineupOn.has(id)).map(([id]) => id);
+  // Paso 1: la línea de cada uno (estimación prudente del índice frente a los demás ahí).
+  const lineOf = (id, line) => { const a = per.get(id).lines.get(line.id); return a && a.n >= LINEUP_MIN ? a.score : null; };
+  const linePicks = assignLineup(chosen, LINEUP_LINES, lineOf);
+  // Paso 2: el puesto dentro de la línea, por perfil (solo desempata dentro de la línea).
+  const picks = linePicks.filter((p) => !p.slot).map((p) => ({ id: p.id, slot: null }));
+  for (const line of LINEUP_LINES) {
+    const ids = linePicks.filter((p) => p.slot?.id === line.id).map((p) => p.id);
+    const slots = LINEUP_SLOTS.filter((s) => s.line === line.id);
+    if (slots.length === 1) { picks.unshift(...ids.map((id) => ({ id, slot: slots[0] }))); continue; }
+    // Dos puestos: se reparte por el ajuste a cada puesto (volumen y eficacia en sus
+    // datos). Con 2+ humanos en la línea, el puesto de cupo 1 (9 o pivote) se llena primero.
+    const fitOf = (id, s) => (per.get(id).lines.get(line.id).fit?.[s.id] ?? 0) + (s.cap === 1 && ids.length >= 2 ? 100 : 0);
+    picks.unshift(...assignLineup(ids, slots, fitOf));
+  }
+  const bySlot = new Map(LINEUP_SLOTS.map((s) => [s.id, []]));
+  for (const p of picks) if (p.slot) bySlot.get(p.slot.id).push(p.id);
+  const shortName = (id) => per.get(id).name;
+  // Cancha vertical, arriba la delantera (como la pantalla de alineación del juego).
+  // Coordenadas en % del ancho y alto de la cancha. El lado de los extremos, interiores y
+  // defensas es indistinto: EA no dice si alguien juega por izquierda o por derecha.
+  const SPOT_XY = {
+    wing: [[17, 20], [83, 20]], st: [[50, 13]], cm: [[29, 39], [71, 39]], cdm: [[50, 55]],
+    def: [[12, 72], [37, 76], [63, 76], [88, 72]], gk: [[50, 91]],
+  };
+  const lineRating = (id, slot) => per.get(id).lines.get(slot.line).rating;
+  const spot = (slotId, i) => {
+    const s = LINEUP_SLOTS.find((x) => x.id === slotId);
+    const id = bySlot.get(slotId)[i];
+    const [x, y] = SPOT_XY[slotId][i];
+    const style = `left:${x}%;top:${y}%`;
+    if (!id) return el('div', { class: 'pitch-spot ai', style, title: `${s.label}: lo cubre la IA` }, el('span', { class: 'pitch-ai' }, s.short), el('span', { class: 'pitch-name' }, 'IA'));
+    const r = lineRating(id, s);
+    return el('button', {
+      type: 'button', class: 'pitch-spot human', style, 'data-person': id,
+      title: `${shortName(id)}: ${s.label}. Toca para ver por qué.`,
+      onclick: () => { const card = box.querySelector(`.lineup-why[data-person="${id}"]`); card?.scrollIntoView({ block: 'nearest', behavior: 'smooth' }); card?.classList.add('flash'); setTimeout(() => card?.classList.remove('flash'), 1200); },
+    },
+      el('span', { class: 'pitch-avatar' }, avatar(shortName(id), true), r != null ? el('span', { class: 'pitch-rating', title: `Calificación media de ${POS_LABEL[s.line]?.toLowerCase()}` }, fmtNum(r, 1)) : null),
+      el('span', { class: 'pitch-name' }, shortName(id)),
+      el('span', { class: 'pitch-pos' }, s.short));
+  };
+  const pitch = el('div', { class: 'pitch', role: 'group', 'aria-label': `Alineación sugerida: ${picks.filter((p) => p.slot).map((p) => `${shortName(p.id)} ${p.slot.label}`).join(', ') || 'sin humanos'}` },
+    el('div', { class: 'pitch-lines', 'aria-hidden': 'true' },
+      el('span', { class: 'pl-half' }), el('span', { class: 'pl-circle' }), el('span', { class: 'pl-box top' }), el('span', { class: 'pl-box bottom' })),
+    Object.entries(SPOT_XY).flatMap(([slotId, xy]) => xy.map((_, i) => spot(slotId, i))));
+  // Elegir quiénes juegan.
+  const chips = el('div', { class: 'lineup-chips', role: 'group', 'aria-label': 'Quiénes juegan' },
+    el('span', { class: 'muted small' }, 'Juegan:'),
+    eligible.map(([id, p]) => el('button', {
+      type: 'button', class: 'lineup-chip', 'aria-pressed': String(state.lineupOn.has(id)),
+      onclick: () => { state.lineupOn.has(id) ? state.lineupOn.delete(id) : state.lineupOn.add(id); renderLineup(box); },
+    }, p.name)));
+  // Por qué y confianza.
+  const why = (id, slot) => {
+    const a = per.get(id).lines.get(slot.line);
+    const parts = [`${a.n} PJ en ${POS_LABEL[slot.line]?.toLowerCase()}`, a.alone ? 'nadie más juega ahí para comparar' : `índice ${fmtNum(a.idx, 0)} ±${fmtNum(a.se, 0)} frente a los demás ahí`];
+    // Las otras líneas donde tiene datos, para ver con qué se comparó.
+    const alt = [...per.get(id).lines].filter(([l, b]) => l !== slot.line && b.n >= LINEUP_MIN)
+      .map(([l, b]) => `${POS_LABEL[l]?.toLowerCase()}: ${b.alone ? 'sin con quién comparar' : `índice ${fmtNum(b.idx, 0)} ±${fmtNum(b.se, 0)}`} en ${b.n} PJ`);
+    if (alt.length) parts.push(`(${alt.join('; ')})`);
+    const lines = [parts.join(' · ')];
+    const det = a.detail?.[slot.id];
+    if (det && peersIn(slot.line) >= 2) {
+      const show = (d) => (d.mt.p90 ? `${d.mt.label} ${fmtNum(d.v, 1)}/90`
+        : d.raw.den ? `${d.mt.label} ${fmtPct((100 * d.raw.num) / d.raw.den, 0)} de ${d.raw.den} ${d.mt.unit}` : `${d.mt.label}: sin intentos`);
+      const ranked = det.slice().sort((x, y) => y.mt.w * y.z - x.mt.w * x.z);
+      const good = ranked.filter((d) => d.z > 0.2 && !(d.mt.p90 && d.v < 0.05)).slice(0, 3), bad = ranked.filter((d) => d.z < -0.2).reverse().slice(0, 2);
+      if (good.length) lines.push(`Fuerte en: ${good.map(show).join(' · ')}`);
+      if (bad.length) lines.push(`Flojo en: ${bad.map(show).join(' · ')}`);
+      const others = LINEUP_SLOTS.filter((s) => s.line === slot.line);
+      lines.push(`Ajuste a cada puesto (0 = como sus compañeros de línea): ${others.map((s) => `${s.label.toLowerCase()} ${fmtSigned2(a.fit?.[s.id])}`).join(' · ')}`);
+    }
+    return lines.map((t) => el('div', {}, t));
+  };
+  const confidence = (id, slot) => {
+    const a = per.get(id).lines.get(slot.line);
+    const other = LINEUP_SLOTS.find((s) => s.line === slot.line && s.id !== slot.id);
+    const subSure = !other || (peersIn(slot.line) >= 2 && Math.abs((a.fit?.[slot.id] ?? 0) - (a.fit?.[other.id] ?? 0)) >= 0.25);
+    const lvl = a.n >= 10 && !a.alone ? (subSure ? 'Alta' : 'Media') : a.n >= 5 ? 'Media' : 'Baja';
+    const note = other && !subSure ? (peersIn(slot.line) < 2 ? 'El puesto dentro de la línea no se puede deducir: nadie más juega ahí.' : 'Se ajusta casi igual a los dos puestos de la línea.') : null;
+    return { lvl: note && lvl === 'Alta' ? 'Media' : lvl, note };
+  };
+  // Explicación corta por jugador (lo esencial); el detalle completo va plegado.
+  const lineName = (l) => POS_LABEL[l]?.toLowerCase() ?? l;
+  const short = (d) => (d.mt.p90 ? `${d.mt.label.toLowerCase()} (${fmtNum(d.v, 1)} por 90)`
+    : `${d.mt.label.toLowerCase()} (${fmtPct((100 * d.raw.num) / d.raw.den, 0)} de ${d.raw.den})`);
+  const order = ['st', 'wing', 'cm', 'cdm', 'def', 'gk'];
+  const cards = picks.filter((p) => p.slot).sort((x, y) => order.indexOf(x.slot.id) - order.indexOf(y.slot.id)).map((p) => {
+    const a = per.get(p.id).lines.get(p.slot.line);
+    const c = confidence(p.id, p.slot);
+    // Por qué esta línea.
+    const alt = [...per.get(p.id).lines].filter(([l, b]) => l !== p.slot.line && b.n >= LINEUP_MIN && b.rating != null)
+      .sort((x, y) => y[1].n - x[1].n)[0];
+    const lineWhy = a.alone
+      ? `Es el único del club que juega de ${lineName(p.slot.line)} (${a.n} PJ).`
+      : `De ${lineName(p.slot.line)} promedia ${fmtNum(a.rating, 2)} en ${a.n} PJ; los demás ahí, ${fmtNum(a.others, 2)}.`
+        + (alt ? ` De ${lineName(alt[0])}, ${fmtNum(alt[1].rating, 2)} en ${alt[1].n} PJ.` : '');
+    // Contexto: resultados del equipo con él en esa línea frente al promedio del club.
+    const rec = (b) => `${b.w}-${b.d}-${b.l}, ${fmtNum(b.ppm, 1)} pts por partido`;
+    const ctxWhy = a.ppm == null ? null
+      : `Con él ahí el equipo va ${rec(a)} (el club en general, ${fmtNum(clubPpm, 1)}).`
+        + (alt && alt[1].ppm != null ? ` Con él de ${lineName(alt[0])}: ${rec(alt[1])}.` : '');
+    // Por qué este puesto dentro de la línea: lo más fuerte y lo más flojo.
+    const det = (a.detail?.[p.slot.id] ?? []).filter((d) => d.mt.p90 ? d.v != null : d.raw.den > 0);
+    const ranked = det.slice().sort((x, y) => y.mt.w * y.z - x.mt.w * x.z);
+    const good = peersIn(p.slot.line) >= 2 ? ranked.filter((d) => d.z > 0.2 && !(d.mt.p90 && d.v < 0.05)).slice(0, 2) : [];
+    const bad = peersIn(p.slot.line) >= 2 ? ranked.filter((d) => d.z < -0.2).reverse().slice(0, 1) : [];
+    return el('article', { class: 'lineup-why', 'data-person': p.id },
+      el('header', {},
+        avatar(shortName(p.id)),
+        el('div', {}, el('strong', {}, shortName(p.id)), el('span', { class: 'muted small' }, ` · ${p.slot.label}`)),
+        el('span', { class: `badge conf-${c.lvl.toLowerCase()}`, title: 'Confianza: depende de cuántos partidos tiene en esa línea y de qué tan clara es la diferencia entre puestos' }, c.lvl)),
+      el('ul', {},
+        el('li', {}, lineWhy),
+        ctxWhy ? el('li', {}, ctxWhy) : null,
+        good.length ? el('li', {}, el('span', { class: 'why-good' }, 'Destaca en '), good.map(short).join(' y '), '.') : null,
+        bad.length ? el('li', {}, el('span', { class: 'why-bad' }, 'A mejorar: '), short(bad[0]), '.') : null,
+        c.note ? el('li', { class: 'muted' }, c.note) : null),
+      el('details', { class: 'why-more' }, el('summary', {}, 'Todos los datos'), el('div', { class: 'muted small' }, why(p.id, p.slot)),
+        el('button', { type: 'button', class: 'link-btn', onclick: () => openPerson(p.id) }, 'Ver su detalle →')));
+  });
+  const left = picks.filter((p) => !p.slot);
+  const side = el('div', { class: 'lineup-side' },
+    cards.length ? cards : el('p', { class: 'muted small' }, 'Elige al menos un jugador.'),
+    left.length ? el('p', { class: 'muted small' }, `Sin lugar en las posiciones donde tienen datos: ${left.map((p) => shortName(p.id)).join(', ')}.`) : null);
+  box.replaceChildren(chips, el('div', { class: 'lineup-grid' }, pitch, side),
+    el('details', { class: 'lineup-how' }, el('summary', {}, 'Cómo se calcula'),
+      el('p', { class: 'muted small' },
+      `Cómo se calcula: cada humano va a la línea donde rinde mejor frente a los demás que juegan ahí (calificación, solo con ${LINEUP_MIN}+ PJ en esa línea), restando su margen de error para que pese más donde tiene más partidos, y sumando el contexto: cómo le fue al equipo con él en esa línea (puntos por partido frente al promedio del club, con menos peso si son pocos partidos). Siempre sin pasar de los cupos del 4-3-3 (2). Los resultados dependen también de los compañeros y del rival: son contexto, no una prueba. `,
+      'El puesto dentro de la línea sale de los datos de cada puesto, en cantidad por 90 min y en % de acierto, frente a sus compañeros de línea. Extremo: centros, rivales superados, conducciones, asistencias, pases filtrados, faltas recibidas y pérdidas. 9: goles, conversión, tiros a puerta y desde el área, tiros, aéreos y goles al primer toque. Pivote: intercepciones, entradas, recuperaciones, aéreos en defensa, pase, pase largo, pérdidas y faltas. Interior: pase hacia adelante, pase, asistencias y 2ª asistencias, filtrados, goles, tiros, rivales superados, recuperaciones y pérdidas. ',
+      'Con pocos intentos, cada % se acerca al promedio de la línea, así un 25 % de 4 centros casi no pesa. Los datos con * son experimentales. ',
+      'EA no da la formación, el puesto exacto ni el lado de la cancha, así que no se sabe si es por izquierda o por derecha. Es una sugerencia: no prueba que alguien vaya a rendir mejor ahí.')));
 }
 
 // ---------------------------------------------------------------------------

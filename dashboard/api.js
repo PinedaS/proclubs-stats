@@ -129,6 +129,8 @@ export const EXTRA_COUNTERS = [
   // 025 (pedido del usuario): pases fallidos por dirección (verificado) y datos SIN CONFIRMAR
   // que el usuario quiere ver igual: malos pases, penales y goles de cabeza.
   'backward_passes_failed_exp', 'sideways_passes_failed_exp', 'bad_passes_exp', 'penalties_taken_exp', 'penalty_goals_exp', 'headed_goals_exp',
+  // v2.35: centros (36/37), para el perfil de extremo de la alineación sugerida.
+  'crosses_ok_exp', 'crosses_failed_exp',
 ];
 
 /** Carrera total de cada miembro según EA (todos sus clubes), 025. */

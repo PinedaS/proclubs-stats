@@ -133,6 +133,11 @@ Deja de ser beta cuando se cumplan tres condiciones:
 
 ### Por posición
 
+**Alineación sugerida · 4-3-3 (2) (experimental).** Arriba de la pestaña hay una cancha con cada humano en el puesto que mejor le va según los datos; la IA cubre los demás. Elige quiénes juegan con los botones de nombres. Al tocar a un jugador se resalta su explicación: su calificación en esa posición frente a la de los demás, cómo le ha ido al equipo con él ahí, en qué destaca y qué mejorar, y la confianza (alta, media o baja).
+- La posición (delantera, medio, defensa o portero) sale de su calificación frente a los demás que juegan ahí, con menos peso si tiene pocos partidos, y de los puntos por partido del equipo con él en esa posición.
+- El puesto dentro de la línea (extremo o 9; pivote o interior) sale de sus datos en cantidad por 90 min y en % de acierto. Con pocos intentos, el % se acerca al promedio.
+- EA no da la formación, el puesto exacto ni el lado de la cancha: es una idea para probar, no una regla.
+
 - Compara a cada jugador con el **promedio del club en su misma posición** (o arquetipo).
 - **Posición** es la general que da EA: delantero, medio, defensa o arquero. EA no distingue, por ejemplo, un extremo de un delantero centro.
 - **100 = promedio de la posición**; 120 = 20 % mejor. Así un defensa no queda abajo por marcar pocos goles.
