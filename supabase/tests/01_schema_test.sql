@@ -518,6 +518,8 @@ select pg_temp.assert_eq('anon lee el escudo', (select crest_asset_id from publi
 select pg_temp.assert_eq('vista con contadores nuevos', (select count(*) from public.v_player_match_stats where (short_passes_ok_exp is null) <> (dribbles_exp is null) or (out_of_position_severe_exp is null) <> (dribbles_exp is null)), 0::bigint);
 select pg_temp.assert_eq('vista con tipos de atajada', (select count(parry_saves) >= 0 from public.v_player_match_stats), true);
 select pg_temp.assert_eq('022: vista con media del Pro por partido', (select count(pro_overall) >= 0 from public.v_player_match_stats), true);
+select pg_temp.assert_eq('023: vista con humanos del rival', (select count(opponent_humans) >= 0 from public.v_player_match_stats), true);
+select pg_temp.assert_eq('023: anon lee los humanos del rival', (select count(opponent_humans) >= 0 from public.matches), true);
 do $$
 begin
   insert into public.club_seasons (club_id, season_no, started_at, detected_by) values (1330384, 5, now(), 'reinicio de EA');
@@ -525,6 +527,25 @@ begin
 exception when insufficient_privilege then raise notice 'PASS anon no escribe temporadas';
 end $$;
 reset role;
+
+-- 023: el relleno desde el JSON crudo cuenta los jugadores del rival (mismo UPDATE que la migración).
+insert into public.match_raw (match_id, club_id, match_type, payload) values
+  ('m23', 1330384, 'leagueMatch', '{"players": {"1330384": {"1": {}}, "777": {"a": {}, "b": {}, "c": {}}}}');
+insert into public.matches (match_id, club_id, match_type, played_at, goals_for, goals_against, outcome, opponent_club_id) values
+  ('m23', 1330384, 'leagueMatch', '2026-11-05T20:00:00Z', 1, 0, 'win', 777);
+update public.matches m
+   set opponent_humans = (select count(*)::smallint from jsonb_object_keys(r.payload -> 'players' -> m.opponent_club_id::text))
+  from public.match_raw r
+ where r.match_id = m.match_id and m.opponent_club_id is not null and m.opponent_humans is null
+   and jsonb_typeof(r.payload -> 'players' -> m.opponent_club_id::text) = 'object';
+select pg_temp.assert_eq('023: humanos del rival desde el JSON crudo', (select opponent_humans from public.matches where match_id = 'm23'), 3::smallint);
+select pg_temp.assert_eq('023: sin JSON del rival queda en null', (select opponent_humans from public.matches where match_id = 'm3'), null::smallint);
+do $$
+begin
+  update public.matches set opponent_humans = 12 where match_id = 'm23';
+  raise exception 'FAIL: se aceptaron 12 humanos rivales';
+exception when check_violation then raise notice 'PASS 023 rechaza más de 11 humanos';
+end $$;
 
 -- =============================================================================
 -- 5. Borrar el club de prueba
