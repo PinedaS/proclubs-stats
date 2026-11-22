@@ -16,13 +16,14 @@ concurrency:
   group: pages
   cancel-in-progress: true
 
+# Dos trabajos, como en la plantilla oficial de GitHub (2026-11-22): con subir y
+# desplegar en el mismo trabajo, deploy-pages falló 3 veces en un día con "No artifacts
+# named github-pages were found": a veces busca el paquete antes de que GitHub lo
+# registre. Separados, el despliegue empieza cuando la subida ya terminó.
 jobs:
-  deploy:
+  build:
     runs-on: ubuntu-24.04
     timeout-minutes: 5
-    environment:
-      name: github-pages
-      url: ${{ steps.deployment.outputs.page_url }}
     steps:
       - uses: actions/checkout@v7
       - uses: actions/configure-pages@v6
@@ -34,5 +35,14 @@ jobs:
       - uses: actions/upload-pages-artifact@v5
         with:
           path: dashboard
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
       - id: deployment
         uses: actions/deploy-pages@v5
