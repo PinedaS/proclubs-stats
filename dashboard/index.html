@@ -227,6 +227,7 @@
             <button type="button" data-split="type" aria-pressed="false">Liga / Amistoso</button>
             <button type="button" data-split="team_size" aria-pressed="false">Jugadores en cancha</button>
             <button type="button" data-split="division" aria-pressed="false">División</button>
+            <button type="button" data-split="opp_humans" aria-pressed="false">Humanos rivales</button>
           </div>
           <label class="field metric-pick">Dato <select id="split-metric" aria-label="Dato a comparar"></select></label>
           <p class="muted small" id="split-help"></p>
@@ -297,6 +298,10 @@
         <div class="card chart-card"><div class="card-head"><h2>Resultados por semana</h2><p class="muted small">Victorias, empates y derrotas de cada semana (lunes a domingo), con los filtros actuales.</p></div><div id="club-results" data-chart class="chart"></div></div>
         <div class="card chart-card"><div class="card-head"><h2>Goles por partido</h2><p class="muted small">A favor y en contra en los últimos 20 partidos. Los abandonados se ven atenuados.</p></div><div id="club-goals" data-chart class="chart"></div></div>
       </div>
+      <div class="grid-2">
+        <div class="card chart-card"><div class="card-head"><h2>División partido a partido</h2><p class="muted small">En qué división se jugó cada partido de la temporada (arriba, la más alta). El punto lleva el color del resultado. EA no da un puesto en una tabla general, sino la división y los puntos.</p></div><div id="club-division" data-chart class="chart"></div></div>
+        <div class="card chart-card"><div class="card-head"><h2>El equipo según los humanos rivales</h2><p class="muted small">Puntos por partido (victoria 3, empate 1) según cuántos humanos tenía el rival, con los goles a favor y en contra. Con pocos partidos en un grupo, la diferencia puede ser casualidad.</p></div><div id="club-opp-humans" data-chart class="chart"></div></div>
+      </div>
       <div class="card chart-card"><div class="card-head"><h2>Evolución semanal del equipo</h2><p class="muted small">Calificación media de todos los jugadores, semana a semana (lunes a domingo), con los filtros actuales.</p></div><div id="club-weekly" data-chart class="chart"></div></div>
     </section>
 
@@ -339,7 +344,7 @@
       <p><strong>Índice:</strong> su calificación en cada posición que jugó frente al promedio del club ahí (solo con 3 o más partidos). <strong>Perfil:</strong> cuánto de su forma de jugar (goles, asistencias, tiros, pases, entradas…) se parece a cada posición, comparado con los demás jugadores; suma 100 %. Es una pista, no una orden.</p>
 
       <h3>Comparar</h3>
-      <p>El mismo jugador en distintas situaciones: rival fuerte o débil, liga o amistoso, cuántos estábamos en cancha y en qué división. En <strong>Dato</strong> eliges qué comparar: calificación, G+A, % de victorias o MVP, o datos de ataque, pase y defensa (en pérdidas, menos es mejor). Fíjate en los <strong>PJ</strong> de cada celda: 2 partidos no se comparan con 30.</p>
+      <p>El mismo jugador en distintas situaciones: rival fuerte o débil, liga o amistoso, cuántos estábamos en cancha, en qué división y cuántos humanos tenía el rival. En <strong>Dato</strong> eliges qué comparar: calificación, G+A, % de victorias o MVP, o datos de ataque, pase y defensa (en pérdidas, menos es mejor). Fíjate en los <strong>PJ</strong> de cada celda: 2 partidos no se comparan con 30.</p>
 
       <h3>Compañeros</h3>
       <p>Arriba, cómo le va al equipo <strong>con y sin</strong> cada jugador (% de victorias y goles). Abajo eliges un jugador: a un lado, los partidos <strong>con él</strong>, junto a cada compañero; al otro, los partidos <strong>sin él</strong>, y cuánto cambia la calificación de cada compañero con y sin él. Muestra que las cosas van juntas, no que uno cause el rendimiento del otro: también influyen el rival, la posición y la suerte.</p>

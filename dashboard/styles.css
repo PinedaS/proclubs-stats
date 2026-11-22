@@ -912,3 +912,9 @@ th.has-tip { cursor: help; text-decoration: underline dotted; text-underline-off
 .col-help dl { margin: 6px 0 10px; }
 .col-help dt { color: var(--ink-2, inherit); font-weight: 600; margin-top: 8px; }
 .col-help dd { margin: 2px 0 0; }
+
+/* v2.28: barras sin clic (equipo según humanos rivales) y división partido a partido */
+.hbar.static { cursor: default; }
+.hbar.static:hover { background: none; }
+.step-line { fill: none; stroke: var(--series); stroke-width: 2; stroke-linejoin: round; }
+circle.dot-win { fill: var(--win); } circle.dot-draw { fill: var(--draw); } circle.dot-loss { fill: var(--loss); } circle.dot-none { fill: var(--ink-3); }

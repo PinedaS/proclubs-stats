@@ -149,6 +149,8 @@ Deja de ser beta cuando se cumplan tres condiciones:
 
 ### Comparar
 
+- **Humanos rivales:** agrupa los partidos según cuántos humanos tenía el rival, para ver cómo rinde cada uno contra equipos con más o menos humanos.
+
 - **Dato:** un menú con los datos por tema: general (calificación, G+A/90, % de victorias, % MVP), ataque, pase y defensa. Todos son por partido, por 90 minutos o en %, para no favorecer a quien jugó más. En pérdidas, menos es mejor.
 
 El mismo jugador en distintas situaciones:
@@ -175,6 +177,8 @@ Antes se llamaba "Duplas". Reúne cómo le va al equipo con y sin cada jugador, 
 ### Club
 
 - Temporada actual, nivel del club día a día, resultados por semana, goles a favor y en contra por partido, y la calificación media del equipo por semana.
+- **División partido a partido:** en qué división se jugó cada partido, con el color del resultado. EA no da un puesto en una tabla general, sino la división y los puntos.
+- **El equipo según los humanos rivales:** puntos por partido y goles según cuántos humanos tenía el rival.
 
 ### Detalle de un jugador
 

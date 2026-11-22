@@ -1277,6 +1277,7 @@ const SPLIT_HELP = {
   rival: 'Rival fuerte = nivel (skillRating) igual o mayor que la mediana de los rivales del rango filtrado.',
   type: 'Útil para ver si los amistosos inflan los números frente a la liga.',
   team_size: 'Cuántos jugadores del club estaban en cancha en ese partido.',
+  opp_humans: 'Cuántos humanos tenía el rival (el resto de su equipo es IA). El MVP se elige entre los humanos de los dos equipos, así que con más rivales humanos es más difícil ganarlo.',
   division: 'División del club el día del partido, según la foto diaria del club (aproximada; los partidos anteriores a la primera foto salen como "Sin dato"). Mira los PJ de cada celda: pocos partidos en una división no son comparables con muchos en otra.',
 };
 // Datos de Comparar. Los 4 "General" los calcula la base (person_split_stats); el resto
@@ -1309,7 +1310,41 @@ function splitBucket(t, split, median) {
   if (split === 'type') return t.match_type === 'leagueMatch' ? 'Liga' : t.match_type === 'playoffMatch' ? 'Play-off' : 'Amistoso';
   if (split === 'team_size') return t.team_size == null ? null : `${t.team_size} jugadores`;
   if (split === 'division') return t.club_division == null ? 'Sin dato' : `División ${t.club_division}`;
+  if (split === 'opp_humans') return t.opponent_humans == null ? 'Sin dato' : `${t.opponent_humans} ${Number(t.opponent_humans) === 1 ? 'rival humano' : 'rivales humanos'}`;
   return null;
+}
+
+/**
+ * v2.28: grupos que la base no calcula (humanos del rival). Arma las mismas filas que
+ * person_split_stats (PJ, V-E-D, calificación, G+A/90, % victorias, % MVP) desde la
+ * línea de tiempo, con los mismos criterios que el SQL de la 011.
+ */
+function clientSplitRows(split) {
+  const acc = new Map();
+  for (const t of state.timeline) {
+    const b = splitBucket(t, split, 0);
+    if (b == null) continue;
+    const k = `${t.person_id}|${b}`;
+    const a = acc.get(k) ?? { person_id: t.person_id, person_name: t.person_name, bucket: b, bucket_order: b === 'Sin dato' ? 99 : Number(t.opponent_humans), ids: new Map(), ratings: [], ga: 0, sec: 0, mom: 0 };
+    a.ids.set(t.match_id, t.outcome);
+    if (t.rating != null) a.ratings.push(Number(t.rating));
+    a.ga += Number(t.goals ?? 0) + Number(t.assists ?? 0);
+    a.sec += Number(t.seconds_played ?? 0);
+    if (t.is_mom) a.mom++;
+    acc.set(k, a);
+  }
+  return [...acc.values()].map((a) => {
+    const n = a.ids.size, out = [...a.ids.values()];
+    const c = (o) => out.filter((x) => x === o).length;
+    return {
+      person_id: a.person_id, person_name: a.person_name, bucket: a.bucket, bucket_order: a.bucket_order,
+      matches: n, wins: c('win'), draws: c('draw'), losses: c('loss'),
+      win_pct: n ? Math.round((1000 * c('win')) / n) / 10 : null,
+      ga_per90: a.sec ? Math.round((a.ga * 540000) / a.sec) / 100 : null,
+      avg_rating: a.ratings.length ? Math.round((100 * a.ratings.reduce((x, y) => x + y, 0)) / a.ratings.length) / 100 : null,
+      mom_pct: n ? Math.round((1000 * a.mom) / n) / 10 : null,
+    };
+  });
 }
 
 /** Calcula en el navegador un dato de Comparar por persona y grupo: Map("persona|grupo" → valor). */
@@ -1331,7 +1366,8 @@ function splitExtra(metric, split) {
 }
 
 async function renderCompare(filters, requestId) {
-  const rows = filters.types.length ? await api.getSplitStats(state.split, filters) : [];
+  // "Humanos rivales" se calcula en el navegador (la base no tiene ese grupo).
+  const rows = !filters.types.length ? [] : state.split === 'opp_humans' ? clientSplitRows('opp_humans') : await api.getSplitStats(state.split, filters);
   if (requestId !== state.requestId) return;
   $('#split-help').textContent = SPLIT_HELP[state.split];
   const metric = METRIC[state.splitMetric] ? state.splitMetric : 'avg_rating';
@@ -1781,6 +1817,8 @@ function renderClub() {
   const games = [...matchRoster(state.timeline).values()].sort((a, b) => a.at.localeCompare(b.at));
   renderResultsByWeek($('#club-results'), games);
   renderGoalsPerMatch($('#club-goals'), games);
+  renderDivisionPath($('#club-division'), games, state.timeline);
+  renderTeamByOppHumans($('#club-opp-humans'), games, state.timeline);
   const last = snaps.at(-1);
   $('#club-season-card').replaceChildren(last
     // Sin lo que ya está en la cabecera (división, V-E-D y puntos de la temporada).
@@ -1792,6 +1830,63 @@ function renderClub() {
         tile('Ascensos', fmtNum(last.promotions)), tile('Descensos', fmtNum(last.relegations)),
         tile('Histórico V-E-D', last.wins != null ? `${last.wins}-${last.draws}-${last.losses}` : '—'))
     : el('p', { class: 'muted', style: 'padding: 0 18px 18px' }, 'Sin fotos del club todavía.'));
+}
+
+/**
+ * v2.28: división de cada partido, en escalones (arriba la más alta). Sale de
+ * club_division de cada partido (anotada al capturar o, si falta, la foto del día).
+ * El color del punto es el del resultado, con la letra en la ayuda.
+ */
+function renderDivisionPath(box, games, timeline) {
+  const divOf = new Map(timeline.filter((t) => t.club_division != null).map((t) => [t.match_id, Number(t.club_division)]));
+  const list = games.filter((g) => divOf.has(g.id));
+  if (list.length < 2) { box.replaceChildren(el('p', { class: 'muted small chart-empty' }, list.length ? 'Hace falta más de un partido con división registrada.' : 'Sin partidos con división registrada en este rango.')); return; }
+  const divs = list.map((g) => divOf.get(g.id));
+  const top = Math.min(...divs), bottom = Math.max(...divs);
+  const levels = []; for (let d = top; d <= bottom; d++) levels.push(d);
+  const W = widthOf(box), H = Math.max(140, 60 + 34 * levels.length), L = 92, R = 14, T = 14, B = 26;
+  const sx = (i) => L + (list.length === 1 ? 0 : (i / (list.length - 1)) * (W - L - R));
+  const sy = (d) => T + (levels.length === 1 ? (H - T - B) / 2 : ((d - top) / (bottom - top)) * (H - T - B));
+  const s = svg('svg', { viewBox: `0 0 ${W} ${H}`, width: W, height: H, class: 'pchart-svg', role: 'img', 'aria-label': `División de cada uno de los ${list.length} partidos, de ${gameDivision(divs[0])} a ${gameDivision(divs.at(-1))}` });
+  for (const d of levels) s.append(svg('line', { x1: L, x2: W - R, y1: sy(d), y2: sy(d), class: 'grid-line' }), svgText(L - 8, sy(d) + 4, d > 1 ? `${gameDivision(d)} división` : TOP_DIVISION_NAME, { class: 'axis', 'text-anchor': 'end' }));
+  const pts = list.map((g, i) => [sx(i), sy(divOf.get(g.id))]);
+  // Escalón: horizontal hasta el partido siguiente y luego vertical.
+  const path = pts.map(([x, y], i) => (i ? `H${x} V${y}` : `M${x} ${y}`)).join(' ');
+  s.append(svg('path', { d: path, class: 'step-line' }));
+  list.forEach((g, i) => {
+    const c = svg('circle', { cx: pts[i][0], cy: pts[i][1], r: 4, class: `dot-${g.outcome ?? 'none'}` });
+    svgTitle(c, `${fmtDate(g.at, false)} · ${gameDivision(divOf.get(g.id))}${divOf.get(g.id) > 1 ? ' división' : ''} · ${OUTCOME[g.outcome]?.label ?? '—'} ${g.gf}-${g.ga}`);
+    s.append(c);
+  });
+  s.append(svgText(L, H - 6, fmtDate(list[0].at, false), { class: 'axis' }), svgText(W - R, H - 6, fmtDate(list.at(-1).at, false), { class: 'axis', 'text-anchor': 'end' }));
+  box.replaceChildren(s, el('p', { class: 'chart-legend muted small' }, ['win', 'draw', 'loss'].map((o) => el('span', {}, el('span', { class: `sw seg-${o}` }), ` ${OUTCOME[o].letter} ${OUTCOME[o].label}  `))));
+}
+
+/**
+ * v2.28: resultados del equipo según los humanos del rival (023): puntos por partido
+ * en barras, con PJ y goles a favor y en contra por partido de cada grupo.
+ */
+function renderTeamByOppHumans(box, games, timeline) {
+  const oppOf = new Map(timeline.filter((t) => t.opponent_humans != null).map((t) => [t.match_id, Number(t.opponent_humans)]));
+  const groups = new Map();
+  for (const g of games) {
+    if (!oppOf.has(g.id)) continue;
+    const k = oppOf.get(g.id);
+    const a = groups.get(k) ?? { n: 0, pts: 0, gf: 0, ga: 0, ours: 0 };
+    a.n++; a.pts += g.outcome === 'win' ? 3 : g.outcome === 'draw' ? 1 : 0; a.gf += g.gf; a.ga += g.ga; a.ours += g.people.size;
+    groups.set(k, a);
+  }
+  if (!groups.size) { box.replaceChildren(el('p', { class: 'muted small chart-empty' }, 'Sin partidos con el dato de humanos rivales en este rango.')); return; }
+  const list = [...groups].sort((a, b) => a[0] - b[0]);
+  box.replaceChildren(
+    el('div', { class: 'hbars', role: 'list' }, list.map(([k, a]) => {
+      const ppm = a.pts / a.n;
+      return el('div', { class: `hbar static${a.n < 3 ? ' low-sample' : ''}`, role: 'listitem', title: `${a.n} partidos contra ${k} humanos · ${fmtNum(ppm, 2)} puntos por partido · goles ${fmtNum(a.gf / a.n, 2)} a favor y ${fmtNum(a.ga / a.n, 2)} en contra por partido · nosotros éramos ${fmtNum(a.ours / a.n, 1)} en promedio` },
+        el('span', { class: 'hbar-name' }, `${k} rival${k === 1 ? '' : 'es'}`),
+        el('span', { class: 'hbar-track', 'aria-hidden': 'true' }, el('i', { style: `width:${(100 * ppm) / 3}%` })),
+        el('span', { class: 'hbar-val' }, el('strong', {}, fmtNum(ppm, 2)), el('span', { class: 'muted small' }, ` pts · ${a.n} PJ · ${fmtNum(a.gf / a.n, 1)}-${fmtNum(a.ga / a.n, 1)}`)));
+    })),
+    el('p', { class: 'muted small' }, 'Barra: puntos por partido (máximo 3). Al lado: partidos jugados y goles a favor-en contra por partido. Atenuado: menos de 3 partidos. Al pasar el cursor se ve cuántos humanos éramos nosotros.'));
 }
 
 /** Lunes (hora local) de la semana de una fecha, como 'YYYY-MM-DD'. */

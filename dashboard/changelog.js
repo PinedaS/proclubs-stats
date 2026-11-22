@@ -3,6 +3,16 @@
 // La fecha es la de Colombia (UTC−5), no la UTC: de noche ya es "mañana" en UTC.
 export const CHANGELOG = [
   {
+    version: '2.28',
+    date: '2026-11-22',
+    title: 'División partido a partido y humanos rivales',
+    changes: [
+      'Club: gráfica de la división en que se jugó cada partido, con el color del resultado, para ver los ascensos de la temporada.',
+      'Club: cómo le va al equipo (puntos y goles por partido) según cuántos humanos tenía el rival.',
+      'Comparar: nuevo grupo "Humanos rivales", con todos los datos del menú "Dato".',
+    ],
+  },
+  {
     version: '2.27',
     date: '2026-11-22',
     title: 'Mejor jugador: factor de nivel más suave',
