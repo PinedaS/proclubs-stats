@@ -520,6 +520,9 @@ select pg_temp.assert_eq('vista con tipos de atajada', (select count(parry_saves
 select pg_temp.assert_eq('022: vista con media del Pro por partido', (select count(pro_overall) >= 0 from public.v_player_match_stats), true);
 select pg_temp.assert_eq('023: vista con humanos del rival', (select count(opponent_humans) >= 0 from public.v_player_match_stats), true);
 select pg_temp.assert_eq('023: anon lee los humanos del rival', (select count(opponent_humans) >= 0 from public.matches), true);
+select pg_temp.assert_eq('024: vista con contadores nuevos útiles', (select count(outside_goals_exp) + count(corner_assists_exp) + count(backward_passes_ok_exp) + count(aerial_won_def_exp) >= 0 from public.v_player_match_stats), true);
+select pg_temp.assert_eq('024: vista con contadores solo guardados', (select count(fb_use_the_ball_exp) + count(penalties_taken_exp) + count(tackles_lost_exp) >= 0 from public.v_player_match_stats), true);
+select pg_temp.assert_eq('024: los nuevos son null donde faltan los contadores, igual que los demás', (select count(*) from public.v_player_match_stats where (outside_goals_exp is null) <> (dribbles_exp is null)), 0::bigint);
 do $$
 begin
   insert into public.club_seasons (club_id, season_no, started_at, detected_by) values (1330384, 5, now(), 'reinicio de EA');
