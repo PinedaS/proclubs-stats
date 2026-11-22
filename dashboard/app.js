@@ -611,11 +611,18 @@ function deriveRow(r) {
 }
 
 const isAdded = (c) => state.addedCols.includes(c.key);
-/** Lo que se muestra: lo básico, los datos importantes según los filtros de "Datos" y lo agregado a mano. */
-function visibleColumns() {
+/** ¿El dato pasa los filtros de "Datos" (totales/proporciones, oficiales/experimentales)? */
+const passesKinds = (c) => {
   const k = state.colKinds;
-  return RANKING_COLUMNS.filter((c) => c.kind === 'base' || isAdded(c) || (c.important
-    && (c.kind === 'abs' ? k.abs : k.rate) && (c.exp ? state.showExp : k.official)));
+  return (c.kind === 'abs' ? k.abs : k.rate) && (c.exp ? state.showExp : k.official);
+};
+/**
+ * Lo que se muestra: lo básico, y los datos importantes y los agregados a mano que pasan
+ * los filtros de "Datos". v2.37 (pedido del usuario): los filtros también se aplican a lo
+ * agregado; lo que ocultan sigue agregado y vuelve al activar el filtro.
+ */
+function visibleColumns() {
+  return RANKING_COLUMNS.filter((c) => c.kind === 'base' || ((c.important || isAdded(c)) && passesKinds(c)));
 }
 const cellClass = (c, extra = '') => [c.text ? 'left' : '', c.exp ? 'exp' : '', isAdded(c) ? 'added' : '', extra].join(' ').trim() || null;
 
@@ -632,11 +639,14 @@ function setAddedCols(keys) {
  */
 function renderColumnPicker() {
   const shown = new Set(visibleColumns().map((c) => c.key));
-  const rest = RANKING_COLUMNS.filter((c) => c.kind !== 'base' && !shown.has(c.key));
+  // Lo agregado no se ofrece de nuevo aunque un filtro lo oculte.
+  const rest = RANKING_COLUMNS.filter((c) => c.kind !== 'base' && !shown.has(c.key) && !isAdded(c) && passesKinds(c));
   const themes = [...new Set(rest.map((c) => c.theme))];
+  const hiddenAdded = RANKING_COLUMNS.filter((c) => isAdded(c) && !passesKinds(c));
   $('#col-picker-count').textContent = state.addedCols.length ? `${state.addedCols.length} agregado${state.addedCols.length === 1 ? '' : 's'}` : '';
   $('#col-picker-body').replaceChildren(...[
-    rest.length ? null : el('p', { class: 'muted small' }, 'Ya están todos los datos en la tabla.'),
+    hiddenAdded.length ? el('p', { class: 'muted small' }, `${hiddenAdded.length} dato${hiddenAdded.length === 1 ? '' : 's'} agregado${hiddenAdded.length === 1 ? '' : 's'} no se ve${hiddenAdded.length === 1 ? '' : 'n'} por los filtros de "Datos": ${hiddenAdded.map((c) => c.label).join(', ')}. Vuelve${hiddenAdded.length === 1 ? '' : 'n'} al activar el filtro.`) : null,
+    rest.length ? null : el('p', { class: 'muted small' }, 'No hay más datos para agregar con los filtros de "Datos" actuales.'),
     ...themes.map((t) => el('div', { class: 'picker-group' }, el('p', { class: 'picker-title' }, t),
       rest.filter((c) => c.theme === t).map((c) => el('button', {
         type: 'button', class: `picker-item${c.exp ? ' exp' : ''}`, title: c.exp ? `${c.title.replace(/\.$/, '')}. ${EXP_NOTE}.` : c.title,
@@ -768,6 +778,8 @@ function renderPodium(rows) {
 function renderRanking() {
   const table = $('#ranking-table');
   const columns = visibleColumns();
+  // Si un filtro ocultó la columna por la que se ordenaba, vuelve al orden por defecto.
+  if (!columns.some((c) => c.key === state.sort.key)) state.sort = { key: 'avg_rating', dir: -1 };
   const head = el('tr', {}, el('th', { scope: 'col', class: 'rank' }, '#'), columns.map((c) => {
     const active = state.sort.key === c.key;
     return el('th', {

@@ -59,6 +59,7 @@ API no oficial de EA ──► Colector (GitHub Actions, cada 30 min) ──► 
    - Los archivos se versionan con el commit en `pages.yml` (`__V__`), para no mezclar versiones viejas desde la caché de Pages.
    - Probado en Chrome con los datos del club de prueba.
    - **Migraciones aplicadas en Supabase:** 001–025, cada una verificada después de aplicarla.
+   - **v2.37 (2026-11-22, pedido del usuario):** los filtros "Datos" (`passesKinds`) se aplican también a lo agregado con "+ Añadir dato"; lo oculto sigue en `addedCols` y el menú lo lista. El menú solo ofrece datos que pasan los filtros.
    - **v2.36 (2026-11-22, pedido del usuario):** indicadores de carga (`withLoading` envuelve `refresh` y `openPerson`; barra `#loading-bar`, contenido atenuado, esqueleto `#first-load` con `body.first-load`; aparecen tras 150 ms y respetan `prefers-reduced-motion`). **Dato del usuario:** el juego solo deja empezar partidos con 2+ humanos (`LINEUP_MIN_HUMANS`).
    - **v2.35 (2026-11-22, pedido y aprobado por el usuario): "Alineación sugerida · 4-3-3 (2)", experimental, arriba de "Por posición"** (`renderLineup`, `lineupData`, `LINEUP_METRICS` en `app.js`; todo en el navegador desde `state.timeline`).
      - **Verificado:** el JSON de EA no trae formación, puesto exacto ni lado; solo 4 posiciones. Izquierda/derecha es imposible.

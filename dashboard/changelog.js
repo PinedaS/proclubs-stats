@@ -3,6 +3,14 @@
 // La fecha es la de Colombia (UTC−5), no la UTC: de noche ya es "mañana" en UTC.
 export const CHANGELOG = [
   {
+    version: '2.37',
+    date: '2026-11-22',
+    title: 'Filtros de datos también para lo agregado',
+    changes: [
+      'Ranking: los botones "Datos" (totales, proporciones, oficiales y experimentales) ahora también ocultan los datos agregados con "+ Añadir dato". No se pierden: siguen agregados y vuelven al activar el filtro; el menú dice cuáles están ocultos.',
+    ],
+  },
+  {
     version: '2.36',
     date: '2026-11-22',
     title: 'Pantallas de carga',
