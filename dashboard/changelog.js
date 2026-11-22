@@ -3,6 +3,14 @@
 // La fecha es la de Colombia (UTC−5), no la UTC: de noche ya es "mañana" en UTC.
 export const CHANGELOG = [
   {
+    version: '2.27',
+    date: '2026-11-22',
+    title: 'Mejor jugador: factor de nivel más suave',
+    changes: [
+      'El ajuste por la media del Pro de cada jugador pesa la mitad: con nuestros partidos, la calificación sube unos 0,05 por punto de media, y el ajuste anterior suponía el doble. Una media más baja sigue dando más mérito.',
+    ],
+  },
+  {
     version: '2.26',
     date: '2026-11-22',
     title: 'Mejor jugador: MVP según los humanos de los dos equipos',

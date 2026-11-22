@@ -2677,6 +2677,11 @@ const matchWeight = (t) => (t.match_type === 'friendlyMatch' ? BEST_FRIENDLY_WEI
 const DIV_STEP = 0.05; // +5 % por división sobre la 5ª del juego (API 6)
 const RIVAL_CAP = 0.15; // factor del rival entre ×0,85 y ×1,15
 const LEVEL_CAP = 0.10; // factor de nivel del jugador entre ×0,90 y ×1,10 (v2.13)
+// v2.27 (aprobado por el usuario): el factor de nivel vale la mitad. Factor =
+// (media del equipo / su media) ^ 0,5. Con los datos del 2026-11-22 (128 partidos con la
+// media exacta) la calificación subía ~0,05 por punto de media (± 0,16), y el factor
+// proporcional suponía ~0,10. Revisar con ~50 partidos por club.
+const LEVEL_ELASTICITY = 0.5;
 
 // Encabezados de la tabla de criterios del mejor jugador, con la explicación
 // que se ve al pasar el cursor (title).
@@ -2885,7 +2890,7 @@ function bestIndices(people, timeline, peerIds = new Set(people.map((p) => p.per
   const meanOvr = avg(withLevel.map((t) => t._ovr).filter((v) => v != null));
   const rows = withLevel.map((t) => {
     const diff = difficultyOf(t, meanSkill);
-    const lvl = t._ovr && meanOvr ? Math.min(1 + LEVEL_CAP, Math.max(1 - LEVEL_CAP, meanOvr / t._ovr)) : 1;
+    const lvl = t._ovr && meanOvr ? Math.min(1 + LEVEL_CAP, Math.max(1 - LEVEL_CAP, (meanOvr / t._ovr) ** LEVEL_ELASTICITY)) : 1;
     return { ...t, _diff: diff, _lvl: lvl, _d: diff * lvl, _mw: matchWeight(t) * abandonedWeight(t) };
   });
   // v2.21 (aprobado por el usuario): la calificación de EA sube con menos humanos en
