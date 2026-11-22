@@ -550,6 +550,36 @@ begin
 exception when check_violation then raise notice 'PASS 023 rechaza más de 11 humanos';
 end $$;
 
+-- 025: vistas de datos de EA que antes no se mostraban (forma real de las respuestas de EA).
+insert into public.ea_snapshots (for_club_id, club_id, endpoint, snapshot_date, is_opponent, payload) values
+  (1330384, 1330384, 'members/career/stats', '2026-11-20', false, '{"members":[{"name":"Viejo","gamesPlayed":"1","goals":"0","assists":"0","ratingAve":"6.0","manOfTheMatch":"0","favoritePosition":"defender"}]}'),
+  (1330384, 1330384, 'members/career/stats', '2026-11-22', false, '{"members":[{"name":"PinedaDS","gamesPlayed":"56","goals":"40","assists":"33","ratingAve":"7.7","manOfTheMatch":"12","favoritePosition":"forward"}],"positionCount":{}}'),
+  (1330384, 1330384, 'club/playoffAchievements', '2026-11-22', false, '[{"seasonId":"5","bestDivision":"3"}]'),
+  (1330384, 777, 'clubs/overallStats', '2026-11-05', true, '{"skillRating":"1442","gamesPlayed":"23","wins":"9","ties":"3","losses":"11","goals":"63","goalsAgainst":"67","promotions":"2","relegations":"0"}'),
+  (1330384, 777, 'currentSeasonLeaderboard', '2026-11-05', true, '{"currentDivision":"5","points":"30","clubInfo":{"name":"Rival 777"}}');
+update public.member_snapshots set raw = '{"nationality":{"label":"Colombia","isoCode":"CO"}}' where member_name = 'PinedaDS' and snapshot_date = '2026-11-02';
+set role anon;
+select pg_temp.assert_eq('025: carrera, solo la foto más reciente', (select count(*) from public.v_member_career where club_id = 1330384), 1::bigint);
+select pg_temp.assert_eq('025: carrera, partidos de PinedaDS', (select games_played from public.v_member_career where member_name = 'PinedaDS'), 56);
+select pg_temp.assert_eq('025: carrera, calificación', (select rating_avg from public.v_member_career where member_name = 'PinedaDS'), 7.7::numeric);
+select pg_temp.assert_eq('025: play-off, un logro', (select entry ->> 'bestDivision' from public.v_playoff_achievements where club_id = 1330384), '3');
+select pg_temp.assert_eq('025: rival, nivel', (select skill_rating from public.v_opponent_snapshots where opponent_club_id = 777), 1442);
+select pg_temp.assert_eq('025: rival, división y nombre', (select current_division || ' ' || name from public.v_opponent_snapshots where opponent_club_id = 777), '5 Rival 777');
+select pg_temp.assert_eq('025: perfil, nacionalidad', (select nationality from public.v_member_profile where member_name = 'PinedaDS'), 'Colombia');
+do $$
+begin
+  perform 1 from public.ea_snapshots limit 1;
+  raise exception 'FAIL: anon pudo leer ea_snapshots';
+exception when insufficient_privilege then raise notice 'PASS 025 anon sigue sin leer ea_snapshots';
+end $$;
+do $$
+begin
+  perform raw from public.member_snapshots limit 1;
+  raise exception 'FAIL: anon pudo leer member_snapshots.raw';
+exception when insufficient_privilege then raise notice 'PASS 025 anon sigue sin leer el JSON crudo de miembros';
+end $$;
+reset role;
+
 -- =============================================================================
 -- 5. Borrar el club de prueba
 -- =============================================================================
