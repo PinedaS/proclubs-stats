@@ -1082,6 +1082,7 @@ const LINEUP_SLOTS = [
   { id: 'gk', label: 'Portero', short: 'POR', line: 'goalkeeper', cap: 1, sub: 0 },
 ];
 const LINEUP_MIN = 3; // PJ mínimos en una línea para poder sugerirla
+const LINEUP_MIN_HUMANS = 2; // el juego no deja empezar un partido con menos humanos
 const LINEUP_CTX_WEIGHT = 8; // puntos de índice por cada punto por partido de diferencia del equipo con él en esa línea
 const LINEUP_MIN_SD = 0.6; // piso de la dispersión de la calificación por partido (con pocos PJ casi no se puede medir)
 const LINEUP_LINES = [ // cupos por línea del 4-3-3 (2)
@@ -1274,7 +1275,10 @@ function renderLineup(box) {
     state.lineupOn = new Set(eligible.filter(([, p]) => p.ids.size >= BEST_PEER_SHARE * clubMatches).map(([id]) => id));
     state.lineupClub = state.clubId;
   }
-  const chosen = eligible.filter(([id]) => state.lineupOn.has(id)).map(([id]) => id);
+  // El juego solo deja empezar un partido con 2 humanos o más (dato del usuario, 2026-11-22).
+  const selected = eligible.filter(([id]) => state.lineupOn.has(id)).map(([id]) => id);
+  const tooFew = selected.length < LINEUP_MIN_HUMANS;
+  const chosen = tooFew ? [] : selected;
   // Paso 1: la línea de cada uno (estimación prudente del índice frente a los demás ahí).
   const lineOf = (id, line) => { const a = per.get(id).lines.get(line.id); return a && a.n >= LINEUP_MIN ? a.score : null; };
   const linePicks = assignLineup(chosen, LINEUP_LINES, lineOf);
@@ -1398,7 +1402,8 @@ function renderLineup(box) {
   });
   const left = picks.filter((p) => !p.slot);
   const side = el('div', { class: 'lineup-side' },
-    cards.length ? cards : el('p', { class: 'muted small' }, 'Elige al menos un jugador.'),
+    tooFew ? el('p', { class: 'lineup-warn' }, `El juego solo deja jugar con ${LINEUP_MIN_HUMANS} humanos o más: elige al menos ${LINEUP_MIN_HUMANS} en "Juegan".`)
+      : cards.length ? cards : el('p', { class: 'muted small' }, `Elige al menos ${LINEUP_MIN_HUMANS} jugadores.`),
     left.length ? el('p', { class: 'muted small' }, `Sin lugar en las posiciones donde tienen datos: ${left.map((p) => shortName(p.id)).join(', ')}.`) : null);
   box.replaceChildren(chips, el('div', { class: 'lineup-grid' }, pitch, side),
     el('details', { class: 'lineup-how' }, el('summary', {}, 'Cómo se calcula'),
@@ -2205,7 +2210,7 @@ async function toggleMatchPlayers(row, matchId, colspan) {
     return;
   }
   row.setAttribute('aria-expanded', 'true');
-  const cell = el('td', { colspan }, el('span', { class: 'muted' }, 'Cargando jugadores…'));
+  const cell = el('td', { colspan }, spinner('Cargando jugadores…'));
   row.after(el('tr', { class: 'match-players' }, cell));
   try {
     const [players, times] = await Promise.all([api.getMatchPlayers(matchId), api.getPlayerTimes([matchId]).catch(() => [])]);
@@ -2354,7 +2359,7 @@ function renderClub() {
 async function renderPlayoffs(box) {
   const clubId = state.clubId;
   if (state.playoffsClub !== clubId) {
-    box.replaceChildren(el('p', { class: 'muted small', style: 'padding: 0 18px 18px' }, 'Cargando…'));
+    box.replaceChildren(el('p', { class: 'muted small', style: 'padding: 0 18px 18px' }, spinner()));
     state.playoffs = await api.getPlayoffs(clubId).catch(() => null);
     state.playoffsClub = clubId;
     if (state.clubId !== clubId) return;
@@ -2665,8 +2670,32 @@ function improveSection(personId) {
 function openPerson(personId) {
   if (state.personId !== personId) state.personTab = 'resumen';
   state.personId = personId;
-  renderPerson(readFilters(), state.requestId).catch(showError);
+  withLoading(renderPerson(readFilters(), state.requestId)).catch(showError);
 }
+
+// ---------------------------------------------------------------------------
+// v2.36 (pedido del usuario): indicadores de carga. Una barra animada arriba y el
+// contenido atenuado mientras se piden datos; en la primera carga, un esqueleto.
+// Aparecen con un pequeño retraso (CSS) para no parpadear en cargas rápidas.
+// ---------------------------------------------------------------------------
+
+let loadingCount = 0;
+function withLoading(promise) {
+  loadingCount++;
+  document.body.classList.add('is-loading');
+  document.querySelector('main')?.setAttribute('aria-busy', 'true');
+  const done = () => {
+    loadingCount = Math.max(0, loadingCount - 1);
+    if (!loadingCount) {
+      document.body.classList.remove('is-loading', 'first-load');
+      document.querySelector('main')?.removeAttribute('aria-busy');
+    }
+  };
+  return Promise.resolve(promise).finally(done);
+}
+
+/** Indicador pequeño de carga dentro de una tarjeta o fila. */
+const spinner = (text = 'Cargando…') => el('span', { class: 'loading-inline', role: 'status' }, el('span', { class: 'spin', 'aria-hidden': 'true' }), text);
 
 const MIN_FIT_MATCHES = 3;
 const POS_ORDER = ['forward', 'midfielder', 'defender', 'goalkeeper'];
@@ -4158,7 +4187,11 @@ function drawLineChart(container, points, opts) {
 // Carga y eventos
 // ---------------------------------------------------------------------------
 
-async function refresh() {
+function refresh() {
+  return withLoading(refreshData());
+}
+
+async function refreshData() {
   const requestId = ++state.requestId;
   const filters = readFilters();
   showError(null);
@@ -4479,4 +4512,5 @@ async function init() {
   else await refresh();
 }
 
-init();
+// Si el arranque falla antes de pedir datos, que no quede el esqueleto de carga para siempre.
+init().finally(() => { if (!loadingCount) document.body.classList.remove('first-load', 'is-loading'); });

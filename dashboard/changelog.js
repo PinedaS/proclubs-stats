@@ -3,6 +3,15 @@
 // La fecha es la de Colombia (UTC−5), no la UTC: de noche ya es "mañana" en UTC.
 export const CHANGELOG = [
   {
+    version: '2.36',
+    date: '2026-11-22',
+    title: 'Pantallas de carga',
+    changes: [
+      'Mientras se cargan datos aparece una barra animada arriba y lo que se está actualizando se atenúa. La primera vez que se abre el dashboard se ve un esqueleto animado en lugar de pestañas vacías.',
+      'Alineación sugerida: el juego solo deja jugar con 2 humanos o más, así que la sugerencia pide elegir al menos 2.',
+    ],
+  },
+  {
     version: '2.35',
     date: '2026-11-22',
     title: 'Alineación sugerida (experimental)',

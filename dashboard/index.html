@@ -17,7 +17,8 @@
   <link rel="stylesheet" href="styles.css?v=__V__">
   <script type="module" src="app.js?v=__V__"></script>
 </head>
-<body>
+<body class="first-load">
+  <div id="loading-bar" aria-hidden="true"><span></span></div>
   <header class="hero">
     <div class="hero-inner">
       <div class="club">
@@ -103,6 +104,13 @@
     <p id="few-data" class="few-data" hidden></p>
 
     <p id="error" class="error" hidden></p>
+
+    <!-- Primera carga: esqueleto animado mientras llegan los datos (lo quita withLoading). -->
+    <div id="first-load" class="card skeleton-card" role="status" aria-live="polite">
+      <p class="loading-inline"><span class="spin" aria-hidden="true"></span>Cargando los datos del club…</p>
+      <div class="sk-podium" aria-hidden="true"><span class="sk"></span><span class="sk"></span><span class="sk"></span></div>
+      <div class="sk-rows" aria-hidden="true"><span class="sk"></span><span class="sk"></span><span class="sk"></span><span class="sk"></span><span class="sk"></span></div>
+    </div>
 
     <section id="view-ranking" class="view">
       <div id="podium" class="podium" aria-label="Los tres primeros según la columna ordenada"></div>
