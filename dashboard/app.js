@@ -1869,9 +1869,15 @@ function renderTeamImprove(box, games, timeline) {
     const diffs = METRICS.map((m) => ({ m, w: val(wins, m), l: val(losses, m) })).filter((x) => x.w != null && x.l != null && x.l !== 0)
       .map((x) => ({ ...x, d: x.w / x.l - 1 })).filter((x) => Math.abs(x.d) >= 0.1).sort((a, b) => Math.abs(b.d) - Math.abs(a.d)).slice(0, 5);
     const fmtV = (x, v) => (x.m.pct ? `${fmtNum(v, 1)} %` : fmtNum(v, 2));
+    // Derecha (azul): más en las victorias; izquierda (naranja): más en las derrotas.
     wl = diffs.length
-      ? el('ul', { class: 'improve-list' }, diffs.map((x) => el('li', { class: x.m.exp ? 'exp' : null },
-          el('strong', {}, x.m.label), el('span', { class: 'muted' }, ` · victorias ${fmtV(x, x.w)}, derrotas ${fmtV(x, x.l)} (${x.d > 0 ? '+' : '−'}${fmtNum(Math.abs(100 * x.d), 0)} % en las victorias${x.m.low ? ', menos es mejor' : ''})`))))
+      ? divergingBars(diffs.sort((a, b) => b.d - a.d).map((x) => ({
+          label: x.m.label,
+          value: Math.log(Math.min(2.5, Math.max(0.4, x.w / x.l))) / Math.log(2.5),
+          text: `${x.d > 0 ? '+' : '−'}${fmtNum(Math.abs(100 * x.d), 0)} %`,
+          sub: `victorias ${fmtV(x, x.w)} · derrotas ${fmtV(x, x.l)}${x.m.low ? ' · menos es mejor' : ''}`,
+          title: `${x.m.label}: ${fmtV(x, x.w)} en las victorias y ${fmtV(x, x.l)} en las derrotas, por jugador y por 90 min${x.m.exp ? '. Dato experimental' : ''}`,
+        })), ['Más en las derrotas', 'Más en las victorias'])
       : note('Ningún dato cambia más de un 10 % entre victorias y derrotas.');
   }
   // Situaciones: puntos por partido por grupo.
@@ -1894,17 +1900,23 @@ function renderTeamImprove(box, games, timeline) {
     if (acc.size < 2) continue; // un solo grupo: nada que comparar
     for (const [k, a] of acc) if (a.n >= 4) groups.push({ k, n: a.n, ppm: a.p / a.n });
   }
-  const sit = (x) => el('li', {}, el('strong', {}, x.k.charAt(0).toUpperCase() + x.k.slice(1)), el('span', { class: 'muted' }, ` · ${fmtNum(x.ppm, 2)} puntos por partido en ${x.n} PJ`));
   const worst = [...groups].filter((x) => x.ppm < ppmAll - 0.15).sort((a, b) => a.ppm - b.ppm).slice(0, 3);
   const best = [...groups].filter((x) => x.ppm > ppmAll + 0.15).sort((a, b) => b.ppm - a.ppm).slice(0, 2);
+  // Barras de puntos por partido (0–3) con una marca en el promedio del equipo:
+  // naranja por debajo, azul por encima.
+  const sitList = [...worst, ...best.reverse()];
+  const sits = sitList.length
+    ? el('div', { class: 'hbars' }, sitList.map((x) => el('div', { class: `hbar static ${x.ppm < ppmAll ? 'below' : 'above'}`, title: `${x.k}: ${fmtNum(x.ppm, 2)} puntos por partido en ${x.n} partidos (promedio del equipo: ${fmtNum(ppmAll, 2)})` },
+        el('span', { class: 'hbar-name' }, x.k.charAt(0).toUpperCase() + x.k.slice(1)),
+        el('span', { class: 'hbar-track avg-track', 'aria-hidden': 'true' }, el('i', { style: `width:${(100 * x.ppm) / 3}%` }), el('b', { class: 'avg-mark', style: `left:${(100 * ppmAll) / 3}%` })),
+        el('span', { class: 'hbar-val' }, el('strong', {}, fmtNum(x.ppm, 2)), el('span', { class: 'muted small' }, ` · ${x.n} PJ`)))))
+    : note('Ninguna situación con 4+ partidos se aleja claramente del promedio.');
   box.replaceChildren(el('div', { class: 'improve', style: 'padding: 0 18px 18px' },
     el('div', { class: 'grid-2' },
       el('div', {}, el('p', { class: 'improve-title' }, 'Victorias frente a derrotas'), wl,
         note('Por jugador humano y por 90 minutos, para que no influya cuántos éramos. Sin partidos abandonados.')),
-      el('div', {}, el('p', { class: 'improve-title' }, `Dónde nos va peor y mejor (promedio: ${fmtNum(ppmAll, 2)} puntos por partido)`),
-        worst.length ? el('ul', { class: 'improve-list worse' }, worst.map(sit)) : note('Ninguna situación con 4+ partidos está claramente por debajo del promedio.'),
-        best.length ? el('ul', { class: 'improve-list better' }, best.map(sit)) : null,
-        note('Solo situaciones con 4 o más partidos. Rival fuerte = nivel igual o mayor que la mediana de los rivales.')))));
+      el('div', {}, el('p', { class: 'improve-title' }, 'Dónde nos va peor y mejor'), sits,
+        note(`Puntos por partido (máximo 3). La raya es el promedio del equipo: ${fmtNum(ppmAll, 2)}. Solo situaciones con 4 o más partidos. Rival fuerte = nivel igual o mayor que la mediana de los rivales.`)))));
 }
 
 /**
@@ -2030,6 +2042,22 @@ function renderGoalsPerMatch(box, games) {
 const IMPROVE_MIN = 5;
 const IMPROVE_IMPORTANCE = { attack: 1, defense: 0.8, passing: 0.5, defenseGk: 1 };
 
+/**
+ * Barras divergentes desde el centro (v2.29). items: { label, value (−1..1), text, title, sub }.
+ * Negativo = izquierda (naranja), positivo = derecha (azul). legend: [izquierda, derecha].
+ * El texto de cada fila dice el número, así no se depende solo del color.
+ */
+function divergingBars(items, legend) {
+  return el('div', { class: 'dbars improve-bars', role: 'list' },
+    items.map((x) => el('div', { class: 'dbar', role: 'listitem', title: x.title, tabindex: '0' },
+      el('span', { class: 'dbar-name' }, x.label, x.sub ? el('span', { class: 'dbar-sub' }, x.sub) : null),
+      el('span', { class: 'dbar-track' },
+        el('span', { class: 'dbar-neg' }, x.value < 0 ? el('i', { style: `width:${Math.min(100, 100 * -x.value)}%` }) : null),
+        el('span', { class: 'dbar-pos' }, x.value > 0 ? el('i', { style: `width:${Math.min(100, 100 * x.value)}%` }) : null)),
+      el('span', { class: 'dbar-val' }, x.text))),
+    el('p', { class: 'dbar-legend muted small' }, el('span', { class: 'sw neg' }), ` ${legend[0]}  `, el('span', { class: 'sw pos' }), ` ${legend[1]}`));
+}
+
 /** Valor de un dato en un grupo de filas: por 90 min, proporción o promedio. Null si hay pocas filas. */
 function improveValue(rows, s) {
   const ok = rows.filter((t) => (s.ok ? s.ok(t) : true) && Number(t.seconds_played) > 0);
@@ -2076,15 +2104,22 @@ function improveSection(personId) {
       items.push({ s, a, b, r, score: Math.abs(Math.log(Math.min(2.5, Math.max(0.25, r)))) * (importance[g] ?? 1) });
     }
   }
-  const fmt = (s, v) => (s.kind === 'ratio' && !/por partido/.test(s.label) ? `${fmtNum(100 * v, 1)} %` : fmtNum(v, s.kind === 'mean' ? 2 : 2));
-  const line = (x) => el('li', { class: x.s.label.includes('*') ? 'exp' : null, title: x.s.label.includes('*') ? 'Dato experimental: interpretación de la comunidad, no oficial de EA' : null },
-    el('strong', {}, x.s.label.replace(/^Arquero: /, '')), el('span', { class: 'muted' }, ` · ${fmt(x.s, x.a)} frente a ${fmt(x.s, x.b)} de los demás (${x.a >= x.b ? '+' : '−'}${fmtNum(Math.abs(100 * (x.a / x.b - 1)), 0)} %${x.s.low ? ', menos es mejor' : ''})`));
+  const fmt = (s, v) => (s.kind === 'ratio' && !/por partido/.test(s.label) ? `${fmtNum(100 * v, 1)} %` : fmtNum(v, 2));
   const top = (list) => list.sort((p, q) => q.score - p.score).slice(0, 3);
   const weak = top(items.filter((x) => x.r < 1)), strong = top(items.filter((x) => x.r > 1));
-  return el('div', { class: 'improve' },
-    el('div', { class: 'grid-2' },
-      el('div', {}, el('p', { class: 'improve-title' }, 'Para mejorar'), weak.length ? el('ul', { class: 'improve-list' }, weak.map(line)) : note('Nada por debajo de los demás en más de un 10 %.')),
-      el('div', {}, el('p', { class: 'improve-title' }, 'Puntos fuertes'), strong.length ? el('ul', { class: 'improve-list' }, strong.map(line)) : note('Nada por encima de los demás en más de un 10 %.'))),
+  // Gráfica divergente (v2.29): a la izquierda (naranja) lo que está por debajo de los
+  // demás, a la derecha (azul) lo que está por encima. El largo es la razón en escala
+  // logarítmica (×2 y ×½ miden lo mismo), hasta ×2,5.
+  const rows = [...weak.sort((p, q) => p.r - q.r), ...strong.sort((p, q) => p.r - q.r)];
+  const chart = rows.length ? divergingBars(rows.map((x) => ({
+    label: x.s.label.replace(/^Arquero: /, ''),
+    value: Math.log(Math.min(2.5, Math.max(0.4, x.r))) / Math.log(2.5),
+    // En los datos donde menos es mejor, el signo confunde junto a una barra azul: se dice "menos"/"más".
+    text: x.s.low ? `${fmtNum(Math.abs(100 * (x.a / x.b - 1)), 0)} % ${x.a < x.b ? 'menos' : 'más'}` : `${x.a >= x.b ? '+' : '−'}${fmtNum(Math.abs(100 * (x.a / x.b - 1)), 0)} %`,
+    title: `${x.s.label}: ${fmt(x.s, x.a)} frente a ${fmt(x.s, x.b)} de los demás${x.s.low ? ' (menos es mejor)' : ''}${x.s.label.includes('*') ? '. Dato experimental: interpretación de la comunidad, no oficial de EA' : ''}`,
+    sub: `${fmt(x.s, x.a)} · demás ${fmt(x.s, x.b)}${x.s.low ? ' · menos es mejor' : ''}`,
+  })), ['Para mejorar', 'Puntos fuertes']) : note('Ningún dato se aleja más de un 10 % de los demás en su posición.');
+  return el('div', { class: 'improve' }, chart,
     note(`Comparado con ${nPeers === 1 ? 'el otro jugador' : `los otros ${nPeers} jugadores`} que juega${nPeers === 1 ? '' : 'n'} habitualmente como ${posName} (su posición principal: ${myRows.length} partidos suyos ahí), con los filtros actuales.${nPeers === 1 ? ' Con una sola persona de referencia, "los demás" es esa persona.' : ''} Va primero lo que más se relaciona con ganar: ataque y defensa según su arquetipo, como en Mejor jugador, y después pase. Es una comparación, no un juicio: con pocos partidos puede ser casualidad. * = experimental.`));
 }
 

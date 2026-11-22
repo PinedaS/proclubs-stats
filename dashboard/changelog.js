@@ -3,6 +3,15 @@
 // La fecha es la de Colombia (UTC−5), no la UTC: de noche ya es "mañana" en UTC.
 export const CHANGELOG = [
   {
+    version: '2.30',
+    date: '2026-11-22',
+    title: 'Qué mejorar, en gráficas',
+    changes: [
+      'Puntos fuertes y para mejorar, del jugador y del equipo, ahora se ven como barras: a la izquierda (naranja) lo que está por debajo, a la derecha (azul) lo que está por encima, con el número al lado.',
+      'Situaciones del equipo: barras de puntos por partido con una raya en el promedio del equipo.',
+    ],
+  },
+  {
     version: '2.29',
     date: '2026-11-22',
     title: 'Qué mejorar, por jugador y por equipo',
