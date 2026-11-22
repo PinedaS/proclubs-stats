@@ -172,7 +172,7 @@ export function getPlayerTimes(matchIds) {
 
 export function getMatches(f) {
   const p = filterParams(f);
-  p.set('select', 'match_id,match_type,played_at,goals_for,goals_against,outcome,winner_by_dnf,opponent_name,opponent_skill_rating,opponent_division');
+  p.set('select', 'match_id,match_type,played_at,goals_for,goals_against,outcome,winner_by_dnf,opponent_name,opponent_skill_rating,opponent_division,opponent_club_id,opponent_humans');
   p.set('order', 'played_at.desc');
   p.set('limit', String(MATCH_LIST_LIMIT));
   return request(`matches?${p}`);

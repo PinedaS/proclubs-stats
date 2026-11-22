@@ -3,6 +3,14 @@
 // La fecha es la de Colombia (UTC−5), no la UTC: de noche ya es "mañana" en UTC.
 export const CHANGELOG = [
   {
+    version: '2.31',
+    date: '2026-11-22',
+    title: 'Rivales repetidos',
+    changes: [
+      'Partidos: nueva sección "Rivales repetidos" con los equipos que enfrentamos 2 veces o más. Al tocar uno se ven todos los partidos contra él (marcador, nivel, humanos de cada lado y división) y cómo rindió cada jugador frente a su calificación media.',
+    ],
+  },
+  {
     version: '2.30',
     date: '2026-11-22',
     title: 'Qué mejorar, en gráficas',

@@ -1625,6 +1625,7 @@ async function renderMatches(filters, requestId) {
   if (requestId !== state.requestId) return;
   const tflags = playerTimeFlags(times);
   renderRivalScatter(shown, flags);
+  renderRepeatRivals($('#rivals-repeat'), shown, flags);
   const byMatch = new Map();
   for (const h of hl) {
     if (!byMatch.has(h.match_id)) byMatch.set(h.match_id, { scorers: new Map(), mvp: [], humanGoals: 0, players: [] });
@@ -1684,6 +1685,90 @@ async function renderMatches(filters, requestId) {
   $('#matches-table').replaceChildren(el('thead', {}, el('tr', {}, cols.map((h, i) => (Array.isArray(h)
     ? el('th', { scope: 'col', class: mobileHidden.has(h[0]) ? 'm-hide' : null }, h[0], partialBadge(h[1]))
     : el('th', { scope: 'col', class: [i < 3 ? 'left' : '', mobileHidden.has(h) ? 'm-hide' : ''].join(' ').trim() || null }, h))))), body);
+}
+
+/**
+ * v2.31 (pedido del usuario): rivales enfrentados 2+ veces. Se agrupan por el ID del
+ * club rival (el nombre puede cambiar). Cada uno se despliega con sus partidos y con el
+ * rendimiento de cada jugador contra ese rival frente a su promedio en el rango.
+ */
+function renderRepeatRivals(box, matches, flags) {
+  const groups = new Map();
+  for (const m of matches) {
+    const k = m.opponent_club_id ?? `n:${m.opponent_name}`;
+    if (!groups.has(k)) groups.set(k, []);
+    groups.get(k).push(m);
+  }
+  const reps = [...groups.values()].filter((a) => a.length >= 2)
+    .map((a) => a.sort((x, y) => x.played_at.localeCompare(y.played_at)))
+    .sort((a, b) => b.length - a.length || b.at(-1).played_at.localeCompare(a.at(-1).played_at));
+  if (!reps.length) { box.replaceChildren(el('p', { class: 'muted small', style: 'padding: 0 18px 18px' }, 'Todavía no enfrentamos a ningún rival 2 veces o más con estos filtros.')); return; }
+  // Promedio general de cada persona en el rango (para comparar contra este rival).
+  const general = new Map();
+  for (const t of state.timeline) {
+    const g = general.get(t.person_id) ?? { r: 0, n: 0 };
+    if (t.rating != null) { g.r += Number(t.rating); g.n++; }
+    general.set(t.person_id, g);
+  }
+  const count = (list, o) => list.filter((m) => m.outcome === o).length;
+  box.replaceChildren(...reps.map((list) => {
+    const last = list.at(-1);
+    const gf = list.reduce((a, m) => a + m.goals_for, 0), ga = list.reduce((a, m) => a + m.goals_against, 0);
+    const names = [...new Set(list.map((m) => m.opponent_name).filter(Boolean))];
+    const ids = new Set(list.map((m) => m.match_id));
+    // Partidos contra este rival.
+    const matchRows = el('table', { class: 'data rival-matches' },
+      el('thead', {}, el('tr', {}, ['Fecha', 'Tipo', 'Marcador', 'Res.', 'Nivel rival', 'Humanos (nos. / ellos)', 'Div.'].map((h, i) => el('th', { scope: 'col', class: [i < 2 ? 'left' : '', i >= 4 ? 'm-hide' : ''].join(' ').trim() || null }, h)))),
+      el('tbody', {}, list.map((m) => {
+        const f = flags.get(m.match_id);
+        return el('tr', {},
+          el('td', { class: 'left' }, fmtDate(m.played_at, true)),
+          el('td', { class: 'left' }, el('span', { class: 'badge' }, TYPE_LABEL[m.match_type] ?? m.match_type)),
+          el('td', {}, el('strong', {}, `${m.goals_for} – ${m.goals_against}`), f?.incomplete ? [' ', el('span', { class: 'badge warn' }, 'Abandonado')] : null),
+          el('td', {}, resultBadge(m.outcome, m.winner_by_dnf)),
+          el('td', { class: 'm-hide' }, fmtNum(m.opponent_skill_rating)),
+          el('td', { class: 'm-hide' }, `${f?.team_size ?? '—'} / ${m.opponent_humans ?? '—'}`),
+          el('td', { class: 'm-hide' }, f?.club_division != null ? gameDivision(f.club_division) : '—'));
+      })));
+    // Jugadores contra este rival.
+    const per = new Map();
+    for (const t of state.timeline) {
+      if (!ids.has(t.match_id)) continue;
+      const p = per.get(t.person_id) ?? { name: t.person_name, ids: new Set(), r: 0, rn: 0, ga: 0, mom: 0 };
+      p.ids.add(t.match_id);
+      if (t.rating != null) { p.r += Number(t.rating); p.rn++; }
+      p.ga += Number(t.goals ?? 0) + Number(t.assists ?? 0);
+      if (t.is_mom) p.mom++;
+      per.set(t.person_id, p);
+    }
+    const playerRows = [...per].sort((a, b) => b[1].ids.size - a[1].ids.size || (b[1].r / (b[1].rn || 1)) - (a[1].r / (a[1].rn || 1))).map(([id, p]) => {
+      const avg = p.rn ? p.r / p.rn : null;
+      const g = general.get(id);
+      const gen = g?.n ? g.r / g.n : null;
+      const d = avg != null && gen != null ? avg - gen : null;
+      return el('tr', { class: 'clickable', ...onActivate(() => openPerson(id)) },
+        el('td', { class: 'left' }, playerCell(p.name)),
+        el('td', {}, fmtNum(p.ids.size)),
+        el('td', {}, fmtNum(avg, 2)),
+        el('td', { class: d == null ? 'muted' : d > 0.05 ? 'delta-up' : d < -0.05 ? 'delta-down' : null, title: gen != null ? `Su calificación media en todos los partidos del rango: ${fmtNum(gen, 2)}` : null }, d == null ? '—' : `${d > 0 ? '+' : ''}${fmtNum(d, 2)}`),
+        el('td', {}, fmtNum(p.ga)),
+        el('td', {}, fmtNum(p.mom)));
+    });
+    const playersTable = el('table', { class: 'data' },
+      el('thead', {}, el('tr', {}, ['Jugador', 'PJ', 'Calif.', 'Frente a su media', 'G+A', 'MVP'].map((h, i) => el('th', { scope: 'col', class: i === 0 ? 'left' : null, title: h === 'Frente a su media' ? 'Su calificación contra este rival menos su calificación media en todos los partidos del rango' : null }, h)))),
+      el('tbody', {}, playerRows));
+    return el('details', { class: 'rival-item' },
+      el('summary', {},
+        el('span', { class: 'rival-name' }, names.join(' / ') || '—'),
+        el('span', { class: 'rival-record' }, `${list.length} PJ · `,
+          el('span', { class: 'rec-w' }, `${count(list, 'win')} V`), ' ', el('span', { class: 'rec-d' }, `${count(list, 'draw')} E`), ' ', el('span', { class: 'rec-l' }, `${count(list, 'loss')} D`),
+          ` · goles ${gf}–${ga}`),
+        el('span', { class: 'muted small' }, `último: ${fmtDate(last.played_at, false)}`)),
+      el('div', { class: 'rival-body' },
+        el('p', { class: 'section-title' }, 'Partidos'), el('div', { class: 'table-wrap' }, matchRows),
+        el('p', { class: 'section-title' }, 'Nuestros jugadores contra este rival'), el('div', { class: 'table-wrap' }, playersTable),
+        el('p', { class: 'muted small' }, 'Con pocos partidos contra un mismo rival, las diferencias pueden ser casualidad.')));
+  }));
 }
 
 async function toggleMatchPlayers(row, matchId, colspan) {

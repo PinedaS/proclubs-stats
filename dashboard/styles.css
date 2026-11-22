@@ -937,3 +937,13 @@ circle.dot-win { fill: var(--win); } circle.dot-draw { fill: var(--draw); } circ
 .improve .hbar-name { white-space: normal; overflow: visible; line-height: 1.25; }
 /* Celular: nombre, barra y valor uno debajo del otro (va al final para mandar sobre lo de arriba). */
 @media (max-width: 640px) { .improve-bars .dbar { grid-template-columns: 1fr; gap: 4px; } .improve-bars .dbar-val { text-align: left; } }
+
+/* v2.31: rivales repetidos (Partidos) */
+.rivals-repeat { padding: 0 18px 18px; display: grid; gap: 8px; }
+.rival-item { border: 1px solid var(--border); border-radius: 10px; background: var(--surface-2); }
+.rival-item > summary { cursor: pointer; padding: 10px 12px; display: flex; flex-wrap: wrap; gap: 6px 14px; align-items: baseline; }
+.rival-item[open] > summary { border-bottom: 1px solid var(--border); }
+.rival-name { font-weight: 700; }
+.rival-record { font-variant-numeric: tabular-nums; color: var(--ink-2); }
+.rec-w { color: var(--win); font-weight: 700; } .rec-d { color: var(--ink-2); font-weight: 700; } .rec-l { color: var(--loss); font-weight: 700; }
+.rival-body { padding: 4px 12px 12px; }

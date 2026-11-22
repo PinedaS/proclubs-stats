@@ -171,6 +171,8 @@ Antes se llamaba "Duplas". Reúne cómo le va al equipo con y sin cada jugador, 
 
 ### Partidos
 
+- **Rivales repetidos:** los equipos que enfrentamos 2 veces o más. Al tocar uno se ven sus partidos (marcador, nivel del rival, humanos de cada lado y división) y cómo rindió cada jugador contra ese rival frente a su calificación media. Se agrupan por el ID del club rival, no por el nombre, que puede cambiar.
+
 - Cada partido con el rival, su nivel, la división, cuántos jugamos, el marcador, los goleadores, el MVP y las etiquetas.
 - Toca un partido para ver a cada jugador.
 
