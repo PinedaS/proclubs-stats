@@ -1819,6 +1819,7 @@ function renderClub() {
   renderGoalsPerMatch($('#club-goals'), games);
   renderDivisionPath($('#club-division'), games, state.timeline);
   renderTeamByOppHumans($('#club-opp-humans'), games, state.timeline);
+  renderTeamImprove($('#club-improve'), games, state.timeline);
   const last = snaps.at(-1);
   $('#club-season-card').replaceChildren(last
     // Sin lo que ya está en la cabecera (división, V-E-D y puntos de la temporada).
@@ -1830,6 +1831,80 @@ function renderClub() {
         tile('Ascensos', fmtNum(last.promotions)), tile('Descensos', fmtNum(last.relegations)),
         tile('Histórico V-E-D', last.wins != null ? `${last.wins}-${last.draws}-${last.losses}` : '—'))
     : el('p', { class: 'muted', style: 'padding: 0 18px 18px' }, 'Sin fotos del club todavía.'));
+}
+
+/**
+ * v2.29 (pedido del usuario): "Para mejorar como equipo".
+ * 1) Victorias frente a derrotas: datos del equipo por jugador humano y por 90 min
+ *    (así no pesa cuántos humanos éramos), sin partidos abandonados.
+ * 2) Situaciones: puntos por partido según humanos propios y rivales, nivel del rival,
+ *    división y tipo de partido; las 3 peores y las 2 mejores con 4+ partidos.
+ */
+function renderTeamImprove(box, games, timeline) {
+  const note = (t) => el('p', { class: 'muted small' }, t);
+  const rows = timeline.filter((t) => !t.incomplete && Number(t.seconds_played) > 0);
+  const n = (k) => (t) => Number(t[k] ?? 0);
+  const METRICS = [
+    { label: 'Tiros', p90: n('shots') },
+    { label: 'Pases completados', p90: n('passes_made') },
+    { label: 'Precisión de pase', pct: [n('passes_made'), n('pass_attempts')] },
+    { label: 'Entradas ganadas', p90: n('tackles_made') },
+    { label: '% de entradas', pct: [n('tackles_made'), n('tackle_attempts')] },
+    { label: 'Intercepciones*', p90: n('interceptions_exp'), exp: 'interceptions_exp' },
+    { label: 'Recuperaciones*', p90: n('possession_won_exp'), exp: 'possession_won_exp' },
+    { label: 'Pérdidas de balón*', p90: n('possession_lost_exp'), exp: 'possession_lost_exp', low: true },
+    { label: 'Regates*', p90: n('dribbles_exp'), exp: 'dribbles_exp' },
+  ];
+  const val = (list, m) => {
+    const ok = m.exp ? list.filter((t) => t[m.exp] != null) : list;
+    if (m.pct) { const d = ok.reduce((a, t) => a + m.pct[1](t), 0); return d ? (100 * ok.reduce((a, t) => a + m.pct[0](t), 0)) / d : null; }
+    const s = ok.reduce((a, t) => a + Number(t.seconds_played), 0);
+    return s ? (5400 * ok.reduce((a, t) => a + m.p90(t), 0)) / s : null;
+  };
+  const wins = rows.filter((t) => t.outcome === 'win'), losses = rows.filter((t) => t.outcome === 'loss');
+  const nW = new Set(wins.map((t) => t.match_id)).size, nL = new Set(losses.map((t) => t.match_id)).size;
+  let wl;
+  if (nW < 3 || nL < 3) wl = note('Hacen falta al menos 3 victorias y 3 derrotas (sin abandonos) para comparar.');
+  else {
+    const diffs = METRICS.map((m) => ({ m, w: val(wins, m), l: val(losses, m) })).filter((x) => x.w != null && x.l != null && x.l !== 0)
+      .map((x) => ({ ...x, d: x.w / x.l - 1 })).filter((x) => Math.abs(x.d) >= 0.1).sort((a, b) => Math.abs(b.d) - Math.abs(a.d)).slice(0, 5);
+    const fmtV = (x, v) => (x.m.pct ? `${fmtNum(v, 1)} %` : fmtNum(v, 2));
+    wl = diffs.length
+      ? el('ul', { class: 'improve-list' }, diffs.map((x) => el('li', { class: x.m.exp ? 'exp' : null },
+          el('strong', {}, x.m.label), el('span', { class: 'muted' }, ` · victorias ${fmtV(x, x.w)}, derrotas ${fmtV(x, x.l)} (${x.d > 0 ? '+' : '−'}${fmtNum(Math.abs(100 * x.d), 0)} % en las victorias${x.m.low ? ', menos es mejor' : ''})`))))
+      : note('Ningún dato cambia más de un 10 % entre victorias y derrotas.');
+  }
+  // Situaciones: puntos por partido por grupo.
+  const opps = [...new Map(timeline.filter((t) => t.opponent_skill_rating != null).map((t) => [t.match_id, Number(t.opponent_skill_rating)])).values()].sort((a, b) => a - b);
+  const median = opps.length ? opps[Math.floor(opps.length / 2)] : 0;
+  const first = new Map(); for (const t of timeline) if (!first.has(t.match_id)) first.set(t.match_id, t);
+  const pts = (g) => (g.outcome === 'win' ? 3 : g.outcome === 'draw' ? 1 : 0);
+  const ppmAll = games.length ? games.reduce((a, g) => a + pts(g), 0) / games.length : 0;
+  const dims = [
+    ['humanos propios', (t) => (t.team_size ? `con ${t.team_size} humanos nuestros` : null)],
+    ['humanos rivales', (t) => (t.opponent_humans != null ? `contra ${t.opponent_humans} humanos rivales` : null)],
+    ['rival', (t) => (t.opponent_skill_rating == null ? null : Number(t.opponent_skill_rating) >= median ? 'contra rivales fuertes' : 'contra rivales débiles')],
+    ['división', (t) => (t.club_division == null ? null : `en ${Number(t.club_division) > 1 ? `${gameDivision(t.club_division)} división` : TOP_DIVISION_NAME}`)],
+    ['tipo', (t) => TYPE_LABEL[t.match_type] ? `en ${TYPE_LABEL[t.match_type].toLowerCase()}` : null],
+  ];
+  const groups = [];
+  for (const [, f] of dims) {
+    const acc = new Map();
+    for (const g of games) { const t = first.get(g.id); const k = t ? f(t) : null; if (!k) continue; const a = acc.get(k) ?? { n: 0, p: 0 }; a.n++; a.p += pts(g); acc.set(k, a); }
+    if (acc.size < 2) continue; // un solo grupo: nada que comparar
+    for (const [k, a] of acc) if (a.n >= 4) groups.push({ k, n: a.n, ppm: a.p / a.n });
+  }
+  const sit = (x) => el('li', {}, el('strong', {}, x.k.charAt(0).toUpperCase() + x.k.slice(1)), el('span', { class: 'muted' }, ` · ${fmtNum(x.ppm, 2)} puntos por partido en ${x.n} PJ`));
+  const worst = [...groups].filter((x) => x.ppm < ppmAll - 0.15).sort((a, b) => a.ppm - b.ppm).slice(0, 3);
+  const best = [...groups].filter((x) => x.ppm > ppmAll + 0.15).sort((a, b) => b.ppm - a.ppm).slice(0, 2);
+  box.replaceChildren(el('div', { class: 'improve', style: 'padding: 0 18px 18px' },
+    el('div', { class: 'grid-2' },
+      el('div', {}, el('p', { class: 'improve-title' }, 'Victorias frente a derrotas'), wl,
+        note('Por jugador humano y por 90 minutos, para que no influya cuántos éramos. Sin partidos abandonados.')),
+      el('div', {}, el('p', { class: 'improve-title' }, `Dónde nos va peor y mejor (promedio: ${fmtNum(ppmAll, 2)} puntos por partido)`),
+        worst.length ? el('ul', { class: 'improve-list worse' }, worst.map(sit)) : note('Ninguna situación con 4+ partidos está claramente por debajo del promedio.'),
+        best.length ? el('ul', { class: 'improve-list better' }, best.map(sit)) : null,
+        note('Solo situaciones con 4 o más partidos. Rival fuerte = nivel igual o mayor que la mediana de los rivales.')))));
 }
 
 /**
@@ -1944,6 +2019,74 @@ function renderGoalsPerMatch(box, games) {
 // ---------------------------------------------------------------------------
 // Detalle de jugador
 // ---------------------------------------------------------------------------
+
+// ---------------------------------------------------------------------------
+// v2.29 (pedido del usuario): "Puntos fuertes y para mejorar". Compara al jugador con
+// los demás en su posición principal, dato por dato (los mismos de la fórmula, SUB),
+// sin ajustes: valores tal cual, para que se lean fácil. Prioriza lo que más se
+// relaciona con ganar según la revisión con datos del 2026-11-22: ataque 1, defensa
+// 0,8 y pase 0,5. Solo datos con 5+ partidos suyos y de los demás ahí.
+// ---------------------------------------------------------------------------
+const IMPROVE_MIN = 5;
+const IMPROVE_IMPORTANCE = { attack: 1, defense: 0.8, passing: 0.5, defenseGk: 1 };
+
+/** Valor de un dato en un grupo de filas: por 90 min, proporción o promedio. Null si hay pocas filas. */
+function improveValue(rows, s) {
+  const ok = rows.filter((t) => (s.ok ? s.ok(t) : true) && Number(t.seconds_played) > 0);
+  if (ok.length < IMPROVE_MIN) return null;
+  if (s.kind === 'mean') return ok.reduce((a, t) => a + s.num(t), 0) / ok.length;
+  const num = ok.reduce((a, t) => a + s.num(t), 0);
+  const den = s.kind === 'p90' ? ok.reduce((a, t) => a + Number(t.seconds_played), 0) / 5400 : ok.reduce((a, t) => a + s.den(t), 0);
+  return den > 0 ? num / den : null;
+}
+
+function improveSection(personId) {
+  const all = state.timeline.filter((t) => t.position && Number(t.seconds_played) > 0);
+  const mine = all.filter((t) => t.person_id === personId);
+  const note = (text) => el('p', { class: 'muted small' }, text);
+  if (mine.length < IMPROVE_MIN) return note(`Hacen falta al menos ${IMPROVE_MIN} partidos con estos filtros para comparar.`);
+  const secs = new Map();
+  for (const t of mine) secs.set(t.position, (secs.get(t.position) ?? 0) + Number(t.seconds_played));
+  const pos = [...secs].sort((a, b) => b[1] - a[1])[0][0];
+  const myRows = mine.filter((t) => t.position === pos);
+  // Los demás en esa posición, solo quienes la jugaron 3+ veces (sin ocasionales).
+  const count = new Map();
+  for (const t of all) if (t.position === pos && t.person_id !== personId) count.set(t.person_id, (count.get(t.person_id) ?? 0) + 1);
+  const peers = all.filter((t) => t.position === pos && t.person_id !== personId && count.get(t.person_id) >= 3);
+  const posName = (POS_LABEL[pos] ?? pos).toLowerCase();
+  if (myRows.length < IMPROVE_MIN) return note(`Hacen falta al menos ${IMPROVE_MIN} partidos de ${posName} para comparar (tiene ${myRows.length}).`);
+  if (peers.length < IMPROVE_MIN) return note(`No hay suficientes partidos de otros jugadores como ${posName} para comparar.`);
+  const rating = { label: 'Calificación', kind: 'mean', num: (t) => Number(t.rating), ok: (t) => t.rating != null };
+  // Prioridad de ataque y defensa según la familia de su arquetipo, como en Mejor jugador
+  // (ofensivo 20/10, equilibrado 15/15, defensivo 10/20 → relativo a 15).
+  const fam = new Map();
+  for (const t of myRows) fam.set(archFamily(t.archetype_id), (fam.get(archFamily(t.archetype_id)) ?? 0) + Number(t.seconds_played));
+  const famTot = [...fam.values()].reduce((a, v) => a + v, 0) || 1;
+  const famW = (k) => [...fam].reduce((a, [f, s]) => a + (s / famTot) * (ARCH_SPLIT[f][k] / 15), 0);
+  const importance = { ...IMPROVE_IMPORTANCE, attack: IMPROVE_IMPORTANCE.attack * famW('attack'), defense: IMPROVE_IMPORTANCE.defense * famW('defense') };
+  const nPeers = new Set(peers.map((t) => t.person_id)).size;
+  const groups = pos === 'goalkeeper' ? [['defenseGk', SUB.defenseGk]] : [['rating', [rating]], ['attack', SUB.attack], ['defense', SUB.defense], ['passing', SUB.passing]];
+  const items = [];
+  for (const [g, specs] of groups) {
+    for (const s of specs) {
+      const a = improveValue(myRows, s), b = improveValue(peers, s);
+      if (a == null || b == null || b === 0 || (a === 0 && b === 0)) continue;
+      const r = s.low ? (a === 0 ? 2.5 : b / a) : a / b; // > 1 = mejor que los demás
+      if (Math.abs(r - 1) < 0.1) continue; // menos del 10 %: no se destaca
+      items.push({ s, a, b, r, score: Math.abs(Math.log(Math.min(2.5, Math.max(0.25, r)))) * (importance[g] ?? 1) });
+    }
+  }
+  const fmt = (s, v) => (s.kind === 'ratio' && !/por partido/.test(s.label) ? `${fmtNum(100 * v, 1)} %` : fmtNum(v, s.kind === 'mean' ? 2 : 2));
+  const line = (x) => el('li', { class: x.s.label.includes('*') ? 'exp' : null, title: x.s.label.includes('*') ? 'Dato experimental: interpretación de la comunidad, no oficial de EA' : null },
+    el('strong', {}, x.s.label.replace(/^Arquero: /, '')), el('span', { class: 'muted' }, ` · ${fmt(x.s, x.a)} frente a ${fmt(x.s, x.b)} de los demás (${x.a >= x.b ? '+' : '−'}${fmtNum(Math.abs(100 * (x.a / x.b - 1)), 0)} %${x.s.low ? ', menos es mejor' : ''})`));
+  const top = (list) => list.sort((p, q) => q.score - p.score).slice(0, 3);
+  const weak = top(items.filter((x) => x.r < 1)), strong = top(items.filter((x) => x.r > 1));
+  return el('div', { class: 'improve' },
+    el('div', { class: 'grid-2' },
+      el('div', {}, el('p', { class: 'improve-title' }, 'Para mejorar'), weak.length ? el('ul', { class: 'improve-list' }, weak.map(line)) : note('Nada por debajo de los demás en más de un 10 %.')),
+      el('div', {}, el('p', { class: 'improve-title' }, 'Puntos fuertes'), strong.length ? el('ul', { class: 'improve-list' }, strong.map(line)) : note('Nada por encima de los demás en más de un 10 %.'))),
+    note(`Comparado con ${nPeers === 1 ? 'el otro jugador' : `los otros ${nPeers} jugadores`} que juega${nPeers === 1 ? '' : 'n'} habitualmente como ${posName} (su posición principal: ${myRows.length} partidos suyos ahí), con los filtros actuales.${nPeers === 1 ? ' Con una sola persona de referencia, "los demás" es esa persona.' : ''} Va primero lo que más se relaciona con ganar: ataque y defensa según su arquetipo, como en Mejor jugador, y después pase. Es una comparación, no un juicio: con pocos partidos puede ser casualidad. * = experimental.`));
+}
 
 function openPerson(personId) {
   if (state.personId !== personId) state.personTab = 'resumen';
@@ -2379,7 +2522,7 @@ async function renderPerson(filters, requestId) {
   // Pestañas internas: menos desplazamiento, sobre todo en el celular.
   const sec = (title, content) => (content ? [el('p', { class: 'section-title' }, title), content] : null);
   const panels = {
-    resumen: [basics, el('div', { class: 'grid-2' }, chartBox, overallBox)],
+    resumen: [basics, sec('Puntos fuertes y para mejorar', improveSection(state.personId)), el('div', { class: 'grid-2' }, chartBox, overallBox)],
     // Orden por importancia (decisión del usuario): rendimiento, relativo a la posición,
     // evolución y, al final, la posición recomendada (orientativa).
     rendimiento: [

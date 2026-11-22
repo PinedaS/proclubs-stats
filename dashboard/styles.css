@@ -918,3 +918,9 @@ th.has-tip { cursor: help; text-decoration: underline dotted; text-underline-off
 .hbar.static:hover { background: none; }
 .step-line { fill: none; stroke: var(--series); stroke-width: 2; stroke-linejoin: round; }
 circle.dot-win { fill: var(--win); } circle.dot-draw { fill: var(--draw); } circle.dot-loss { fill: var(--loss); } circle.dot-none { fill: var(--ink-3); }
+
+/* v2.29: puntos fuertes y para mejorar (jugador y equipo) */
+.improve-title { font-weight: 700; margin: 4px 0 6px; }
+.improve-list { margin: 0 0 8px; padding-left: 18px; display: grid; gap: 4px; }
+.improve-list.worse li::marker { color: var(--loss); }
+.improve-list.better li::marker { color: var(--win); }

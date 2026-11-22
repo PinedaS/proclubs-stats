@@ -178,12 +178,14 @@ Antes se llamaba "Duplas". Reúne cómo le va al equipo con y sin cada jugador, 
 
 - Temporada actual, nivel del club día a día, resultados por semana, goles a favor y en contra por partido, y la calificación media del equipo por semana.
 - **División partido a partido:** en qué división se jugó cada partido, con el color del resultado. EA no da un puesto en una tabla general, sino la división y los puntos.
+- **Para mejorar como equipo:** qué datos cambian entre victorias y derrotas (por jugador humano y por 90 minutos, sin abandonos) y en qué situaciones nos va peor y mejor (humanos propios y rivales, rival fuerte o débil, división, tipo de partido; solo con 4+ partidos). Son relaciones, no causas.
 - **El equipo según los humanos rivales:** puntos por partido y goles según cuántos humanos tenía el rival.
 
 ### Detalle de un jugador
 
 Se abre al tocar un jugador. Tiene cuatro pestañas:
 - **Resumen.**
+- **Resumen → Puntos fuertes y para mejorar:** sus 3 datos más altos y más bajos frente a los demás que juegan habitualmente en su posición principal (solo con 5+ partidos suyos y de los demás). Va primero lo que más se relaciona con ganar: ataque y defensa según su arquetipo, después pase. Si la referencia es una sola persona, lo dice.
 - **Rendimiento:** datos avanzados, relativo a su posición, calificación contra el nivel del rival, regularidad, evolución semanal y posición recomendada.
 - **Contexto:** media del Pro al entrar y actual, división en que entró, rendimiento por división, dónde juega, calendario, récords y rachas.
 - **Partidos.**

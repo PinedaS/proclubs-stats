@@ -3,6 +3,15 @@
 // La fecha es la de Colombia (UTC−5), no la UTC: de noche ya es "mañana" en UTC.
 export const CHANGELOG = [
   {
+    version: '2.29',
+    date: '2026-11-22',
+    title: 'Qué mejorar, por jugador y por equipo',
+    changes: [
+      'Detalle de cada jugador: "Puntos fuertes y para mejorar", sus 3 datos más altos y más bajos frente a los demás que juegan en su posición, primero lo que más se relaciona con ganar.',
+      'Club: "Para mejorar como equipo", qué cambia entre las victorias y las derrotas, y en qué situaciones nos va mejor y peor.',
+    ],
+  },
+  {
     version: '2.28',
     date: '2026-11-22',
     title: 'División partido a partido y humanos rivales',
