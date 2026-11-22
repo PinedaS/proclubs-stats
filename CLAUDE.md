@@ -420,6 +420,9 @@ No hay API oficial. Se usan los endpoints públicos que lee la web de Clubes de 
    - Mínimo de partidos para entrar al ranking.
    - Comparación dentro de cada posición.
    - Hacerla transparente y configurable.
+2b. **⏰ REVISIÓN PENDIENTE DE LA FÓRMULA (pedido del usuario, 2026-11-22): cuando un club llegue a ~50 partidos capturados, avisarle y revisar juntos.** Al 2026-11-22: 100 D CILANTRO 44 y FC Aston Huila 19 (contar con `matches` por `club_id`). Al empezar cada sesión, comprobarlo.
+   - El usuario quiere **seguir cambiando la fórmula mientras tanto**; la recomendación de congelarla queda para esa revisión.
+   - Temas a revisar con datos: fuerza del factor de nivel (cuánto sube la calificación por punto de media dentro de cada persona); MVP según humanos calculado con datos en vez de ×1,5 fijo (CILANTRO: ~34 % por persona con 2 humanos y ~15 % con 3); Ubicación absoluta frente a la posición; calificación contada varias veces (calificación + MVP + ataque/defensa/pase); datos experimentales a la mitad; escala fija de las notas; margen de error (*bootstrap*); si los ajustes por humanos, rival y división se sostienen con más partidos.
 3. ~~Validar el colector desde GitHub Actions contra EA.~~ **Primera prueba OK (2026-11-11), sin 403.** Hay que vigilar fallas intermitentes en `collector_runs`. El plan B (un dispositivo en casa) sigue disponible.
 4. **Descifrar `match_event_aggregate`** (opcional, futuro). **Investigado el 2026-11-11:**
    - **No está cifrado.** Son contadores sin documentar con el formato `código:cantidad`. En nuestros datos solo `_0` y `_1` traen valores.
