@@ -58,7 +58,7 @@ API no oficial de EA ──► Colector (GitHub Actions, cada 30 min) ──► 
    - Filtros: tipo de partido, fechas, mínimo de partidos y excluir incompletos.
    - Los archivos se versionan con el commit en `pages.yml` (`__V__`), para no mezclar versiones viejas desde la caché de Pages.
    - Probado en Chrome con los datos del club de prueba.
-   - **Migraciones aplicadas en Supabase:** 001–022, cada una verificada después de aplicarla.
+   - **Migraciones aplicadas en Supabase:** 001–023, cada una verificada después de aplicarla.
    - **BETA (decidido con el usuario el 2026-11-16, v2.10):** etiqueta "Beta" junto a la versión.
      - **Qué es beta:** solo la forma de mostrar y analizar (pestañas, gráficas y fórmula). **Los datos de EA no.** El texto lo aclara.
      - **Criterios de salida (las tres condiciones):**
@@ -396,6 +396,10 @@ No hay API oficial. Se usan los endpoints públicos que lee la web de Clubes de 
      - **Verificado (2026-11-17):** EA no da el nivel del arquetipo (1–50); `members/stats` solo trae `proOverall`. Y la media por partido de AlxCampu fue 80–81 con el arquetipo 4 y 79 con el 10, un buen indicio de que EA manda la media del arquetipo del último partido.
      - **Fuerza del factor de nivel:** se queda proporcional (tope ±10 %). Recomendación dada: revisarla con ~50 partidos, midiendo con los datos cuánto sube la calificación de una persona por punto de media; hoy no se ve relación (Andresjimene 7,39 con 81 y 6,84 con 82).
    - **v2.19 (2026-11-18, aprobado por el usuario):** cada MVP pesa además `team_size / promedio de humanos del rango` (con 3 humanos vale 1,5 veces lo que con 2). Hallazgo del 2026-11-18: la calificación media de EA es 8,13 con 2 humanos y 7,17 con 3 (31 partidos); **la calificación todavía no se ajusta por humanos** (propuesta A, pendiente de decidir). Con división × rival aplicados la diferencia sigue: 8,37 frente a 7,69, y dentro de cada persona también (AlxCampu +1,0; PinedaDS +0,85; Andresjimene +0,57).
+   - **v2.26 (2026-11-22, aprobado por el usuario): migración 023, humanos del rival (`matches.opponent_humans`).**
+     - **Verificado** en los 10 partidos del fixture: un solo MVP por partido, elegido entre los humanos de los dos equipos (4 del club, 6 del rival, nunca la IA).
+     - El colector lo cuenta en `players[<rival>]` (`opponentHumansOf` en `transform.ts`); la 023 rellenó los 63 partidos existentes desde `match_raw` (rivales con 2 a 7 humanos) y lo agregó al final de la vista.
+     - MVP: cada uno pesa `(team_size + opponent_humans) / promedio`; sin dato del rival, se usa el promedio de los rivales. Reemplaza al `team_size / promedio` de la v2.19.
    - **v2.25 (2026-11-22, aprobado por el usuario): Impacto estratificado por `team_size`.** Para cada número de humanos con partidos con y sin él, diferencia de % de puntos, ponderada por n_con × n_sin / (n_con + n_sin). Neutro si hay menos de 5 partidos sin él comparables. Motivo (datos del 2026-11-22): en CILANTRO 2,11 puntos por partido con 2 humanos y 0,96 con 3; en Aston 1,00 / 1,29 / 1,40 con 2 / 3 / 4 (muestras chicas). Los partidos sin un jugador tienen menos humanos, así que el impacto mezclaba el efecto del tamaño. El usuario creía que con pocos humanos es más difícil ganar; en CILANTRO los datos dicen lo contrario, por eso no se agregó un premio fijo.
      - Efecto: CILANTRO AlxCampu 74,2 → 77,7 (impacto 94 → 115), PinedaDS 62,9 → 66,5 (75 → 101); Aston Hecodes98 73,1 → 70,3 (137 → 100, neutro), Henoxerwtf 61,0 → 58,9.
    - **v2.24 (2026-11-18, decisión del usuario):** la pestaña "Duplas" pasa a llamarse **"Compañeros"** (la vista interna sigue siendo `pairs`; la sección de la matriz conserva el título "Duplas"). Se descartaron "Química" e "Impacto" porque sugieren causa y los datos son correlación.

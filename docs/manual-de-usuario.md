@@ -122,7 +122,7 @@ Deja de ser beta cuando se cumplan tres condiciones:
 - **Jugadores en cancha:** la calificación y los datos por 90 minutos se ajustan según cuántos humanos jugaron, porque con menos humanos cada uno toca más el balón.
 - **Dificultad en todo:** MVP, juego limpio y regularidad también usan la división, el rival y el nivel; impacto, la división y el rival.
 - **Regularidad:** solo cuentan los partidos por debajo de su media.
-- **MVP y humanos en cancha:** cada MVP vale según los humanos que había (con 3 vale 1,5 veces lo que con 2), porque con menos humanos es más fácil ganarlo.
+- **MVP y humanos en cancha:** el MVP se elige entre los humanos de los dos equipos, así que cada MVP vale según cuántos había en total: ganarlo entre 8 vale el doble que entre 4.
 - **Impacto en el equipo:** compara el % de puntos (victoria 3, empate 1, derrota 0) con y sin el jugador, solo entre partidos con el mismo número de humanos: cuando alguien falta hay menos humanos, y eso cambia los resultados del equipo. Se corrige según el menor entre partidos con él y sin él. Con menos de 5 partidos sin él, queda en 100.
 - **Pesos reales:** la nota es 50 + 15 × (índice − 100) ÷ la dispersión del criterio entre los jugadores del ranking (mínimo 5). Así cada criterio mueve el puntaje según su peso y no según lo disperso que sea.
 - **Justo para quien rota:** todo se compara con el promedio de su posición. El portero se mide por % de atajadas en vez de por ataque.

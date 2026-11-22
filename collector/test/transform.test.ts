@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { describe, test } from 'node:test';
 import type { ClubMatch } from 'proclubs-sdk';
-import { TransformError, normalizeMatch, parseEventAggregates, toRawRow } from '../src/transform.ts';
+import { TransformError, normalizeMatch, opponentHumansOf, parseEventAggregates, toRawRow } from '../src/transform.ts';
 
 // Fixture con estructura y stats REALES: 10 partidos de liga de "Aston Huila"
 // (club ajeno de prueba), descargados con `npm run fetch-fixture` el 2026-11-10.
@@ -48,8 +48,16 @@ describe('normalizeMatch con datos reales', () => {
       winner_by_dnf: false,
       opponent_club_id: 9000001,
       opponent_name: 'Rival FC 01',
+      opponent_humans: 3,
       last_collected_at: '2026-11-10T12:00:00.000Z',
     });
+  });
+
+  test('humanos del rival: cuenta sus jugadores; null si no viene el rival o sus jugadores', () => {
+    const m = match('165590075320436');
+    assert.equal(opponentHumansOf(m, '9000001'), 3);
+    assert.equal(opponentHumansOf(m, undefined), null);
+    assert.equal(opponentHumansOf({ ...m, players: { [CLUB]: players(m, CLUB) } } as typeof m, '9000001'), null);
   });
 
   test('convierte los stats del jugador (strings -> números y booleanos)', () => {

@@ -3,6 +3,15 @@
 // La fecha es la de Colombia (UTC−5), no la UTC: de noche ya es "mañana" en UTC.
 export const CHANGELOG = [
   {
+    version: '2.26',
+    date: '2026-11-22',
+    title: 'Mejor jugador: MVP según los humanos de los dos equipos',
+    changes: [
+      'Ahora se guarda cuántos humanos tenía el rival en cada partido (también en los ya jugados).',
+      'El MVP se elige entre los humanos de los dos equipos: cada MVP vale según cuántos había en total. Ganarlo entre 8 vale el doble que entre 4.',
+    ],
+  },
+  {
     version: '2.25',
     date: '2026-11-22',
     title: 'Mejor jugador: impacto según humanos en cancha',

@@ -2711,7 +2711,7 @@ const BEST_CRITERIA = [
   // ni corregirlo por pocos partidos. La nota es el % tal cual.
   { key: 'positioning', label: 'Ubicación*', weight: 5, absolute: true, help: 'Su % de veces en posición frente a fuera de posición, según los avisos del juego. Se mide por su cuenta, sin compararlo con los demás de su posición: la nota es el % tal cual (98 % en posición = nota 98).' },
   { key: 'impact', label: 'Impacto en el equipo', weight: 10, help: '% de puntos que gana el equipo con él (victoria 3, empate 1, derrota 0) menos el % sin él, comparando solo partidos con el mismo número de humanos (cuando alguien falta hay menos humanos, y eso cambia los resultados); cada punto de diferencia suma o resta un punto al índice. Se corrige según el menor entre partidos con él y sin él, y con menos de 5 partidos sin él queda en 100.' },
-  { key: 'mvp', label: 'MVP', weight: 10, help: 'Su % de MVP frente al promedio de los jugadores que entran al ranking. Cada MVP vale según la dificultad del partido, su nivel y los humanos en cancha (con 3 humanos vale 1,5 veces lo que con 2, porque con menos humanos es más fácil ganarlo).' },
+  { key: 'mvp', label: 'MVP', weight: 10, help: 'Su % de MVP frente al promedio de los jugadores que entran al ranking. Cada MVP vale según la dificultad del partido, su nivel y los humanos en cancha de los dos equipos: el MVP se elige entre todos ellos, así que ganarlo entre 8 humanos vale el doble que entre 4.' },
   { key: 'fairplay', label: 'Juego limpio', weight: 5, help: 'Sanciones por 90 min frente al promedio: roja 3, amarilla* 1, penal cometido* 1, falta* 0,25. Menos sanciones = más puntos.' },
   { key: 'regularity', label: 'Regularidad', weight: 5, help: 'Qué tan estable es su calificación (ajustada por dificultad y nivel): solo cuentan los partidos por debajo de su media, así un partido excepcional no le resta. Menos caídas que el promedio = índice mayor.' },
 ];
@@ -3036,16 +3036,21 @@ function bestIndices(people, timeline, peerIds = new Set(people.map((p) => p.per
     else if (playedAny) { o.impact = 100; o.impactNeutral = true; }
     else o.impact = null;
   }
-  // Humanos en cancha promedio de los partidos del rango (para el MVP, v2.19).
-  const meanSize = avg(roster.map((m) => m.people.size).filter((v) => v > 0)) || 1;
+  // v2.26: el MVP se elige entre los humanos de LOS DOS equipos (verificado el
+  // 2026-11-22), así que cada MVP vale según el total de humanos en cancha: nuestros
+  // + del rival (023). Si falta el dato del rival, se usa el promedio de los rivales.
+  const oppOf = new Map(rows.filter((t) => t.opponent_humans != null).map((t) => [t.match_id, Number(t.opponent_humans)]));
+  const meanOpp = avg([...oppOf.values()]) ?? 0;
+  const totalHumans = (t) => (Number(t.team_size) || 0) + (oppOf.get(t.match_id) ?? meanOpp);
+  const meanTotal = avg(roster.map((m) => (sizeOf.get(m.id) ?? 0) + (oppOf.get(m.id) ?? meanOpp)).filter((v) => v > 0)) || 1;
   // MVP frente al promedio de los que entran (amistoso = ½).
   const mvpPct = (p) => {
     const mine = byPerson.get(p.person_id) ?? [];
     const n = mine.reduce((a, t) => a + t._mw, 0);
-    // v2.18: cada MVP vale según la dificultad del partido y su nivel (_d).
-    // v2.19: y según los humanos en cancha (con 3 vale 1,5 veces lo que con 2): con
-    // menos humanos es más fácil ganarlo. Se divide por el promedio para no inflar el total.
-    return n ? (100 * mine.reduce((a, t) => a + (t.is_mom ? t._mw * t._d * ((Number(t.team_size) || meanSize) / meanSize) : 0), 0)) / n : null;
+    // v2.18: cada MVP vale según la dificultad del partido y su nivel (_d), y según
+    // cuántos humanos había en cancha: ganarlo entre 8 vale el doble que entre 4. Se
+    // divide por el promedio para no inflar el total.
+    return n ? (100 * mine.reduce((a, t) => a + (t.is_mom ? t._mw * t._d * ((totalHumans(t) || meanTotal) / meanTotal) : 0), 0)) / n : null;
   };
   const mvps = new Map(people.map((p) => [p.person_id, mvpPct(p)]));
   const mvpMean = avg([...mvps.values()].filter((v) => v != null));

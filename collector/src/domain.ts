@@ -31,6 +31,8 @@ export interface MatchRow {
   winner_by_dnf: boolean;
   opponent_club_id: number | null;
   opponent_name: string | null;
+  /** Humanos del rival en el partido (cuántos jugadores suyos trae EA). 023. */
+  opponent_humans: number | null;
   last_collected_at: string;
 }
 

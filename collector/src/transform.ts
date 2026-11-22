@@ -111,6 +111,13 @@ export function normalizeMatch(raw: ClubMatch, ctx: TransformContext): Normalize
   }
 }
 
+/** Humanos del rival: cuántos jugadores suyos trae `players`. Null si no viene el rival. */
+export function opponentHumansOf(raw: ClubMatch, opponentId: string | undefined): number | null {
+  if (!opponentId) return null;
+  const theirs = asDict(asDict(raw.players)?.[opponentId]);
+  return theirs ? Object.keys(theirs).length : null;
+}
+
 function normalizeUnsafe(raw: ClubMatch, matchId: string, ctx: TransformContext): NormalizedMatch {
   const nowIso = ctx.collectedAt.toISOString();
   const clubs = asDict(raw.clubs) ?? {};
@@ -134,6 +141,9 @@ function normalizeUnsafe(raw: ClubMatch, matchId: string, ctx: TransformContext)
     winner_by_dnf: isBlank(ours.winnerByDnf) ? false : flag(ours.winnerByDnf, 'clubs.winnerByDnf'),
     opponent_club_id: opponentId ? int(opponentId, 'opponentClubId') : null,
     opponent_name: typeof opponentName === 'string' ? opponentName : null,
+    // 023: el MVP se elige entre los humanos de los dos equipos, así que importa
+    // cuántos tenía el rival. EA solo manda stats de humanos: cada clave es uno.
+    opponent_humans: opponentHumansOf(raw, opponentId),
     last_collected_at: nowIso,
   };
 
