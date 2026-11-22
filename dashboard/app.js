@@ -443,7 +443,7 @@ const RANKING_COLUMNS = [
   { theme: 'Pase', key: 'forward_pass_pct_exp', label: 'Pase adel. %*', kind: 'rate', title: 'Pases hacia adelante completados', digits: 1, exp: true },
   { theme: 'Pase', key: 'through_passes_exp', label: 'Filtrados*', kind: 'abs', important: true, title: 'Pases filtrados completados', exp: true },
   { theme: 'Pase', key: 'through_passes_exp_p90', label: 'Filtrados/90*', kind: 'rate', title: 'Pases filtrados por cada 90 minutos', digits: 2, exp: true },
-  { theme: 'Pase', key: 'cross_pct_exp', label: 'Centros %*', kind: 'rate', title: 'Centros completados', digits: 1, exp: true },
+  { theme: 'Pase', key: 'cross_pct_exp', label: 'Centros %*', kind: 'rate', title: 'Centros completados ÷ (completados + fallidos). Ojo: EA cuenta en los completados también los de balón parado, y en los fallidos solo los de juego, así que este % sale algo alto.', digits: 1, exp: true },
   { theme: 'Pase', key: 'best_option_pct_exp', label: 'Decisiones %*', kind: 'rate', title: 'Veces que el juego dijo "mejor opción" frente a "debió pasar a otro"', digits: 1, exp: true },
   { theme: 'Pase', key: 'possession_lost_exp', label: 'Pérdidas*', kind: 'abs', title: 'Posesiones perdidas', exp: true, better: 'low' },
   { theme: 'Pase', key: 'possession_lost_exp_p90', label: 'Pérdidas/90*', kind: 'rate', important: true, title: 'Posesiones perdidas por cada 90 minutos', digits: 2, exp: true, better: 'low' },
@@ -479,6 +479,12 @@ const RANKING_COLUMNS = [
   { theme: 'Ataque', key: 'beats_exp_p90', label: 'Rival superado/90*', kind: 'rate', title: 'Regates superando al rival por cada 90 minutos', digits: 2, exp: true },
   { theme: 'Ataque', key: 'skill_beats_exp', label: 'Filigranas*', kind: 'abs', title: 'Regates superando al rival con filigrana (skill move)', exp: true },
   { theme: 'Ataque', key: 'corners_taken_exp', label: 'Córners*', kind: 'abs', title: 'Córners lanzados', exp: true },
+  // 024: verificados contra los datos oficiales el 2026-11-22 (docs/datos-ea.md).
+  { theme: 'Ataque', key: 'outside_goals_exp', label: 'Goles de afuera*', kind: 'abs', title: 'Goles desde fuera del área', exp: true },
+  { theme: 'Ataque', key: 'inside_goals_exp', label: 'Goles en el área*', kind: 'abs', title: 'Goles desde dentro del área (goles − goles de afuera)', exp: true },
+  { theme: 'Ataque', key: 'first_time_goals_exp', label: 'Goles al primer toque*', kind: 'abs', title: 'Goles con remate al primer toque', exp: true },
+  { theme: 'Pase', key: 'corner_assists_exp', label: 'Asist. de córner*', kind: 'abs', title: 'Asistencias desde un córner', exp: true },
+  { theme: 'Pase', key: 'forward_share_pct_exp', label: 'Pases hacia adelante %*', kind: 'rate', title: 'De los pases completados, qué parte fue hacia adelante (el resto, hacia atrás o a los lados)', digits: 1, exp: true },
   { theme: 'Pase', key: 'short_pass_pct_exp', label: 'Pase corto %*', kind: 'rate', title: 'Pases cortos completados', digits: 1, exp: true },
   { theme: 'Pase', key: 'medium_pass_pct_exp', label: 'Pase medio %*', kind: 'rate', title: 'Pases de media distancia completados', digits: 1, exp: true },
   { theme: 'Pase', key: 'long_pass_pct_exp', label: 'Pase largo %*', kind: 'rate', title: 'Pases largos completados', digits: 1, exp: true },
@@ -489,8 +495,10 @@ const RANKING_COLUMNS = [
   { theme: 'Pase', key: 'offside_passes_exp', label: 'Pases a fuera de juego*', kind: 'abs', title: 'Pases a un compañero en fuera de juego', exp: true, better: 'low' },
   { theme: 'Defensa', key: 'standing_tackles_exp', label: 'Entradas de pie*', kind: 'abs', title: 'Entradas de pie ganadas', exp: true },
   { theme: 'Defensa', key: 'sliding_tackles_exp', label: 'Barridas*', kind: 'abs', title: 'Entradas con barrida ganadas', exp: true },
-  { theme: 'Defensa', key: 'clean_tackles_exp', label: 'Entradas limpias*', kind: 'abs', title: 'Entradas limpias al balón', exp: true },
-  { theme: 'Defensa', key: 'dangerous_tackles_exp', label: 'Entradas peligrosas*', kind: 'abs', title: 'Entradas peligrosas', exp: true, better: 'low' },
+  // v2.32: sin "Entradas limpias*" (164 = entradas ganadas) ni "Entradas peligrosas*" (163 =
+  // parte de las entradas perdidas, sin significado confirmado). Siguen en la base.
+  { theme: 'Defensa', key: 'aerial_won_att_exp', label: 'Aéreos en ataque*', kind: 'abs', title: 'Duelos aéreos ganados atacando', exp: true },
+  { theme: 'Defensa', key: 'aerial_won_def_exp', label: 'Aéreos en defensa*', kind: 'abs', title: 'Duelos aéreos ganados defendiendo', exp: true },
   { theme: 'Defensa', key: 'dispossessed_exp', label: 'Balones quitados*', kind: 'abs', title: 'Veces que le quitó el balón al rival', exp: true },
   { theme: 'Defensa', key: 'dispossessed_exp_p90', label: 'Balones quitados/90*', kind: 'rate', title: 'Balones quitados al rival por cada 90 minutos', digits: 2, exp: true },
   { theme: 'Defensa', key: 'crosses_blocked_exp', label: 'Centros bloqueados*', kind: 'abs', title: 'Centros bloqueados', exp: true },
@@ -551,6 +559,10 @@ function addExtraCounters(rows, timeline) {
     if (!sums.has(t.person_id)) sums.set(t.person_id, {});
     const s = sums.get(t.person_id);
     for (const k of api.EXTRA_COUNTERS) if (t[k] != null) s[k] = (s[k] ?? 0) + Number(t[k]);
+    // Pases hacia adelante completados (viene en la línea de tiempo por la fórmula, no en EXTRA_COUNTERS).
+    if (t.forward_passes_ok_exp != null) s.fwd_ok = (s.fwd_ok ?? 0) + Number(t.forward_passes_ok_exp);
+    // Goles solo de los partidos con contadores, para que "goles en el área" no mezcle partidos sin dato.
+    if (t.outside_goals_exp != null) s.goals_with_counters = (s.goals_with_counters ?? 0) + Number(t.goals ?? 0);
   }
   const add = (a, b) => (a == null && b == null ? null : (a ?? 0) + (b ?? 0));
   const pct = (ok, ko) => (ok == null || ok + (ko ?? 0) === 0 ? null : Math.round((1000 * ok) / (ok + (ko ?? 0))) / 10);
@@ -563,6 +575,10 @@ function addExtraCounters(rows, timeline) {
       short_pass_pct_exp: pct(s.short_passes_ok_exp, s.short_passes_failed_exp),
       medium_pass_pct_exp: pct(s.medium_passes_ok_exp, s.medium_passes_failed_exp),
       long_pass_pct_exp: pct(s.long_passes_ok_exp, s.long_passes_failed_exp),
+      // 024: goles dentro del área = goles − goles de afuera (en los partidos con contadores).
+      inside_goals_exp: s.outside_goals_exp == null ? null : (s.goals_with_counters ?? 0) - s.outside_goals_exp,
+      // 024: de los pases completados, qué parte fue hacia adelante (adelante + atrás + lados = completados, verificado).
+      forward_share_pct_exp: pct(s.fwd_ok, add(s.backward_passes_ok_exp, s.sideways_passes_ok_exp)),
     };
   });
 }
@@ -3068,7 +3084,7 @@ function levelOn(playername, playedAt) {
 const BEST_CRITERIA = [
   { key: 'rating', label: 'Calificación frente a su posición', weight: 25, help: 'Su calificación de EA frente al promedio del club en las posiciones que jugó, ajustada por la dificultad de cada partido.' },
   { key: 'attack', label: 'Ataque frente a su posición', weight: 15, help: 'G+A, conversión, regates*, rival superado*, segundas asistencias*, tiros, tiros a puerta*, conducciones* y faltas recibidas* frente a su posición, ajustados por dificultad.' },
-  { key: 'defense', label: 'Defensa frente a su posición', weight: 15, help: 'Entradas, % de entradas, intercepciones*, recuperaciones*, balones quitados*, duelos aéreos*, % de entradas limpias* y entradas peligrosas* (menos es mejor) frente a su posición, ajustados por dificultad. Sus minutos de arquero se miden con % de atajadas, goles recibidos (menos es mejor), atajadas y vallas invictas.' },
+  { key: 'defense', label: 'Defensa frente a su posición', weight: 15, help: 'Entradas, % de entradas, intercepciones*, recuperaciones*, balones quitados* y duelos aéreos* frente a su posición, ajustados por dificultad. Sus minutos de arquero se miden con % de atajadas, goles recibidos (menos es mejor), atajadas y vallas invictas.' },
   { key: 'passing', label: 'Pase frente a su posición', weight: 10, help: 'Precisión, pases completados, filtrados*, pérdidas* (menos es mejor), pase adelante*, pase largo*, primer toque*, decisiones* y pases a fuera de juego* (menos es mejor) frente a su posición, ajustados por dificultad.' },
   // Ubicación (aprobada por el usuario): su propio % en posición, sin compararlo con los demás de su posición
   // ni corregirlo por pocos partidos. La nota es el % tal cual.
@@ -3103,8 +3119,11 @@ const SUB = {
     { label: 'Recuperaciones por 90*', w: 15, kind: 'p90', num: n('possession_won_exp'), ok: has('possession_won_exp') },
     { label: 'Balones quitados por 90*', w: 10, kind: 'p90', num: n('dispossessed_exp'), ok: has('dispossessed_exp') },
     { label: 'Duelos aéreos por 90*', w: 10, kind: 'p90', num: n('aerial_duels_won_exp'), ok: has('aerial_duels_won_exp') },
-    { label: '% de entradas limpias*', w: 5, kind: 'ratio', num: n('clean_tackles_exp'), den: n('tackles_made'), ok: has('clean_tackles_exp') },
-    { label: 'Entradas peligrosas por 90*', w: 5, kind: 'p90', low: true, num: n('dangerous_tackles_exp'), ok: has('dangerous_tackles_exp') },
+    // v2.32: quitados "% de entradas limpias*" (código 164) y "Entradas peligrosas por 90*"
+    // (163). Verificado el 2026-11-22 con los datos oficiales: 164 es igual a las entradas
+    // ganadas (168 de 176 registros), así que el % daba ~100 % para todos; 163 es siempre
+    // una parte de las entradas perdidas (175 de 176) y no coincide con las faltas (133 de
+    // 176), así que no son "peligrosas". Los demás pesos se reparten solos (suman 90).
   ],
   // Arquero (aprobado por el usuario el 2026-11-16): se usa en los minutos que jugó de arquero.
   defenseGk: [

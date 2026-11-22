@@ -120,9 +120,12 @@ export const EXTRA_COUNTERS = [
   'long_passes_ok_exp', 'long_passes_failed_exp', 'first_time_passes_exp', 'switches_exp', 'flair_passes_exp',
   'offside_passes_exp', 'through_ball_assists_exp', 'box_shots_on_exp', 'box_shots_off_exp', 'outside_shots_on_exp',
   'outside_shots_off_exp', 'weak_foot_goals_exp', 'post_goals_exp', 'carries_exp', 'beats_exp', 'skill_beats_exp',
-  'standing_tackles_exp', 'sliding_tackles_exp', 'dangerous_tackles_exp', 'clean_tackles_exp', 'dispossessed_exp',
+  'standing_tackles_exp', 'sliding_tackles_exp', 'dispossessed_exp',
   'crosses_blocked_exp', 'corners_conceded_exp', 'corners_taken_exp', 'out_of_position_severe_exp',
   'parry_saves', 'punch_saves', 'reflex_saves', 'cross_saves', 'ball_dive_saves', 'good_direction_saves',
+  // 024 (verificados contra los datos oficiales el 2026-11-22; ver docs/datos-ea.md)
+  'outside_goals_exp', 'first_time_goals_exp', 'corner_assists_exp', 'aerial_won_att_exp', 'aerial_won_def_exp',
+  'backward_passes_ok_exp', 'sideways_passes_ok_exp',
 ];
 
 /** Datos por partido que usa la fórmula del mejor jugador (dificultad, criterios ampliados y juego limpio). */

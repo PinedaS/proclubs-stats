@@ -113,6 +113,54 @@ Mejor resultado por temporada de play-off, con su división y posición final.
 | **Penales cometidos** | 🧪 Sí | Código 94. En el dashboard: "Penales cometidos*". |
 | **% de regates exitosos** | ❌ No | Solo hay regates **completados** (174), conducciones (97) y regates superando al rival (112). No hay regates intentados ni fallidos, así que no se puede calcular un %. |
 
+## 2c. Verificación de los contadores (2026-11-22)
+
+**Método.** Los significados vienen de la comunidad, no de EA: [Interactive-63/eafc-pro-clubs-api-research](https://github.com/Interactive-63/eafc-pro-clubs-api-research) (README actualizado en septiembre de 2026), su [issue #1](https://github.com/Interactive-63/eafc-pro-clubs-api-research/issues/1) (octubre de 2026, todavía no incorporado al README) y [1erkandogan/fc27-clubs-api](https://github.com/1erkandogan/fc27-clubs-api) (que copia la tabla del README). Se usan para saber **qué probar**, no como prueba. Cada código se contrastó con los **campos oficiales** de EA en nuestros 176 registros jugador × partido: identidades que tienen que cumplirse si el significado es correcto. Script: `verify_codes.mjs` (en el chat del 2026-11-22).
+
+### Confirmados con nuestros datos
+
+| Código | Significado | Prueba | Resultado |
+|---|---|---|---|
+| 214 / 11 | Goles / asistencias | = campos oficiales | 175/176 |
+| 217 + 218 | Tiros a puerta + afuera | = tiros oficiales | 173/176 |
+| 13 + 18 | Tiros a puerta (área + afuera) | = 217 | 176/176 |
+| 13 + 14 + 18 + 19 | Tiros por zona | = tiros oficiales | 166/176 |
+| 30 + 32 + 34 | Pases completados adelante + atrás + lados | = pases completados oficiales | 171/176 |
+| 229 + 230 | Entradas de pie + barridas | = 0 (entradas ganadas) | 171/176 |
+| 0 | Entradas ganadas | = oficiales | 164/176 |
+| 219 | Fuera de posición (total) | = 99 + … + 103 | 176/176 |
+| 96 | Indicador de roja | ⇔ rojas oficiales | 175/176 |
+| 112 | Rival superado (incluye filigrana) | ≥ 38 | 176/176 |
+| 238 + 239 + 48 | **Goles desde fuera del área** (propuesta del issue #1) | ≤ goles y ≤ tiros de afuera a puerta; goles − ellos ≤ tiros del área a puerta; en los 2 goles con todos los tiros de afuera aparece y en los 31 con todos del área no | 176/176 en todo |
+| 117 | **Asistencias de córner** (propuesta del issue #1) | ≤ asistencias y siempre con córner lanzado (145) | 176/176 |
+| 128, 131, 136, 123 | Goles al primer toque, pierna mala, tras palo, vaselina (etiquetas) | ≤ goles | 176/176 |
+| 118 | Asistencias de pase filtrado | ≤ asistencias | 176/176 |
+
+### Corregidos: los usábamos mal
+
+| Código | Lo que decíamos | Lo que es | Prueba |
+|---|---|---|---|
+| **164** | "Entradas limpias" (comunidad, README) | **Igual a las entradas ganadas** (como dice el issue #1) | = entradas ganadas oficiales en 168/176; = código 0 en 169/176 |
+| **163** | "Entradas peligrosas" (comunidad, README) | **Una parte de las entradas perdidas**; significado exacto sin confirmar | ≤ código 1 en 175/176; ≤ faltas solo en 133/176 |
+
+Desde la v2.32 ninguno de los dos se muestra ni entra en la fórmula. Siguen en la vista con su nombre viejo (`clean_tackles_exp`, `dangerous_tackles_exp`), porque `create or replace view` no permite renombrar.
+
+### Afirmaciones de la comunidad que nuestros datos NO confirman
+
+- **1 = "entradas perdidas":** no es igual a intentadas − ganadas (107/176), ni 0 + 1 a intentadas (103/176).
+- **175 + 176 + 177 + 182 ≈ 91,5 % de los pases intentados:** en nuestros datos la suma **supera** los pases intentados en 150/176 registros. Las indicaciones del juego no son "una por pase".
+- **215 = pases completados:** solo 132/176 (la comunidad dice que excluye pases en fuera de juego). Usamos el campo oficial.
+- **Pases por distancia (24–29):** corto + medio + largo completados = 215 solo en 116/176 (135/176 sumando los centros, 36). Por eso "Pase corto/medio/largo %" siguen como experimentales.
+- **Centros (36/37):** el 36 incluye balón parado y el 37 solo juego abierto, así que "Centros %" sale algo alto (avisado en su ayuda).
+- **Sin poder comprobar** (casi no aparecen en nuestros partidos): 125 goles de cabeza (0 casos), 203/46 penales (6 y 4), 5 bloqueos, 202 atajadas (1 registro de arquero), 179 "debió tirar".
+- **Sin respaldo en ninguna fuente:** ocasiones claras, pases clave, distancia recorrida, el xG que muestra el juego.
+
+### Qué se hizo con cada uno (migración 024 y v2.32)
+
+- **Se muestran** (Ranking → "+ Añadir dato"): goles de afuera*, goles en el área* (goles − goles de afuera), goles al primer toque*, asistencias de córner*, pases hacia adelante %* (de los completados), duelos aéreos en ataque* y en defensa*.
+- **Solo guardados con nombre en la vista** (no se muestran): 1, 123, 125, 203, 46, 157, 151, 96, 99–101, 175, 176, 179, 183, 207, 212, y la dirección de los pases fallidos (33, 35).
+- **Todo** sigue además en `player_match_stats.event_counts` y en el JSON crudo, así que si la comunidad confirma algo después se puede calcular para todos los partidos ya guardados.
+
 ## 3. Lo que EA no expone (✅ verificado)
 
 - Distancia recorrida.

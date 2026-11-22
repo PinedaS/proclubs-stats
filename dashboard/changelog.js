@@ -3,6 +3,15 @@
 // La fecha es la de Colombia (UTC−5), no la UTC: de noche ya es "mañana" en UTC.
 export const CHANGELOG = [
   {
+    version: '2.32',
+    date: '2026-11-22',
+    title: 'Datos experimentales revisados',
+    changes: [
+      'Se revisó cada dato experimental contra los datos oficiales de EA. Dos estaban mal: "Entradas limpias" eran en realidad las entradas ganadas, y "Entradas peligrosas" no lo eran. Se quitaron del ranking y de la fórmula del mejor jugador (cambio pequeño: menos de 1,5 puntos para cada uno).',
+      'Datos nuevos en "+ Añadir dato", ya comprobados: goles de afuera y en el área, goles al primer toque, asistencias de córner, qué parte de los pases van hacia adelante y duelos aéreos en ataque y en defensa.',
+    ],
+  },
+  {
     version: '2.31',
     date: '2026-11-22',
     title: 'Rivales repetidos',

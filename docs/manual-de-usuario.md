@@ -103,7 +103,7 @@ Deja de ser beta cuando se cumplan tres condiciones:
 - **Ubicación\*:** el % de veces en posición, según los avisos del juego. Es el único criterio que no se compara con la posición: la nota es el % tal cual. Ojo: los delanteros suelen tener un % más bajo que los medios y defensas.
 
 - **Dificultad:** en calificación, ataque, defensa y pase, cada partido vale más en divisiones altas (+5 % por división sobre la 5ª) y contra rivales de más nivel (entre −15 % y +15 %).
-- **Ataque, defensa y pase combinan varios datos:** G+A, conversión, regates*, tiros, conducciones*, faltas recibidas*; entradas, intercepciones*, recuperaciones*, duelos aéreos*, % de entradas limpias*; precisión, pases filtrados*, pérdidas*, primer toque*, pases a fuera de juego*, entre otros.
+- **Ataque, defensa y pase combinan varios datos:** G+A, conversión, regates*, tiros, conducciones*, faltas recibidas*; entradas, intercepciones*, recuperaciones*, duelos aéreos*; precisión, pases filtrados*, pérdidas*, primer toque*, pases a fuera de juego*, entre otros.
 - **Nivel del jugador:** la misma actuación vale más con una media del Pro más baja. Cada partido se ajusta por la media que el jugador tenía ese día frente a la del equipo, con la mitad de fuerza que un ajuste proporcional (por ejemplo, 74 frente a 78 da +3 %) y entre −10 % y +10 %.
 - **Media por arquetipo:** cada arquetipo tiene su propia media, y EA da una sola. Desde el 16-nov-2026 se guarda la media de cada partido, justo después de jugarlo. Los partidos anteriores usan la foto del día, que es una aproximación.
 - **Arqueros:** los minutos de arquero se miden con una defensa propia, frente a otros arqueros, y no cuentan en el ataque:

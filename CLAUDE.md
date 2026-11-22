@@ -58,7 +58,7 @@ API no oficial de EA ──► Colector (GitHub Actions, cada 30 min) ──► 
    - Filtros: tipo de partido, fechas, mínimo de partidos y excluir incompletos.
    - Los archivos se versionan con el commit en `pages.yml` (`__V__`), para no mezclar versiones viejas desde la caché de Pages.
    - Probado en Chrome con los datos del club de prueba.
-   - **Migraciones aplicadas en Supabase:** 001–023, cada una verificada después de aplicarla.
+   - **Migraciones aplicadas en Supabase:** 001–024, cada una verificada después de aplicarla.
    - **BETA (decidido con el usuario el 2026-11-16, v2.10):** etiqueta "Beta" junto a la versión.
      - **Qué es beta:** solo la forma de mostrar y analizar (pestañas, gráficas y fórmula). **Los datos de EA no.** El texto lo aclara.
      - **Criterios de salida (las tres condiciones):**
@@ -396,6 +396,10 @@ No hay API oficial. Se usan los endpoints públicos que lee la web de Clubes de 
      - **Verificado (2026-11-17):** EA no da el nivel del arquetipo (1–50); `members/stats` solo trae `proOverall`. Y la media por partido de AlxCampu fue 80–81 con el arquetipo 4 y 79 con el 10, un buen indicio de que EA manda la media del arquetipo del último partido.
      - **Fuerza del factor de nivel:** se queda proporcional (tope ±10 %). Recomendación dada: revisarla con ~50 partidos, midiendo con los datos cuánto sube la calificación de una persona por punto de media; hoy no se ve relación (Andresjimene 7,39 con 81 y 6,84 con 82).
    - **v2.19 (2026-11-18, aprobado por el usuario):** cada MVP pesa además `team_size / promedio de humanos del rango` (con 3 humanos vale 1,5 veces lo que con 2). Hallazgo del 2026-11-18: la calificación media de EA es 8,13 con 2 humanos y 7,17 con 3 (31 partidos); **la calificación todavía no se ajusta por humanos** (propuesta A, pendiente de decidir). Con división × rival aplicados la diferencia sigue: 8,37 frente a 7,69, y dentro de cada persona también (AlxCampu +1,0; PinedaDS +0,85; Andresjimene +0,57).
+   - **v2.32 (2026-11-22, pedido del usuario: "verifica todo, corrige lo equivocado, muestra lo útil y guarda el resto"):** migración **024** (contadores con nombre en la vista) y verificación completa en `docs/datos-ea.md` §2c.
+     - **Corregido:** 164 no son "entradas limpias" sino las entradas ganadas (168/176); 163 no son "entradas peligrosas" sino una parte de las perdidas (175/176 ≤ código 1). Quitados del ranking y de `SUB.defense` (los otros pesos se reparten solos, suman 90). Efecto medido: CILANTRO AlxCampu 77,6 → 77,4, PinedaDS 65,0 → 64,7, Andresjimene 55,1 → 55,2; Aston Hecodes98 71,6 → 70,2, Henoxerwtf 61,6 → 61,0, PinedaDS 56,6 → 56,1, X_The_Unlucky_X 54,6 → 53,8. Mismo orden.
+     - **Nuevos en "+ Añadir dato":** goles de afuera (238+239+48, verificado), goles en el área (derivado), goles al primer toque (128), asistencias de córner (117, verificado), pases hacia adelante % (30 ÷ (30+32+34), verificado) y aéreos en ataque/defensa (265/266). **No entran en la fórmula** (decisión pendiente del usuario).
+     - **Regla de trabajo (pedido del usuario):** verificar todo contra datos oficiales antes de usarlo, y cuidar las fuentes (la comunidad no es EA).
    - **v2.31 (2026-11-22, pedido del usuario):** Partidos → "Rivales repetidos" (`renderRepeatRivals`): agrupa por `opponent_club_id` (o el nombre si falta), 2+ partidos con los filtros; despliega los partidos y el rendimiento de cada jugador contra ese rival (calificación frente a su media del rango). Al 2026-11-22 había 2: FURIA LATINA B (CILANTRO) y Pepe Tola FCE (Aston).
    - **v2.30 (2026-11-22, pedido del usuario):** "qué mejorar" en gráficas: barras divergentes (`divergingBars`) y puntos por partido con raya en el promedio.
    - **v2.29 (2026-11-22, pedido del usuario, paso 1 de 2): qué mejorar.**
