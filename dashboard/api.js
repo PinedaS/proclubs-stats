@@ -216,6 +216,12 @@ export function getPersonMatches(personId, f) {
   return request(`v_player_match_stats?${p}`);
 }
 
+/** v2.39: todos los datos de un jugador en un partido (para el detalle dentro de Partidos). */
+export function getMatchPlayerDetail(matchId, playerId) {
+  const p = new URLSearchParams({ select: '*', match_id: `eq.${matchId}`, player_id: `eq.${playerId}` });
+  return request(`v_player_match_stats?${p}`).then((rows) => rows[0] ?? null);
+}
+
 export function getMatchPlayers(matchId) {
   const p = new URLSearchParams({
     select: 'person_id,player_id,person_name,playername,position,platform,rating,goals,assists,is_mom,shots,passes_made,pass_attempts,tackles_made,saves,dribbles_exp,interceptions_exp',

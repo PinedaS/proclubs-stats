@@ -179,6 +179,7 @@ Antes se llamaba "Duplas". Reúne cómo le va al equipo con y sin cada jugador, 
 - **Rivales repetidos:** los equipos que enfrentamos 2 veces o más. Al tocar uno se ven sus partidos (marcador, nivel del rival, humanos de cada lado y división) y cómo rindió cada jugador contra ese rival frente a su calificación media. Se agrupan por el ID del club rival, no por el nombre, que puede cambiar.
 
 - Cada partido con el rival, su nivel, la división, cuántos jugamos, el marcador, los goleadores, el MVP y las etiquetas.
+- Al tocar a un jugador dentro de un partido se ven sus datos **de ese partido**; "Ver su historial" abre su detalle completo.
 - Toca un partido para ver a cada jugador y, arriba, los datos del rival según EA el día del partido: nivel, división, récord en FC 27 y puntos de la temporada. Solo hay foto del rival desde el 16 de noviembre de 2026.
 
 ### Club

@@ -235,7 +235,7 @@ function onActivate(fn) {
   return {
     tabindex: '0',
     onclick: fn,
-    onkeydown: (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); fn(); } },
+    onkeydown: (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); fn(e); } },
   };
 }
 
@@ -2232,7 +2232,7 @@ async function toggleMatchPlayers(row, matchId, colspan) {
       el('thead', {}, el('tr', {},
         ['Jugador', 'Pos.', 'Calif.', 'G', 'A', 'Tiros', 'Pases', 'Entradas', 'Atajadas', 'MVP'].map((h, i) => el('th', { scope: 'col', class: i < 2 ? 'left' : null }, h)),
         state.showExp ? ['Regates*', 'Intercep.*'].map((h) => el('th', { scope: 'col', class: 'exp' }, h)) : null)),
-      el('tbody', {}, players.map((p) => el('tr', { class: 'clickable', ...onActivate(() => openPerson(p.person_id)) },
+      el('tbody', {}, players.map((p) => el('tr', { class: 'clickable', 'aria-expanded': 'false', title: 'Toca para ver sus datos de este partido', ...onActivate((e) => toggleMatchPlayerDetail(e.currentTarget, matchId, p, state.showExp ? 12 : 10)) },
         el('td', {}, playerCell(p.person_name, p.platform ? platformLabel(p.platform) : null)),
         el('td', { class: 'left' }, posBadge(p.position), ' ', timeBadges(tf.get(`${matchId}|${p.player_id}`))),
         el('td', {}, el('strong', {}, fmtNum(p.rating, 1))),
@@ -2244,6 +2244,88 @@ async function toggleMatchPlayers(row, matchId, colspan) {
   } catch (err) {
     cell.replaceChildren(el('span', { class: 'muted' }, `Error: ${err.message}`));
   }
+}
+
+/**
+ * v2.39 (pedido del usuario): al tocar un jugador dentro de un partido se ven SUS datos
+ * DE ESE PARTIDO (no su historial). El historial sigue a un toque, con "Ver su historial".
+ * Los datos van tal cual los da EA; los experimentales llevan *.
+ */
+async function toggleMatchPlayerDetail(row, matchId, p, colspan) {
+  const next = row.nextElementSibling;
+  if (next?.classList.contains('match-player-detail')) { next.remove(); row.setAttribute('aria-expanded', 'false'); return; }
+  row.setAttribute('aria-expanded', 'true');
+  const cell = el('td', { colspan }, spinner('Cargando sus datos del partido…'));
+  row.after(el('tr', { class: 'match-player-detail' }, cell));
+  try {
+    const d = await api.getMatchPlayerDetail(matchId, p.player_id);
+    if (!d) { cell.replaceChildren(el('span', { class: 'muted' }, 'Sin datos de este jugador en el partido.')); return; }
+    cell.replaceChildren(matchPlayerDetail(d));
+  } catch (err) {
+    cell.replaceChildren(el('span', { class: 'muted' }, `Error: ${err.message}`));
+  }
+}
+
+function matchPlayerDetail(d) {
+  const v = (k) => (d[k] == null ? null : Number(d[k]));
+  const num = (k, dg = 0) => fmtNum(v(k), dg);
+  const ratio = (ok, tot) => (tot ? `${fmtNum(ok)}/${fmtNum(tot)} (${fmtPct((100 * ok) / tot, 0)})` : '—');
+  const sumK = (...ks) => ks.reduce((a, k) => a + (v(k) ?? 0), 0);
+  const has = (...ks) => ks.some((k) => d[k] != null);
+  const exp = state.showExp;
+  const mins = d.seconds_played != null ? Math.round(Number(d.seconds_played) / 60) : null;
+  const shotsZone = sumK('box_shots_on_exp', 'box_shots_off_exp', 'outside_shots_on_exp', 'outside_shots_off_exp');
+  const fwdTot = sumK('forward_passes_ok_exp', 'forward_passes_failed_exp');
+  const longTot = sumK('long_passes_ok_exp', 'long_passes_failed_exp');
+  const crossTot = sumK('crosses_ok_exp', 'crosses_failed_exp');
+  const group = (title, tiles) => {
+    const shown = tiles.filter(Boolean);
+    return shown.length ? el('div', { class: 'mpd-group' }, el('p', { class: 'section-title' }, title), el('div', { class: 'tiles' }, shown)) : null;
+  };
+  const xt = (label, value) => (exp ? tile(`${label}*`, value, 'exp') : null);
+  const isGk = d.position === 'goalkeeper';
+  return el('div', { class: 'mpd' },
+    group('En este partido', [
+      tile('Calificación', num('rating', 1)),
+      tile('Minutos', mins != null ? `${mins}'` : '—'),
+      tile('Posición', POS_LABEL[d.position] ?? d.position ?? '—'),
+      d.archetype_id != null ? Object.assign(tile('Arquetipo', archetypeName(d.archetype_id)), { title: archetypeTitle(d.archetype_id) ?? '' }) : null,
+      tile('Goles', num('goals')), tile('Asistencias', num('assists')),
+      tile('MVP del partido', d.is_mom ? '★ Sí' : 'No'),
+    ]),
+    isGk ? group('Portería', [tile('Atajadas', num('saves')), tile('Goles recibidos', num('goals_conceded')), tile('Valla invicta', Number(d.clean_sheets_gk) > 0 ? 'Sí' : 'No')]) : null,
+    group('Ataque', [
+      tile('Tiros', num('shots')),
+      exp && shotsZone ? tile('Tiros a puerta*', ratio(sumK('box_shots_on_exp', 'outside_shots_on_exp'), shotsZone), 'exp') : null,
+      exp && shotsZone ? tile('Tiros desde el área*', ratio(sumK('box_shots_on_exp', 'box_shots_off_exp'), shotsZone), 'exp') : null,
+      has('beats_exp') ? xt('Rivales superados', num('beats_exp')) : null,
+      has('second_assists_exp') ? xt('2ª asistencias', num('second_assists_exp')) : null,
+      has('carries_exp') ? xt('Conducciones', num('carries_exp')) : null,
+      exp && crossTot ? tile('Centros*', ratio(v('crosses_ok_exp') ?? 0, crossTot), 'exp') : null,
+      has('fouls_won_exp') ? xt('Faltas recibidas', num('fouls_won_exp')) : null,
+      has('aerial_won_att_exp') ? xt('Aéreos ganados', num('aerial_won_att_exp')) : null,
+    ]),
+    group('Pase', [
+      tile('Pases', ratio(v('passes_made') ?? 0, v('pass_attempts') ?? 0)),
+      exp && fwdTot ? tile('Hacia adelante*', ratio(v('forward_passes_ok_exp') ?? 0, fwdTot), 'exp') : null,
+      exp && longTot ? tile('Largos*', ratio(v('long_passes_ok_exp') ?? 0, longTot), 'exp') : null,
+      has('through_passes_exp') ? xt('Filtrados', num('through_passes_exp')) : null,
+      has('possession_lost_exp') ? xt('Balones perdidos', num('possession_lost_exp')) : null,
+    ]),
+    group('Defensa', [
+      tile('Entradas ganadas', ratio(v('tackles_made') ?? 0, v('tackle_attempts') ?? 0)),
+      has('interceptions_exp') ? xt('Intercepciones', num('interceptions_exp')) : null,
+      has('possession_won_exp') ? xt('Balones recuperados', num('possession_won_exp')) : null,
+      has('aerial_won_def_exp') ? xt('Aéreos ganados', num('aerial_won_def_exp')) : null,
+    ]),
+    group('Disciplina', [
+      has('fouls_exp') ? xt('Faltas', num('fouls_exp')) : null,
+      has('yellow_cards_exp') ? xt('Amarillas', num('yellow_cards_exp')) : null,
+      tile('Rojas', num('red_cards')),
+    ]),
+    el('p', { class: 'muted small mpd-foot' },
+      exp ? 'Datos de este partido, tal cual los da EA. * = experimental. ' : 'Datos de este partido, tal cual los da EA. ',
+      el('button', { type: 'button', class: 'link-btn', onclick: () => openPerson(d.person_id) }, 'Ver su historial →')));
 }
 
 // ---------------------------------------------------------------------------

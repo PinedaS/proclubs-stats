@@ -1021,6 +1021,19 @@ button.pitch-spot:focus-visible { outline: 2px solid #fff; outline-offset: 3px; 
   .pitch-name { font-size: .7rem; padding: 2px 4px; }
   .pitch-rating { right: -14px; font-size: .66rem; }
 }
+/* v2.39: datos de un jugador en un partido (Partidos → jugadores → tocar uno). */
+.match-player-detail > td { background: var(--surface-2); padding: 12px 14px; white-space: normal; }
+.mpd { display: grid; gap: 10px; max-width: 100%; }
+.mpd .section-title { margin: 0 0 6px; }
+.mpd .tiles { grid-template-columns: repeat(auto-fill, minmax(130px, 1fr)); }
+.mpd .tile.exp { background: var(--exp-tint); }
+.mpd-foot { margin: 0; display: flex; flex-wrap: wrap; gap: 6px 12px; align-items: center; }
+/* En el celular la tabla de jugadores es más ancha que la pantalla: el detalle queda fijo
+   a la izquierda y del ancho de la pantalla, así se lee sin desplazar de lado. */
+@media (max-width: 760px) {
+  .mpd { position: sticky; left: 0; width: calc(100vw - 72px); }
+  .mpd .tiles { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
 .lineup-warn {
   margin: 0; padding: 10px 12px; border-radius: 12px; font-size: .9rem; color: var(--ink);
   background: color-mix(in srgb, var(--warning) 14%, transparent); border: 1px solid color-mix(in srgb, var(--warning) 40%, transparent);

@@ -3,6 +3,14 @@
 // La fecha es la de Colombia (UTC−5), no la UTC: de noche ya es "mañana" en UTC.
 export const CHANGELOG = [
   {
+    version: '2.39',
+    date: '2026-11-23',
+    title: 'Datos de cada jugador en un partido',
+    changes: [
+      'Partidos: al abrir un partido y tocar a un jugador, ahora se ven sus datos de ese partido (calificación, minutos, ataque, pase, defensa y disciplina), no su historial. Su historial sigue a un toque con "Ver su historial".',
+    ],
+  },
+  {
     version: '2.38',
     date: '2026-11-22',
     title: 'Colores bien distintos en las gráficas',
