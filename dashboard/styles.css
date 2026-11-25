@@ -1014,6 +1014,7 @@ button.pitch-spot:focus-visible { outline: 2px solid #fff; outline-offset: 3px; 
 .badge.conf-media { background: color-mix(in srgb, var(--warning) 18%, transparent); color: var(--warning); }
 .badge.conf-baja { background: color-mix(in srgb, var(--critical) 16%, transparent); color: var(--critical); }
 @media (max-width: 760px) {
+  #club-vs { padding: 0 12px 14px; }
   .lineup-grid { grid-template-columns: 1fr; padding: 0 12px 12px; }
   .lineup-chips { padding: 0 12px 12px; }
   .lineup-how { padding: 0 12px 14px; }
@@ -1028,6 +1029,10 @@ button.pitch-spot:focus-visible { outline: 2px solid #fff; outline-offset: 3px; 
 .ball-svg .sc-label { font-size: 12px; fill: var(--ink); font-weight: 600; paint-order: stroke; stroke: var(--surface); stroke-width: 3px; }
 .ball-table { margin-top: 6px; font-size: .88rem; }
 .ball-controls { display: flex; flex-wrap: wrap; gap: 8px 18px; margin: 0 0 8px; }
+/* v2.46: "Nosotros contra los rivales" y el selector de "Puntos fuertes": el mismo relleno
+   lateral que el resto de las tarjetas y aire entre el selector y las barras. */
+#club-vs { padding: 0 18px 16px; }
+#club-vs > .ball-ctl, .improve-ref { margin: 0 0 12px; }
 .ball-ctl { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
 .ball-evidence { margin: 6px 0; padding: 8px 10px; border-radius: 10px; background: var(--surface-2); border: 1px solid var(--border); color: var(--ink-2); }
 .ball-table summary { cursor: pointer; color: var(--ink-3); }

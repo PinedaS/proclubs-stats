@@ -3,6 +3,14 @@
 // La fecha es la de Colombia (UTC−5), no la UTC: de noche ya es "mañana" en UTC.
 export const CHANGELOG = [
   {
+    version: '2.46.1',
+    date: '2026-11-25',
+    title: 'Ajustes de diseño',
+    changes: [
+      '"Nosotros contra los rivales" ya no queda pegado a los bordes de la tarjeta, y los selectores "Partidos" y "Comparar con" tienen aire antes de las barras.',
+    ],
+  },
+  {
     version: '2.46',
     date: '2026-11-25',
     title: 'Nosotros contra los rivales',
