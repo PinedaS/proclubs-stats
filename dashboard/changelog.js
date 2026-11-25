@@ -3,6 +3,14 @@
 // La fecha es la de Colombia (UTC−5), no la UTC: de noche ya es "mañana" en UTC.
 export const CHANGELOG = [
   {
+    version: '2.43',
+    date: '2026-11-25',
+    title: 'Con el balón: calidad del pase',
+    changes: [
+      '"Con el balón" suma en "Ver los números" la columna "Elige un pase peor*": qué parte de sus pases tuvo el aviso del juego "debió pasar a otro" (pasó, pero había un compañero mejor ubicado), frente a los demás de su posición. Mide la elección del pase, no si se quedó con el balón.',
+    ],
+  },
+  {
     version: '2.42',
     date: '2026-11-25',
     title: 'Mejor jugador: sin Regularidad',

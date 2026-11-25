@@ -1088,8 +1088,9 @@ const ballDanger = (t) => Number(t.shots ?? 0) + 2 * Number(t.goals ?? 0) + 2 * 
 
 function ballUseData(timeline) {
   const rows = timeline.filter((t) => !t.incomplete && Number(t.seconds_played) >= 2700 && t.carries_exp != null && ['forward', 'midfielder'].includes(t.position));
-  const acc = () => ({ n: 0, pm: 0, car: 0, lost: 0, dng: 0, tch: 0, m90: 0, list: [] });
-  const add = (a, t) => { a.n++; a.pm += Number(t.passes_made ?? 0); a.car += Number(t.carries_exp ?? 0); a.lost += Number(t.possession_lost_exp ?? 0); a.dng += ballDanger(t); a.tch += ballTouches(t); a.m90 += Number(t.seconds_played) / 5400; a.list.push(t); };
+  const acc = () => ({ n: 0, pm: 0, pa: 0, car: 0, lost: 0, worse: 0, dng: 0, tch: 0, m90: 0, list: [] });
+  // worse: avisos del juego "debió pasar a otro"* (código 182): pasó, pero había un compañero mejor.
+  const add = (a, t) => { a.n++; a.pm += Number(t.passes_made ?? 0); a.pa += Number(t.pass_attempts ?? 0); a.car += Number(t.carries_exp ?? 0); a.lost += Number(t.possession_lost_exp ?? 0); a.worse += Number(t.should_have_passed_exp ?? 0); a.dng += ballDanger(t); a.tch += ballTouches(t); a.m90 += Number(t.seconds_played) / 5400; a.list.push(t); };
   const per = new Map(), pos = new Map();
   for (const t of rows) {
     const k = `${t.person_id}|${t.position}`;
@@ -1103,17 +1104,20 @@ function ballUseData(timeline) {
   const out = [];
   for (const a of per.values()) {
     const g = pos.get(a.position);
-    const o = { n: g.n - a.n, pm: g.pm - a.pm, car: g.car - a.car, lost: g.lost - a.lost, dng: g.dng - a.dng, tch: g.tch - a.tch };
+    const o = { n: g.n - a.n, pm: g.pm - a.pm, pa: g.pa - a.pa, car: g.car - a.car, lost: g.lost - a.lost, worse: g.worse - a.worse, dng: g.dng - a.dng, tch: g.tch - a.tch };
     if (a.n < BALL_MIN || o.n < BALL_MIN || !a.pm || !o.pm || !a.tch || !o.tch || !o.dng) continue;
     const retention = (100 * (a.car / a.pm)) / (o.car / o.pm);
     const danger = (100 * (a.dng / a.tch)) / (o.dng / o.tch);
     const lossIdx = o.lost ? (100 * (a.lost / a.tch)) / (o.lost / o.tch) : null;
+    // v2.43: "Elige un pase peor*": avisos de "debió pasar a otro" por cada pase intentado.
+    const worsePct = a.pa ? (100 * a.worse) / a.pa : null;
+    const worseIdx = a.pa && o.pa && o.worse ? (100 * (a.worse / a.pa)) / (o.worse / o.pa) : null;
     // Efecto en el equipo: puntos cuando retiene más que su propia mediana frente a menos.
     const ratio = (t) => (Number(t.passes_made) ? Number(t.carries_exp ?? 0) / Number(t.passes_made) : 0);
     const sorted = a.list.map(ratio).sort((x, y) => x - y), med = sorted[Math.floor(sorted.length / 2)];
     const hi = a.list.filter((t) => ratio(t) > med), lo = a.list.filter((t) => ratio(t) <= med);
     const ppm = (l) => (l.length ? l.reduce((s, t) => s + pts(t.outcome), 0) / l.length : null);
-    out.push({ ...a, retention, danger, lossIdx, touches90: a.tch / a.m90, hiPts: ppm(hi), loPts: ppm(lo), hiN: hi.length, loN: lo.length,
+    out.push({ ...a, retention, danger, lossIdx, worsePct, worseIdx, touches90: a.tch / a.m90, hiPts: ppm(hi), loPts: ppm(lo), hiN: hi.length, loN: lo.length,
       label: multiPos.has(a.id) ? `${a.name} (${POS_SHORT[a.position]})` : a.name });
   }
   return out;
@@ -1151,7 +1155,7 @@ function renderBallUse(box) {
   for (const d of [...data].sort((a, b) => b.touches90 - a.touches90)) {
     const x = sx(d.retention), y = sy(d.danger), r = 5 + 8 * Math.sqrt(d.touches90 / tMax);
     const fmtP = (v) => (v == null ? '—' : fmtNum(v, 2));
-    const tip = `${d.label}: retención ${fmtNum(d.retention, 0)}, peligro por toque ${fmtNum(d.danger, 0)}${d.lossIdx != null ? `, pérdidas por toque ${fmtNum(d.lossIdx, 0)}` : ''} (100 = los demás de su posición). `
+    const tip = `${d.label}: retención ${fmtNum(d.retention, 0)}, peligro por toque ${fmtNum(d.danger, 0)}${d.lossIdx != null ? `, pérdidas por toque ${fmtNum(d.lossIdx, 0)}` : ''}${d.worseIdx != null ? `, elige un pase peor ${fmtNum(d.worseIdx, 0)}` : ''} (100 = los demás de su posición). `
       + `${fmtNum(d.touches90, 0)} toques por 90 en ${d.n} PJ. Equipo: ${fmtP(d.hiPts)} pts por partido cuando retiene más que de costumbre (${d.hiN} PJ) y ${fmtP(d.loPts)} cuando retiene menos (${d.loN} PJ); con pocos partidos puede ser casualidad.`;
     const g = svg('g', { class: 'sc-dot', tabindex: '0', role: 'button', 'aria-label': tip });
     g.append(svgTitle(svg('circle', { cx: x, cy: y, r, style: `fill: ${personColor(d.id)}` }), tip));
@@ -1164,10 +1168,13 @@ function renderBallUse(box) {
   // Tabla compacta debajo (accesible y con lo que no cabe en la gráfica).
   const table = el('details', { class: 'ball-table' }, el('summary', {}, 'Ver los números'),
     el('div', { class: 'table-wrap' }, el('table', { class: 'data' },
-      el('thead', {}, el('tr', {}, ['Jugador', 'PJ', 'Toques/90', 'Retención', 'Peligro por toque', 'Pérdidas por toque*', 'Equipo: retiene más / menos'].map((h, i) => el('th', { scope: 'col', class: i === 0 ? 'left' : null }, h)))),
+      el('thead', {}, el('tr', {}, [['Jugador'], ['PJ'], ['Toques/90'], ['Retención'], ['Peligro por toque'], ['Pérdidas por toque*'],
+        ['Elige un pase peor*', 'Avisos del juego "debió pasar a otro": pasó, pero había un compañero mejor ubicado. % de sus pases intentados y, entre paréntesis, frente a los demás de su posición (100 = igual; menos es mejor). Mide la elección del pase, no si se quedó con el balón. Dato experimental, sin un dato oficial de EA para comprobarlo.'],
+        ['Equipo: retiene más / menos']].map(([h, tip], i) => el('th', { scope: 'col', class: i === 0 ? 'left' : null, title: tip ?? null }, h)))),
       el('tbody', {}, [...data].sort((a, b) => b.danger - a.danger).map((d) => el('tr', { class: 'clickable', ...onActivate(() => openPerson(d.id)) },
         el('td', { class: 'left' }, playerCell(d.label)), el('td', {}, fmtNum(d.n)), el('td', {}, fmtNum(d.touches90, 0)),
         el('td', {}, fmtNum(d.retention, 0)), el('td', {}, fmtNum(d.danger, 0)), el('td', {}, d.lossIdx == null ? '—' : fmtNum(d.lossIdx, 0)),
+        el('td', {}, d.worsePct == null ? '—' : `${fmtPct(d.worsePct, 0)}${d.worseIdx == null ? '' : ` (${fmtNum(d.worseIdx, 0)})`}`),
         el('td', { title: 'Puntos por partido del equipo cuando retiene más que su propia mediana / cuando retiene menos' }, `${d.hiPts == null ? '—' : fmtNum(d.hiPts, 2)} / ${d.loPts == null ? '—' : fmtNum(d.loPts, 2)}`)))))));
   box.replaceChildren(s, el('p', { class: 'muted small' }, 'Lo ideal es estar arriba: generar peligro con el balón, lo retenga mucho o poco. Abajo a la derecha está quien se queda con el balón sin sacarle provecho. Son datos experimentales y relaciones, no causas. Toca un punto para ver al jugador.'), table);
 }
