@@ -3,6 +3,17 @@
 // La fecha es la de Colombia (UTC−5), no la UTC: de noche ya es "mañana" en UTC.
 export const CHANGELOG = [
   {
+    version: '2.40',
+    date: '2026-11-25',
+    title: 'Mejor jugador: revisión con 91 partidos',
+    changes: [
+      'Corregido un error: los partidos de cada jugador se ajustaban por dificultad, pero el promedio de los demás con que se compara no. En un club de división alta todos quedaban "por encima del promedio" y las notas salían infladas. Ahora se comparan parejo; el orden no cambia, pero las notas bajan y quedan centradas en 50.',
+      'La división ya no suma: con 91 partidos, jugar en una división más alta no bajó la calificación de nadie.',
+      'El ajuste por nivel del rival queda a la mitad, que es lo que muestran los datos.',
+      'Las pérdidas de balón* se miden por cada vez que tiene el balón y no por 90 minutos, para no castigar a quien participa más.',
+    ],
+  },
+  {
     version: '2.39',
     date: '2026-11-23',
     title: 'Datos de cada jugador en un partido',

@@ -102,7 +102,8 @@ Deja de ser beta cuando se cumplan tres condiciones:
 
 - **Ubicación\*:** el % de veces en posición, según los avisos del juego. Es el único criterio que no se compara con la posición: la nota es el % tal cual. Ojo: los delanteros suelen tener un % más bajo que los medios y defensas.
 
-- **Dificultad:** en calificación, ataque, defensa y pase, cada partido vale más en divisiones altas (+5 % por división sobre la 5ª) y contra rivales de más nivel (entre −15 % y +15 %).
+- **Dificultad:** en calificación, ataque, defensa y pase, cada partido vale más contra rivales de más nivel (la raíz de su nivel frente al medio, entre −15 % y +15 %). El promedio de los demás se ajusta igual. Desde el 25/11/2026 la división no cuenta: con 91 partidos, jugar más arriba no bajó la calificación de nadie.
+- **Pérdidas:** se miden por cada vez que tiene el balón (pases completados + conducciones\*), no por 90 minutos, para no castigar a quien participa más.
 - **Ataque, defensa y pase combinan varios datos:** G+A, conversión, regates*, tiros, conducciones*, faltas recibidas*, tiros desde el área %*; entradas, intercepciones*, recuperaciones*, duelos aéreos*; precisión, pases filtrados*, pérdidas*, primer toque*, pases a fuera de juego*, entre otros.
 - **Nivel del jugador:** la misma actuación vale más con una media del Pro más baja. Cada partido se ajusta por la media que el jugador tenía ese día frente a la del equipo, con la mitad de fuerza que un ajuste proporcional (por ejemplo, 74 frente a 78 da +3 %) y entre −10 % y +10 %.
 - **Media por arquetipo:** cada arquetipo tiene su propia media, y EA da una sola. Desde el 16-nov-2026 se guarda la media de cada partido, justo después de jugarlo. Los partidos anteriores usan la foto del día, que es una aproximación.
@@ -120,7 +121,7 @@ Deja de ser beta cuando se cumplan tres condiciones:
 - **Amistosos:** en esta fórmula, cada amistoso vale la mitad que un partido de liga o de play-off.
 - **Abandonos:** un partido abandonado cuenta según los minutos que duró.
 - **Jugadores en cancha:** la calificación y los datos por 90 minutos se ajustan según cuántos humanos jugaron, porque con menos humanos cada uno toca más el balón.
-- **Dificultad en todo:** MVP, juego limpio y regularidad también usan la división, el rival y el nivel; impacto, la división y el rival.
+- **Dificultad en todo:** MVP, juego limpio y regularidad también usan el rival y el nivel; impacto, el rival.
 - **Regularidad:** solo cuentan los partidos por debajo de su media.
 - **MVP y humanos en cancha:** el MVP se elige entre los humanos de los dos equipos, así que cada MVP vale según cuántos había en total: ganarlo entre 8 vale el doble que entre 4.
 - **Impacto en el equipo:** compara el % de puntos (victoria 3, empate 1, derrota 0) con y sin el jugador, solo entre partidos con el mismo número de humanos: cuando alguien falta hay menos humanos, y eso cambia los resultados del equipo. Se corrige según el menor entre partidos con él y sin él. Con menos de 5 partidos sin él, queda en 100.

@@ -3635,10 +3635,11 @@ function teamPlaceSection(personId) {
 //   1. Cada criterio es un índice: 100 = promedio (de la posición, cuando aplica).
 //      Calificación, ataque, defensa y pase se comparan con el promedio del club
 //      en las posiciones que jugó, ponderado por sus minutos en cada una.
-//   2. Dificultad (v2.12): en esos cuatro, cada partido pesa según la división
-//      (+5 % por división sobre la 5ª) y el nivel del rival (su nivel / el medio
-//      de los rivales, entre ×0,85 y ×1,15). Lo bueno se multiplica; lo malo
-//      (pérdidas, entradas peligrosas) se divide.
+//   2. Dificultad (v2.12; v2.40): en esos cuatro, cada partido pesa según el nivel
+//      del rival ((su nivel / el medio) ^ 0,5, entre ×0,85 y ×1,15) y la media del
+//      Pro. Lo bueno se multiplica; lo malo se divide. Desde la v2.40 la división ya
+//      no premia (los datos no lo respaldan) y el promedio de los demás se ajusta
+//      igual que los partidos del jugador.
 //   3. Corrección por pocos partidos: 100 + (índice − 100) × PJ / (PJ + 5).
 //   4. Nota 0–100: 50 + (índice − 100), recortada a [0, 100].
 //   5. Puntaje = promedio ponderado de las notas. Si a alguien le falta un
@@ -3662,7 +3663,13 @@ const BEST_FRIENDLY_WEIGHT = 0.5;
 // neutro (100) con menos de este número de partidos sin él.
 const BEST_IMPACT_MIN_WITHOUT = 5;
 const matchWeight = (t) => (t.match_type === 'friendlyMatch' ? BEST_FRIENDLY_WEIGHT : 1);
-const DIV_STEP = 0.05; // +5 % por división sobre la 5ª del juego (API 6)
+// v2.40 (revisión con 91 partidos, aprobada por el usuario el 2026-11-25): dentro de cada
+// persona, la calificación de EA SUBE +0,18 por división más alta (±0,08), así que el
+// premio de +5 % por división no se sostiene: queda en 0. El nivel del rival baja la
+// calificación −0,24 por cada 100 (±0,06), la mitad de lo que corregía el factor
+// proporcional: ahora es (nivel / medio) ^ 0,5.
+const DIV_STEP = 0; // antes 0,05 (+5 % por división sobre la 5ª)
+const RIVAL_ELASTICITY = 0.5;
 const RIVAL_CAP = 0.15; // factor del rival entre ×0,85 y ×1,15
 const LEVEL_CAP = 0.10; // factor de nivel del jugador entre ×0,90 y ×1,10 (v2.13)
 // v2.27 (aprobado por el usuario): el factor de nivel vale la mitad. Factor =
@@ -3699,7 +3706,7 @@ const BEST_CRITERIA = [
   { key: 'rating', label: 'Calificación frente a su posición', weight: 25, help: 'Su calificación de EA frente al promedio del club en las posiciones que jugó, ajustada por la dificultad de cada partido.' },
   { key: 'attack', label: 'Ataque frente a su posición', weight: 15, help: 'G+A, conversión, regates*, rival superado*, segundas asistencias*, tiros, tiros a puerta*, conducciones*, faltas recibidas* y tiros desde el área %* frente a su posición, ajustados por dificultad.' },
   { key: 'defense', label: 'Defensa frente a su posición', weight: 15, help: 'Entradas, % de entradas, intercepciones*, recuperaciones*, balones quitados* y duelos aéreos* frente a su posición, ajustados por dificultad. Sus minutos de arquero se miden con % de atajadas, goles recibidos (menos es mejor), atajadas y vallas invictas.' },
-  { key: 'passing', label: 'Pase frente a su posición', weight: 10, help: 'Precisión, pases completados, filtrados*, pérdidas* (menos es mejor), pase adelante*, pase largo*, primer toque*, decisiones* y pases a fuera de juego* (menos es mejor) frente a su posición, ajustados por dificultad.' },
+  { key: 'passing', label: 'Pase frente a su posición', weight: 10, help: 'Precisión, pases completados, filtrados*, pérdidas por cada vez que tiene el balón* (menos es mejor), pase adelante*, pase largo*, primer toque*, decisiones* y pases a fuera de juego* (menos es mejor) frente a su posición, ajustados por dificultad.' },
   // Ubicación (aprobada por el usuario): su propio % en posición, sin compararlo con los demás de su posición
   // ni corregirlo por pocos partidos. La nota es el % tal cual.
   { key: 'positioning', label: 'Ubicación*', weight: 5, absolute: true, help: 'Su % de veces en posición frente a fuera de posición, según los avisos del juego. Se mide por su cuenta, sin compararlo con los demás de su posición: la nota es el % tal cual (98 % en posición = nota 98).' },
@@ -3754,7 +3761,9 @@ const SUB = {
     { label: 'Precisión de pase', w: 25, kind: 'ratio', num: n('passes_made'), den: n('pass_attempts') },
     { label: 'Pases por 90', w: 15, kind: 'p90', num: n('passes_made') },
     { label: 'Filtrados por 90*', w: 15, kind: 'p90', num: n('through_passes_exp'), ok: has('through_passes_exp') },
-    { label: 'Pérdidas por 90*', w: 15, kind: 'p90', low: true, num: n('possession_lost_exp'), ok: has('possession_lost_exp') },
+    // v2.40 (aprobado por el usuario): pérdidas por cada vez que tiene el balón (pases
+    // completados + conducciones*), no por 90 min, para no castigar a quien participa más.
+    { label: 'Pérdidas por toque*', w: 15, kind: 'ratio', low: true, num: n('possession_lost_exp'), den: sum('passes_made', 'carries_exp'), ok: has('possession_lost_exp', 'carries_exp') },
     { label: 'Pase adelante %*', w: 10, kind: 'ratio', num: n('forward_passes_ok_exp'), den: sum('forward_passes_ok_exp', 'forward_passes_failed_exp'), ok: has('forward_passes_ok_exp') },
     { label: 'Pase largo %*', w: 5, kind: 'ratio', num: n('long_passes_ok_exp'), den: sum('long_passes_ok_exp', 'long_passes_failed_exp'), ok: has('long_passes_ok_exp') },
     { label: 'Primer toque por 90*', w: 5, kind: 'p90', num: n('first_time_passes_exp'), ok: has('first_time_passes_exp') },
@@ -3768,7 +3777,7 @@ function difficultyOf(t, meanSkill) {
   const div = Number(t.club_division);
   const fDiv = Number.isInteger(div) && div >= 1 && div <= 6 ? 1 + DIV_STEP * (6 - div) : 1;
   const sk = Number(t.opponent_skill_rating);
-  const fRival = sk > 0 && meanSkill ? Math.min(1 + RIVAL_CAP, Math.max(1 - RIVAL_CAP, sk / meanSkill)) : 1;
+  const fRival = sk > 0 && meanSkill ? Math.min(1 + RIVAL_CAP, Math.max(1 - RIVAL_CAP, (sk / meanSkill) ** RIVAL_ELASTICITY)) : 1;
   return fDiv * fRival;
 }
 
@@ -3791,7 +3800,10 @@ function roleIndex(rows, all, spec, peers = all) {
     if (!valid(t) || !t.position || t.person_id === self) continue;
     const b = base.get(t.position) ?? { num: 0, den: 0, n: 0 };
     const mw = t._mw ?? 1; // v2.17: amistoso = ½
-    b.num += mw * num(t); b.den += mw * (spec.kind === 'p90' ? Number(t.seconds_played) : spec.den(t)); b.n += mw;
+    // v2.40 (corrección de un error): el promedio de los demás se ajusta por la dificultad
+    // y el nivel igual que los partidos del jugador. Antes solo se ajustaban los del
+    // jugador, y en un club de división alta todos quedaban "por encima del promedio".
+    b.num += mw * (spec.low ? num(t) / t._d : num(t) * t._d); b.den += mw * (spec.kind === 'p90' ? Number(t.seconds_played) : spec.den(t)); b.n += mw;
     base.set(t.position, b);
   }
   const mine = new Map();
@@ -3926,7 +3938,8 @@ function bestIndices(people, timeline, peerIds = new Set(people.map((p) => p.per
   const posAvg = new Map();
   for (const t of peerRows) {
     if (t.rating == null || !t.position) continue;
-    const e = posAvg.get(t.position) ?? { s: 0, n: 0 }; e.s += t._mw * t._rat; e.n += t._mw; posAvg.set(t.position, e);
+    // v2.40: el promedio se ajusta igual que el jugador (calificación × dificultad y nivel).
+    const e = posAvg.get(t.position) ?? { s: 0, n: 0 }; e.s += t._mw * t._rat * t._d; e.n += t._mw; posAvg.set(t.position, e);
   }
   for (const p of people) {
     const mine = byPerson.get(p.person_id) ?? [];
@@ -3934,7 +3947,7 @@ function bestIndices(people, timeline, peerIds = new Set(people.map((p) => p.per
     const own = new Map();
     for (const t of mine) {
       if (t.rating == null || !t.position) continue;
-      const e = own.get(t.position) ?? { s: 0, n: 0 }; e.s += t._mw * t._rat; e.n += t._mw; own.set(t.position, e);
+      const e = own.get(t.position) ?? { s: 0, n: 0 }; e.s += t._mw * t._rat * t._d; e.n += t._mw; own.set(t.position, e);
     }
     let num = 0, den = 0;
     for (const t of mine) {
@@ -4162,7 +4175,7 @@ async function renderBest() {
     : null);
   const list = el('div', { class: 'best-list' }, rows.map((r, i) => {
     const detail = el('div', { class: 'best-detail', hidden: true },
-      r.difficulty != null ? el('p', { class: 'muted small' }, `Dificultad media de sus partidos: ×${fmtNum(r.difficulty, 2)} (1,00 = 5ª división y rival de nivel medio).`) : null,
+      r.difficulty != null ? el('p', { class: 'muted small' }, `Dificultad media de sus partidos: ×${fmtNum(r.difficulty, 2)} (1,00 = rival de nivel medio; la división ya no cuenta).`) : null,
       r.level != null ? el('p', { class: 'muted small' }, r.ovr != null
         ? `Factor de nivel: ×${fmtNum(r.level, 2)} (su media del Pro, ${fmtNum(r.ovr, 0)} en promedio, frente a ${fmtNum(r.meanOvr, 0)} del equipo; más bajo = más mérito).`
         : 'Factor de nivel: ×1,00 (EA no tiene fotos de su media del Pro).') : null,
