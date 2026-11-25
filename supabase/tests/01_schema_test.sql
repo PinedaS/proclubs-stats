@@ -592,6 +592,16 @@ select pg_temp.assert_eq('026: pase peor, filtrados, superados y 2ª asist.', (s
 select pg_temp.assert_eq('026: oficiales del medio rival', (select goals || '/' || assists || '/' || shots || '/' || passes_made || '/' || pass_attempts || '/' || seconds_played from public.v_opponent_player_stats where position = 'midfielder' and played_at = '2026-11-06T20:00:00Z'), '1/2/3/20/25/5400');
 select pg_temp.assert_eq('026: sin contadores queda en null, no en 0', (select carries_exp from public.v_opponent_player_stats where position = 'forward' and played_at = '2026-11-06T20:00:00Z'), null::integer);
 reset role;
+-- 027: más datos del mismo rival (agregados a m26 con la forma real de EA).
+update public.match_raw set payload = jsonb_set(payload, '{players,888,9001}', (payload #> '{players,888,9001}') || '{"rating": "7.80", "tacklesmade": "4", "tackleattempts": "6", "saves": "0", "goalsconceded": "1", "cleansheetsgk": "0", "redcards": "0", "mom": "1", "match_event_aggregate_2": "6:5,108:2,109:1,265:1,266:2,13:2,19:1,30:9,31:3,177:6,158:2"}'::jsonb)
+ where match_id = 'm26';
+set role anon;
+select pg_temp.assert_eq('027: calificación y entradas del medio rival', (select rating || '/' || tackles_made || '/' || tackle_attempts from public.v_opponent_player_stats where position = 'midfielder' and played_at = '2026-11-06T20:00:00Z'), '7.80/4/6');
+select pg_temp.assert_eq('027: MVP del rival', (select is_mom from public.v_opponent_player_stats where position = 'midfielder' and played_at = '2026-11-06T20:00:00Z'), true);
+select pg_temp.assert_eq('027: intercep., recuperaciones y aéreos', (select interceptions_exp || '/' || possession_won_exp || '/' || aerial_duels_won_exp || '/' || aerial_won_att_exp || '/' || aerial_won_def_exp from public.v_opponent_player_stats where position = 'midfielder' and played_at = '2026-11-06T20:00:00Z'), '5/3/3/1/2');
+select pg_temp.assert_eq('027: tiros por zona, pase adelante, mejor opción y quitados', (select box_shots_on_exp || '/' || outside_shots_off_exp || '/' || forward_passes_ok_exp || '/' || forward_passes_failed_exp || '/' || best_option_exp || '/' || dispossessed_exp from public.v_opponent_player_stats where position = 'midfielder' and played_at = '2026-11-06T20:00:00Z'), '2/1/9/3/6/2');
+select pg_temp.assert_eq('027: los contadores de la 026 siguen iguales', (select carries_exp || '/' || possession_lost_exp || '/' || should_have_passed_exp from public.v_opponent_player_stats where position = 'midfielder' and played_at = '2026-11-06T20:00:00Z'), '7/3/4');
+reset role;
 select pg_temp.assert_eq('026: la vista no expone nombres, cuentas ni el club rival',
   (select count(*) from information_schema.columns where table_schema = 'public' and table_name = 'v_opponent_player_stats'
      and column_name in ('playername', 'player_id', 'person_id', 'person_name', 'opponent_club_id', 'opponent_name', 'match_id')), 0::bigint);
