@@ -86,19 +86,20 @@ Deja de ser beta cuando se cumplan tres condiciones:
 
 ### Mejor jugador (experimental)
 
-- **Puntaje de 0 a 100** con 9 criterios. Los pesos son fijos, salvo ataque y defensa, que suman 30 % y se reparten según la familia del arquetipo (ofensivo 20/10, equilibrado 15/15, defensivo 10/20):
+- **Puntaje de 0 a 100** con 8 criterios. Los pesos son fijos, salvo ataque y defensa, que suman 30 y se reparten según la familia del arquetipo (ofensivo 20/10, equilibrado 15/15, defensivo 10/20). Los pesos suman 95: cada criterio vale su peso ÷ 95 (en la tabla, el % real):
 
-  | Criterio | Peso |
-  |---|---|
-  | Calificación frente a su posición | 25 % |
-  | Ataque frente a su posición | 15 % |
-  | Defensa frente a su posición | 15 % |
-  | Pase frente a su posición | 10 % |
-  | Impacto en el equipo | 10 % |
-  | MVP | 10 % |
-  | Juego limpio | 5 % |
-  | Regularidad | 5 % |
-  | Ubicación* | 5 % |
+  | Criterio | Peso | % real |
+  |---|---|---|
+  | Calificación frente a su posición | 25 | 26,3 % |
+  | Ataque frente a su posición | 15 | 15,8 % |
+  | Defensa frente a su posición | 15 | 15,8 % |
+  | Pase frente a su posición | 10 | 10,5 % |
+  | Impacto en el equipo | 10 | 10,5 % |
+  | MVP | 10 | 10,5 % |
+  | Juego limpio | 5 | 5,3 % |
+  | Ubicación* | 5 | 5,3 % |
+
+  La **regularidad** se quitó el 25/11/2026: con 91 partidos, las diferencias entre jugadores eran ruido y premiaba a quien tenía calificaciones bajas pero estables.
 
 - **Ubicación\*:** el % de veces en posición, según los avisos del juego. Es el único criterio que no se compara con la posición: la nota es el % tal cual. Ojo: los delanteros suelen tener un % más bajo que los medios y defensas.
 
@@ -121,8 +122,7 @@ Deja de ser beta cuando se cumplan tres condiciones:
 - **Amistosos:** en esta fórmula, cada amistoso vale la mitad que un partido de liga o de play-off.
 - **Abandonos:** un partido abandonado cuenta según los minutos que duró.
 - **Jugadores en cancha:** la calificación y los datos por 90 minutos se ajustan según cuántos humanos jugaron, porque con menos humanos cada uno toca más el balón.
-- **Dificultad en todo:** MVP, juego limpio y regularidad también usan el rival y el nivel; impacto, el rival.
-- **Regularidad:** solo cuentan los partidos por debajo de su media.
+- **Dificultad en todo:** MVP y juego limpio también usan el rival y el nivel; impacto, el rival.
 - **MVP y humanos en cancha:** el MVP se elige entre los humanos de los dos equipos, así que cada MVP vale según cuántos había en total: ganarlo entre 8 vale el doble que entre 4.
 - **Impacto en el equipo:** compara el % de puntos (victoria 3, empate 1, derrota 0) con y sin el jugador, solo entre partidos con el mismo número de humanos: cuando alguien falta hay menos humanos, y eso cambia los resultados del equipo. Se corrige según el menor entre partidos con él y sin él. Con menos de 5 partidos sin él, queda en 100.
 - **Pesos reales:** la nota es 50 + 15 × (índice − 100) ÷ la dispersión del criterio entre los jugadores del ranking (mínimo 5). Así cada criterio mueve el puntaje según su peso y no según lo disperso que sea.

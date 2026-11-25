@@ -3781,7 +3781,7 @@ const LEVEL_ELASTICITY = 0.5;
 // que se ve al pasar el cursor (title).
 const BEST_COLS = [
   ['Criterio', 'Qué se mide. Los datos pequeños de abajo son los que forman el criterio, cada uno con su índice (100 = promedio de los demás en su posición). Los marcados con * son experimentales.'],
-  ['Índice', 'Cómo le fue frente al promedio: 100 = igual al promedio de los DEMÁS jugadores en su posición (la general que da EA: delantero, medio, defensa o arquero; no distingue extremo de delantero centro) (no se cuenta a sí mismo; si nadie más jugó esa posición, esos minutos no cuentan, y si los demás jugaron pocos partidos ahí, la comparación pesa menos). En MVP, juego limpio y regularidad, al de los jugadores del ranking). 120 = 20 % mejor; 80 = 20 % peor. En Impacto es 100 + (% de victorias con él − % sin él). En Ubicación es su % en posición, tal cual, y no se corrige. En calificación, ataque, defensa y pase ya incluye el ajuste por la dificultad de cada partido y por su nivel.'],
+  ['Índice', 'Cómo le fue frente al promedio: 100 = igual al promedio de los DEMÁS jugadores en su posición (la general que da EA: delantero, medio, defensa o arquero; no distingue extremo de delantero centro) (no se cuenta a sí mismo; si nadie más jugó esa posición, esos minutos no cuentan, y si los demás jugaron pocos partidos ahí, la comparación pesa menos). En MVP y juego limpio, al de los jugadores del ranking). 120 = 20 % mejor; 80 = 20 % peor. En Impacto es 100 + (% de victorias con él − % sin él). En Ubicación es su % en posición, tal cual, y no se corrige. En calificación, ataque, defensa y pase ya incluye el ajuste por la dificultad de cada partido y por su nivel.'],
   ['Con corrección', `El índice acercado a 100 según cuántos partidos jugó, para que pocos partidos no den un número extremo por suerte: 100 + (índice − 100) × PJ / (PJ + ${BEST_SHRINK_K}), donde un amistoso cuenta como medio partido. En Impacto, PJ es el menor entre partidos con él y sin él. Con muchos partidos casi no cambia.`],
   ['Nota', `El índice corregido pasado a una nota de 0 a 100: 50 + ${BEST_NOTE_PER_SD} × (índice corregido − 100) ÷ dispersión del criterio entre los jugadores del ranking (mínimo ${BEST_MIN_SPREAD}). Así cada criterio mueve el puntaje según su peso y no según lo disperso que sea. 50 = promedio; se recorta a 0 y 100. En Ubicación, la nota es el % tal cual.`],
   ['Peso', 'Cuánto vale este criterio en el puntaje final. Son fijos, salvo ataque y defensa (30 % entre los dos), que se reparten según la familia de su arquetipo: ofensivo 20/10, equilibrado 15/15, defensivo 10/20.'],
@@ -3812,7 +3812,10 @@ const BEST_CRITERIA = [
   { key: 'impact', label: 'Impacto en el equipo', weight: 10, help: '% de puntos que gana el equipo con él (victoria 3, empate 1, derrota 0) menos el % sin él, comparando solo partidos con el mismo número de humanos (cuando alguien falta hay menos humanos, y eso cambia los resultados); cada punto de diferencia suma o resta un punto al índice. Se corrige según el menor entre partidos con él y sin él, y con menos de 5 partidos sin él queda en 100.' },
   { key: 'mvp', label: 'MVP', weight: 10, help: 'Su % de MVP frente al promedio de los jugadores que entran al ranking. Cada MVP vale según la dificultad del partido, su nivel y los humanos en cancha de los dos equipos: el MVP se elige entre todos ellos, así que ganarlo entre 8 humanos vale el doble que entre 4.' },
   { key: 'fairplay', label: 'Juego limpio', weight: 5, help: 'Sanciones por 90 min frente al promedio: roja 3, amarilla* 1, penal cometido* 1, falta* 0,25. Menos sanciones = más puntos.' },
-  { key: 'regularity', label: 'Regularidad', weight: 5, help: 'Qué tan estable es su calificación (ajustada por dificultad y nivel): solo cuentan los partidos por debajo de su media, así un partido excepcional no le resta. Menos caídas que el promedio = índice mayor.' },
+  // v2.42 (aprobado por el usuario, 2026-11-25): se quitó "Regularidad" (5). Medida con 91
+  // partidos: las diferencias entre jugadores eran ruido (mitades par/impar r −0,21), las
+  // caídas crecen con la media (r 0,59, premiaba calificaciones bajas) y un mal partido no
+  // cuesta más que lo que suma uno bueno. Su peso se reparte en proporción entre los demás.
 ];
 
 // Datos de cada criterio por posición. kind: 'p90' = por 90 min; 'ratio' = num / den.
@@ -4184,21 +4187,7 @@ function bestIndices(people, timeline, peerIds = new Set(people.map((p) => p.per
     const eps = Math.max(0.05, 0.1 * (sMean ?? 0));
     out.get(p.person_id).fairplay = s == null || sMean == null ? null : (100 * (sMean + eps)) / (s + eps);
   }
-  // Regularidad: variación media del grupo / la suya (menos variación = más de 100).
-  // v2.17: desviación ponderada (amistoso = ½) de sus calificaciones, calculada aquí.
-  const wStd = (p) => {
-    const mine = (byPerson.get(p.person_id) ?? []).filter((t) => t.rating != null);
-    const n = mine.reduce((a, t) => a + t._mw, 0);
-    if (mine.length < 2 || !n) return null;
-    // v2.18: sobre las calificaciones ajustadas por dificultad y nivel (_d).
-    const m = mine.reduce((a, t) => a + t._mw * t._rat * t._d, 0) / n;
-    // v2.18: solo cuentan los partidos POR DEBAJO de su media (semidesviación): un
-    // partido excepcional no le resta regularidad.
-    return Math.sqrt(mine.reduce((a, t) => a + t._mw * Math.min(0, t._rat * t._d - m) ** 2, 0) / n);
-  };
-  const stds = new Map(people.map((p) => [p.person_id, wStd(p)]));
-  const stdMean = avg([...stds.values()].filter((v) => v != null));
-  for (const p of people) { const s = stds.get(p.person_id); out.get(p.person_id).regularity = s != null && s > 0 && stdMean ? (100 * stdMean) / s : null; }
+  // v2.42: "Regularidad" se quitó de la fórmula (ver BEST_CRITERIA).
   return out;
 }
 
@@ -4244,7 +4233,10 @@ function computeBest() {
     }
     const used = parts.filter((x) => x.score != null);
     const wsum = used.reduce((a, x) => a + x.weight, 0);
-    for (const x of parts) x.points = x.score == null || !wsum ? null : (x.score * x.weight) / wsum;
+    for (const x of parts) {
+      x.points = x.score == null || !wsum ? null : (x.score * x.weight) / wsum;
+      x.share = x.score == null || !wsum ? null : (100 * x.weight) / wsum; // peso efectivo en % (los pesos ya no suman 100)
+    }
     return { p, parts, impactNeutral: raw.impactNeutral, impactWithout: raw.impactWithout, families: raw.families, neutral: BEST_CRITERIA.filter((c) => raw.neutral?.includes(c.key)).map((c) => c.label), difficulty: raw.difficulty, level: raw.level, ovr: raw.ovr, meanOvr: raw.meanOvr, exactLevels: raw.exactLevels, levelRows: raw.levelRows, keeperShare: raw.keeperShare, onlyKeeper: raw.onlyKeeper, total: wsum ? used.reduce((a, x) => a + x.points, 0) : null, missing: parts.filter((x) => x.score == null).map((x) => x.c.label) };
   }).sort((a, b) => (b.total ?? -1) - (a.total ?? -1));
   return { rows, others, min, clubMatches };
@@ -4263,7 +4255,10 @@ async function renderBest() {
   }
   const { rows, others, min, clubMatches } = computeBest();
   const box = $('#best-body');
-  $('#best-weights').replaceChildren(...BEST_CRITERIA.map((c) => el('tr', {}, el('td', { class: 'left' }, c.label), el('td', {}, c.key === 'attack' || c.key === 'defense' ? '10–20 %' : `${c.weight} %`), el('td', { class: 'left muted small' }, c.help))));
+  // v2.42: sin Regularidad los pesos suman 95; se muestran en % del total (25 de 95 = 26,3 %).
+  const wTotal = BEST_CRITERIA.reduce((a, c) => a + c.weight, 0);
+  const pct = (w) => `${fmtNum((100 * w) / wTotal, 1)} %`;
+  $('#best-weights').replaceChildren(...BEST_CRITERIA.map((c) => el('tr', {}, el('td', { class: 'left' }, c.label), el('td', {}, c.key === 'attack' || c.key === 'defense' ? `${pct(10)}–${pct(20)}` : pct(c.weight)), el('td', { class: 'left muted small' }, c.help))));
   $('#best-min').textContent = `${min} partidos (30 % de los ${clubMatches} del club con los filtros actuales)`;
   if (!rows.length) {
     box.replaceChildren(el('p', { class: 'muted', style: 'padding: 0 18px 18px' }, `Nadie tiene todavía el mínimo de ${min} partidos (30 % de los ${clubMatches} del club con estos filtros).`));
@@ -4292,7 +4287,7 @@ async function renderBest() {
           el('td', {}, x.idx == null ? '—' : fmtNum(x.idx, 0)),
           el('td', {}, x.adj == null ? '—' : fmtNum(x.adj, 0)),
           el('td', {}, x.score == null ? '—' : fmtNum(x.score, 0)),
-          el('td', {}, `${fmtNum(x.weight, Number.isInteger(x.weight) ? 0 : 1)} %`),
+          el('td', {}, x.share == null ? '—' : `${fmtNum(x.share, 1)} %`),
           el('td', {}, el('strong', {}, x.points == null ? '—' : fmtNum(x.points, 1)))))))),
       r.missing.length ? el('p', { class: 'muted small' }, `Sin dato en: ${r.missing.join(', ')}. Su peso se repartió entre los demás criterios.`) : null,
       // Las explicaciones al pasar el cursor (title) no existen en el celular:

@@ -3,6 +3,14 @@
 // La fecha es la de Colombia (UTC−5), no la UTC: de noche ya es "mañana" en UTC.
 export const CHANGELOG = [
   {
+    version: '2.42',
+    date: '2026-11-25',
+    title: 'Mejor jugador: sin Regularidad',
+    changes: [
+      'Se quitó el criterio "Regularidad" (5 %). Con 91 partidos, las diferencias entre jugadores eran casualidad y terminaba premiando a quien tenía calificaciones bajas pero estables. Su peso se reparte en proporción entre los demás criterios, y la tabla muestra el % real de cada uno. El orden no cambió.',
+    ],
+  },
+  {
     version: '2.41',
     date: '2026-11-25',
     title: 'Con el balón',
