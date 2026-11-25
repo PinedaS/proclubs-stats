@@ -3,6 +3,14 @@
 // La fecha es la de Colombia (UTC−5), no la UTC: de noche ya es "mañana" en UTC.
 export const CHANGELOG = [
   {
+    version: '2.41',
+    date: '2026-11-25',
+    title: 'Con el balón',
+    changes: [
+      'Por posición estrena "Con el balón" (experimental): una gráfica que muestra quién se queda con el balón y qué saca de él, frente a los demás de su posición. Separa a quien conduce y genera peligro de quien amarra el balón sin generar. Al tocar un punto se abre el jugador y en "Ver los números" está el detalle, con cómo le va al equipo cuando retiene más o menos. No entra en la fórmula del mejor jugador.',
+    ],
+  },
+  {
     version: '2.40',
     date: '2026-11-25',
     title: 'Mejor jugador: revisión con 91 partidos',
