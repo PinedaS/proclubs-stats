@@ -1071,6 +1071,9 @@ async function renderRoles(filters, requestId) {
   $('#roles-table').replaceChildren(el('thead', {}, head), body);
   renderRoleDots(list);
   renderLineup($('#lineup'));
+  // v2.45: humanos rivales (sin identificar) para comparar "Con el balón" contra todos.
+  state.oppPlayers = filters.types.length ? await api.getOpponentPlayers(filters).catch(() => null) : [];
+  if (requestId !== state.requestId) return;
   renderBallUse($('#ball-use'));
 }
 
@@ -1086,8 +1089,14 @@ const ballTouches = (t) => Number(t.passes_made ?? 0) + Number(t.carries_exp ?? 
 const ballDanger = (t) => Number(t.shots ?? 0) + 2 * Number(t.goals ?? 0) + 2 * Number(t.assists ?? 0)
   + Number(t.through_passes_exp ?? 0) + Number(t.beats_exp ?? 0) + Number(t.second_assists_exp ?? 0);
 
-function ballUseData(timeline) {
-  const rows = timeline.filter((t) => !t.incomplete && Number(t.seconds_played) >= 2700 && t.carries_exp != null && ['forward', 'midfielder'].includes(t.position));
+/**
+ * ref: 'all' (v2.45, por defecto) = el promedio de la posición incluye a los humanos rivales
+ * (sin identificar, migración 026): "un jugador de nuestro nivel", porque el juego nos empareja
+ * por nivel. 'team' = solo los compañeros de club (como hasta la v2.44).
+ */
+function ballUseData(timeline, rivals = [], ref = 'all') {
+  const valid = (t) => Number(t.seconds_played) >= 2700 && t.carries_exp != null && ['forward', 'midfielder'].includes(t.position);
+  const rows = timeline.filter((t) => !t.incomplete && valid(t));
   const acc = () => ({ n: 0, pm: 0, pa: 0, car: 0, lost: 0, worse: 0, dng: 0, tch: 0, m90: 0, list: [] });
   // worse: avisos del juego "debió pasar a otro"* (código 182): pasó, pero había un compañero mejor.
   const add = (a, t) => { a.n++; a.pm += Number(t.passes_made ?? 0); a.pa += Number(t.pass_attempts ?? 0); a.car += Number(t.carries_exp ?? 0); a.lost += Number(t.possession_lost_exp ?? 0); a.worse += Number(t.should_have_passed_exp ?? 0); a.dng += ballDanger(t); a.tch += ballTouches(t); a.m90 += Number(t.seconds_played) / 5400; a.list.push(t); };
@@ -1098,6 +1107,14 @@ function ballUseData(timeline) {
     add(per.get(k), t);
     if (!pos.has(t.position)) pos.set(t.position, acc());
     add(pos.get(t.position), t);
+  }
+  // Rivales: solo suman a la referencia de su posición (nunca aparecen como puntos).
+  const rivalN = {};
+  if (ref === 'all') for (const t of rivals ?? []) {
+    if (!valid(t)) continue;
+    if (!pos.has(t.position)) pos.set(t.position, acc());
+    add(pos.get(t.position), { ...t, outcome: null });
+    rivalN[t.position] = (rivalN[t.position] ?? 0) + 1;
   }
   const pts = (o) => (o === 'win' ? 3 : o === 'draw' ? 1 : 0);
   const multiPos = new Set([...per.values()].map((a) => a.id).filter((id, i, all) => all.indexOf(id) !== i));
@@ -1118,9 +1135,41 @@ function ballUseData(timeline) {
     const hi = a.list.filter((t) => ratio(t) > med), lo = a.list.filter((t) => ratio(t) <= med);
     const ppm = (l) => (l.length ? l.reduce((s, t) => s + pts(t.outcome), 0) / l.length : null);
     out.push({ ...a, retention, danger, lossIdx, worsePct, worseIdx, touches90: a.tch / a.m90, hiPts: ppm(hi), loPts: ppm(lo), hiN: hi.length, loN: lo.length,
+      refN: o.n, rivalRefN: rivalN[a.position] ?? 0,
       label: multiPos.has(a.id) ? `${a.name} (${POS_SHORT[a.position]})` : a.name });
   }
   return out;
+}
+
+/**
+ * v2.45 (pedido del usuario): qué dicen NUESTROS resultados de cada dato. Cada jugador
+ * contra sí mismo (mismo club y posición, 6+ partidos): puntos del equipo en sus partidos
+ * del tercio alto del dato frente a los del tercio bajo. Medido el 2026-11-25: peligro por
+ * toque 2,00 frente a 0,72; elige un pase peor 1,14 frente a 1,60; retener, sin efecto.
+ */
+const BALL_METRIC = {
+  danger: (t) => ballDanger(t) / ballTouches(t),
+  worse: (t) => (Number(t.pass_attempts) ? Number(t.should_have_passed_exp ?? 0) / Number(t.pass_attempts) : null),
+  loss: (t) => (t.possession_lost_exp == null ? null : Number(t.possession_lost_exp) / ballTouches(t)),
+  retention: (t) => (Number(t.passes_made) ? Number(t.carries_exp ?? 0) / Number(t.passes_made) : null),
+};
+function ballOutcome(timeline, key) {
+  const f = BALL_METRIC[key];
+  const rows = timeline.filter((t) => !t.incomplete && Number(t.seconds_played) >= 2700 && t.carries_exp != null && ['forward', 'midfielder'].includes(t.position) && ballTouches(t) > 0 && t.outcome);
+  const groups = new Map();
+  for (const t of rows) { const k = `${t.person_id}|${t.position}`; if (!groups.has(k)) groups.set(k, []); groups.get(k).push(t); }
+  const pts = (o) => (o === 'win' ? 3 : o === 'draw' ? 1 : 0);
+  const lo = [], hi = [];
+  for (const list of groups.values()) {
+    const v = list.map((t) => [f(t), pts(t.outcome)]).filter(([x]) => x != null && Number.isFinite(x));
+    if (v.length < 6) continue;
+    const s = v.map(([x]) => x).sort((a, b) => a - b);
+    const t1 = s[Math.floor(s.length / 3)], t2 = s[Math.floor((2 * s.length) / 3)];
+    for (const [x, p] of v) { if (x < t1) lo.push(p); else if (x >= t2) hi.push(p); }
+  }
+  if (lo.length < 15 || hi.length < 15) return null;
+  const avg = (b) => b.reduce((a, c) => a + c, 0) / b.length;
+  return { lo: avg(lo), hi: avg(hi), nLo: lo.length, nHi: hi.length };
 }
 
 // v2.44 (pedido del usuario, opción A): el eje vertical se elige. En los datos donde menos
@@ -1139,15 +1188,36 @@ const BALL_Y = {
 
 function renderBallUse(box) {
   if (!box) return;
-  const all = ballUseData(state.timeline);
+  const ref = state.ballRef === 'team' || !state.oppPlayers?.length ? 'team' : 'all';
+  const all = ballUseData(state.timeline, state.oppPlayers ?? [], ref);
   if (!all.length) { box.replaceChildren(el('p', { class: 'muted small chart-empty' }, `Hace falta que alguien tenga ${BALL_MIN}+ partidos de 45 min en delantera o medio, y otros ${BALL_MIN} de los demás en esa posición.`)); return; }
   const Y = BALL_Y[state.ballY] ?? BALL_Y.danger;
   const yOf = (d) => d[Y.key];
   const data = all.filter((d) => yOf(d) != null);
   const missing = all.filter((d) => yOf(d) == null).map((d) => d.label);
   // Selector del eje vertical (redibuja solo esta gráfica).
-  const picker = el('div', { class: 'segmented ball-y', role: 'group', 'aria-label': 'Eje vertical' },
-    Object.entries(BALL_Y).map(([k, y]) => el('button', { type: 'button', 'aria-pressed': String(Y === y), onclick: () => { state.ballY = k; renderBallUse(box); } }, y.label)));
+  const picker = el('div', { class: 'ball-controls' },
+    el('div', { class: 'ball-ctl' }, el('span', { class: 'muted small' }, 'Eje vertical:'),
+      el('div', { class: 'segmented', role: 'group', 'aria-label': 'Eje vertical' },
+        Object.entries(BALL_Y).map(([k, y]) => el('button', { type: 'button', 'aria-pressed': String(Y === y), onclick: () => { state.ballY = k; renderBallUse(box); } }, y.label)))),
+    // v2.45: contra quién se compara (100 = igual que ellos).
+    el('div', { class: 'ball-ctl' }, el('span', { class: 'muted small' }, 'Comparar con:'),
+      el('div', { class: 'segmented', role: 'group', 'aria-label': 'Comparar con' },
+        [['all', 'Todos los humanos'], ['team', 'Compañeros']].map(([k, label]) => el('button', {
+          type: 'button', 'aria-pressed': String(ref === k), disabled: k === 'all' && !state.oppPlayers?.length ? '' : null,
+          title: k === 'all' ? 'Promedio de todos los humanos que jugaron esa posición en nuestros partidos, nuestros y rivales: un jugador de nuestro nivel (el juego nos empareja por nivel)' : 'Promedio de los demás jugadores del club en esa posición',
+          onclick: () => { state.ballRef = k; renderBallUse(box); },
+        }, label)))));
+  // v2.45: lo que dicen nuestros resultados del dato elegido y de la retención.
+  const outY = ballOutcome(state.timeline, state.ballY in BALL_METRIC ? (state.ballY ?? 'danger') : 'danger');
+  const outR = ballOutcome(state.timeline, 'retention');
+  const f2 = (v) => fmtNum(v, 2);
+  const yName = { danger: 'genera más peligro por toque', worse: 'elige un pase peor más seguido', loss: 'pierde más balones por toque' }[state.ballY ?? 'danger'] ?? 'genera más peligro por toque';
+  const evidence = el('p', { class: 'ball-evidence small' },
+    el('strong', {}, 'Lo que dicen nuestros resultados: '),
+    outY ? `en los partidos en que un jugador ${yName} que de costumbre, el equipo suma ${f2(outY.hi)} puntos por partido; cuando lo hace menos, ${f2(outY.lo)}. ` : 'todavía hay pocos partidos para medirlo. ',
+    outR ? `Retener más que de costumbre: ${f2(outR.hi)} frente a ${f2(outR.lo)}${Math.abs(outR.hi - outR.lo) < 0.3 ? ' (casi sin diferencia)' : ''}. ` : '',
+    'Cada uno comparado consigo mismo; son relaciones, no causas, y con pocos partidos pueden ser casualidad.');
   const W = Math.max(280, widthOf(box, 300) - 36), mobile = W < 520; // − el relleno de .chart
   const H = Math.round(Math.min(420, Math.max(300, W * 0.62))), L = 40, R = mobile ? 12 : 24, T = 26, B = 40;
   // Escala logarítmica centrada en 100: el doble y la mitad quedan a la misma distancia.
@@ -1197,7 +1267,10 @@ function renderBallUse(box) {
         el('td', {}, fmtNum(d.retention, 0)), el('td', {}, fmtNum(d.danger, 0)), el('td', {}, d.lossIdx == null ? '—' : fmtNum(d.lossIdx, 0)),
         el('td', {}, d.worsePct == null ? '—' : `${fmtPct(d.worsePct, 0)}${d.worseIdx == null ? '' : ` (${fmtNum(d.worseIdx, 0)})`}`),
         el('td', { title: 'Puntos por partido del equipo cuando retiene más que su propia mediana / cuando retiene menos' }, `${d.hiPts == null ? '—' : fmtNum(d.hiPts, 2)} / ${d.loPts == null ? '—' : fmtNum(d.loPts, 2)}`)))))));
-  box.replaceChildren(picker, s, el('p', { class: 'muted small' }, `${Y.note} Son datos experimentales y relaciones, no causas. Toca un punto para ver al jugador.`,
+  const refNote = ref === 'all'
+    ? `100 = un jugador típico de esa posición en nuestros partidos, nuestros y rivales (${data[0] ? `${fmtNum(Math.max(...data.map((d) => d.rivalRefN)))} registros de rivales` : 'rivales'}; el juego nos empareja con rivales de nuestro nivel).`
+    : '100 = los demás jugadores del club en esa posición.';
+  box.replaceChildren(picker, s, evidence, el('p', { class: 'muted small' }, `${Y.note} ${refNote} Son datos experimentales. Toca un punto para ver al jugador.`,
     missing.length ? ` Sin este dato: ${missing.join(', ')}.` : ''), table);
 }
 

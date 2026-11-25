@@ -3,6 +3,15 @@
 // La fecha es la de Colombia (UTC−5), no la UTC: de noche ya es "mañana" en UTC.
 export const CHANGELOG = [
   {
+    version: '2.45',
+    date: '2026-11-25',
+    title: 'Con el balón: comparado con jugadores de nuestro nivel',
+    changes: [
+      '"Con el balón" ahora compara por defecto con todos los humanos que jugaron cada posición en nuestros partidos, nuestros y rivales: un jugador típico de nuestro nivel, porque el juego nos empareja con rivales de nivel parecido. Con "Comparar con: Compañeros" se vuelve a la comparación anterior. De los rivales solo se usan números, sin nombres.',
+      'Debajo de la gráfica se ve lo que dicen nuestros propios resultados: cuántos puntos suma el equipo cuando un jugador genera más peligro, elige peor el pase o pierde más balones que de costumbre, y cuando retiene más.',
+    ],
+  },
+  {
     version: '2.44',
     date: '2026-11-25',
     title: 'Con el balón: eje a elección',

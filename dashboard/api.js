@@ -216,6 +216,17 @@ export function getPersonMatches(personId, f) {
   return request(`v_player_match_stats?${p}`);
 }
 
+/**
+ * v2.45 (migración 026): estadísticas de los humanos rivales, SIN identificarlos (sin nombre,
+ * cuenta ni club rival), con los mismos filtros de tipo, fechas y club. Referencia de
+ * "jugador de nuestro nivel" para "Con el balón".
+ */
+export function getOpponentPlayers(f) {
+  const p = filterParams(f);
+  p.set('select', 'played_at,match_type,position,seconds_played,goals,assists,shots,passes_made,pass_attempts,carries_exp,possession_lost_exp,should_have_passed_exp,through_passes_exp,beats_exp,second_assists_exp');
+  return request(`v_opponent_player_stats?${p}`);
+}
+
 /** v2.39: todos los datos de un jugador en un partido (para el detalle dentro de Partidos). */
 export function getMatchPlayerDetail(matchId, playerId) {
   const p = new URLSearchParams({ select: '*', match_id: `eq.${matchId}`, player_id: `eq.${playerId}` });
