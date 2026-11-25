@@ -1027,6 +1027,7 @@ button.pitch-spot:focus-visible { outline: 2px solid #fff; outline-offset: 3px; 
 .ball-svg .quad-label { font-size: 11px; fill: var(--ink-3); font-weight: 600; letter-spacing: .02em; }
 .ball-svg .sc-label { font-size: 12px; fill: var(--ink); font-weight: 600; paint-order: stroke; stroke: var(--surface); stroke-width: 3px; }
 .ball-table { margin-top: 6px; font-size: .88rem; }
+.ball-y { margin: 0 0 8px; }
 .ball-table summary { cursor: pointer; color: var(--ink-3); }
 /* v2.39: datos de un jugador en un partido (Partidos → jugadores → tocar uno). */
 .match-player-detail > td { background: var(--surface-2); padding: 12px 14px; white-space: normal; }

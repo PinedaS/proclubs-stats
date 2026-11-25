@@ -1123,25 +1123,46 @@ function ballUseData(timeline) {
   return out;
 }
 
+// v2.44 (pedido del usuario, opción A): el eje vertical se elige. En los datos donde menos
+// es mejor (pase peor, pérdidas) el eje va invertido para que arriba siga siendo "bien".
+const BALL_Y = {
+  danger: { label: 'Peligro por toque', axis: 'Peligro por toque →', key: 'danger', invert: false,
+    quads: ['Conduce y genera', 'Juega simple y genera', 'Amarra sin generar', 'Juega simple, genera poco'],
+    note: 'Lo ideal es estar arriba: generar peligro con el balón, lo retenga mucho o poco. Abajo a la derecha está quien se queda con el balón sin sacarle provecho.' },
+  worse: { label: 'Elige un pase peor*', axis: 'Elige mejor el pase ↑', key: 'worseIdx', invert: true,
+    quads: ['Conduce y elige bien', 'Suelta rápido y elige bien', 'Amarra y elige mal', 'Suelta rápido y elige mal'],
+    note: 'Eje invertido: arriba elige mejor el pase (menos avisos de "debió pasar a otro" que los demás de su posición). Abajo a la derecha está quien se queda con el balón y, al soltarlo, elige un compañero peor ubicado.' },
+  loss: { label: 'Pérdidas por toque*', axis: 'Pierde menos el balón ↑', key: 'lossIdx', invert: true,
+    quads: ['Conduce y no la pierde', 'Suelta rápido y no la pierde', 'Amarra y la pierde', 'Suelta rápido y la pierde'],
+    note: 'Eje invertido: arriba pierde menos balones por cada vez que lo tiene que los demás de su posición. Abajo a la derecha está quien se queda con el balón y lo pierde más.' },
+};
+
 function renderBallUse(box) {
   if (!box) return;
-  const data = ballUseData(state.timeline);
-  if (!data.length) { box.replaceChildren(el('p', { class: 'muted small chart-empty' }, `Hace falta que alguien tenga ${BALL_MIN}+ partidos de 45 min en delantera o medio, y otros ${BALL_MIN} de los demás en esa posición.`)); return; }
+  const all = ballUseData(state.timeline);
+  if (!all.length) { box.replaceChildren(el('p', { class: 'muted small chart-empty' }, `Hace falta que alguien tenga ${BALL_MIN}+ partidos de 45 min en delantera o medio, y otros ${BALL_MIN} de los demás en esa posición.`)); return; }
+  const Y = BALL_Y[state.ballY] ?? BALL_Y.danger;
+  const yOf = (d) => d[Y.key];
+  const data = all.filter((d) => yOf(d) != null);
+  const missing = all.filter((d) => yOf(d) == null).map((d) => d.label);
+  // Selector del eje vertical (redibuja solo esta gráfica).
+  const picker = el('div', { class: 'segmented ball-y', role: 'group', 'aria-label': 'Eje vertical' },
+    Object.entries(BALL_Y).map(([k, y]) => el('button', { type: 'button', 'aria-pressed': String(Y === y), onclick: () => { state.ballY = k; renderBallUse(box); } }, y.label)));
   const W = Math.max(280, widthOf(box, 300) - 36), mobile = W < 520; // − el relleno de .chart
   const H = Math.round(Math.min(420, Math.max(300, W * 0.62))), L = 40, R = mobile ? 12 : 24, T = 26, B = 40;
   // Escala logarítmica centrada en 100: el doble y la mitad quedan a la misma distancia.
   const lg = (v) => Math.log2(Math.min(3, Math.max(1 / 3, v / 100)));
-  const span = Math.max(1, ...data.flatMap((d) => [Math.abs(lg(d.retention)), Math.abs(lg(d.danger))])) * 1.08;
+  const span = Math.max(1, ...data.flatMap((d) => [Math.abs(lg(d.retention)), Math.abs(lg(yOf(d)))])) * 1.08;
   const sx = (v) => L + ((lg(v) + span) / (2 * span)) * (W - L - R);
-  const sy = (v) => T + (1 - (lg(v) + span) / (2 * span)) * (H - T - B);
-  const s = svg('svg', { viewBox: `0 0 ${W} ${H}`, width: W, height: H, class: 'pchart-svg ball-svg', role: 'img', 'aria-label': 'Retención frente a peligro por toque de cada jugador' });
+  const sy = (v) => { const f = (lg(v) + span) / (2 * span); return T + (Y.invert ? f : 1 - f) * (H - T - B); };
+  const s = svg('svg', { viewBox: `0 0 ${W} ${H}`, width: W, height: H, class: 'pchart-svg ball-svg', role: 'img', 'aria-label': `Retención frente a ${Y.label.replace('*', '').toLowerCase()} de cada jugador` });
   // Cuadrantes y su nombre.
   s.append(svg('line', { x1: sx(100), x2: sx(100), y1: T, y2: H - B, class: 'grid-line strong' }), svg('line', { x1: L, x2: W - R, y1: sy(100), y2: sy(100), class: 'grid-line strong' }));
   const q = (x, y, text, anchor) => s.append(svgText(x, y, text, { class: 'quad-label', 'text-anchor': anchor }));
-  q(W - R - 4, T + 12, 'Conduce y genera', 'end');
-  q(L + 4, T + 12, 'Juega simple y genera', 'start');
-  q(W - R - 4, H - B - 6, 'Amarra sin generar', 'end');
-  q(L + 4, H - B - 6, 'Juega simple, genera poco', 'start');
+  q(W - R - 4, T + 12, Y.quads[0], 'end');
+  q(L + 4, T + 12, Y.quads[1], 'start');
+  q(W - R - 4, H - B - 6, Y.quads[2], 'end');
+  q(L + 4, H - B - 6, Y.quads[3], 'start');
   // Ejes.
   const ticks = [50, 100, 200].filter((v) => Math.abs(lg(v)) <= span);
   for (const v of ticks) {
@@ -1149,11 +1170,11 @@ function renderBallUse(box) {
     s.append(svgText(L - 6, sy(v) + 4, String(v), { class: 'axis', 'text-anchor': 'end' }));
   }
   s.append(svgText((L + W - R) / 2, H - 6, 'Retención → (más conduce que pasa)', { class: 'axis', 'text-anchor': 'middle' }));
-  s.append(svgText(12, (T + H - B) / 2, 'Peligro por toque →', { class: 'axis', 'text-anchor': 'middle', transform: `rotate(-90 12 ${(T + H - B) / 2})` }));
+  s.append(svgText(12, (T + H - B) / 2, Y.axis, { class: 'axis', 'text-anchor': 'middle', transform: `rotate(-90 12 ${(T + H - B) / 2})` }));
   // Puntos: tamaño según toques por 90; color propio de cada jugador; nombre al lado.
   const tMax = Math.max(...data.map((d) => d.touches90));
   for (const d of [...data].sort((a, b) => b.touches90 - a.touches90)) {
-    const x = sx(d.retention), y = sy(d.danger), r = 5 + 8 * Math.sqrt(d.touches90 / tMax);
+    const x = sx(d.retention), y = sy(yOf(d)), r = 5 + 8 * Math.sqrt(d.touches90 / tMax);
     const fmtP = (v) => (v == null ? '—' : fmtNum(v, 2));
     const tip = `${d.label}: retención ${fmtNum(d.retention, 0)}, peligro por toque ${fmtNum(d.danger, 0)}${d.lossIdx != null ? `, pérdidas por toque ${fmtNum(d.lossIdx, 0)}` : ''}${d.worseIdx != null ? `, elige un pase peor ${fmtNum(d.worseIdx, 0)}` : ''} (100 = los demás de su posición). `
       + `${fmtNum(d.touches90, 0)} toques por 90 en ${d.n} PJ. Equipo: ${fmtP(d.hiPts)} pts por partido cuando retiene más que de costumbre (${d.hiN} PJ) y ${fmtP(d.loPts)} cuando retiene menos (${d.loN} PJ); con pocos partidos puede ser casualidad.`;
@@ -1171,12 +1192,13 @@ function renderBallUse(box) {
       el('thead', {}, el('tr', {}, [['Jugador'], ['PJ'], ['Toques/90'], ['Retención'], ['Peligro por toque'], ['Pérdidas por toque*'],
         ['Elige un pase peor*', 'Avisos del juego "debió pasar a otro": pasó, pero había un compañero mejor ubicado. % de sus pases intentados y, entre paréntesis, frente a los demás de su posición (100 = igual; menos es mejor). Mide la elección del pase, no si se quedó con el balón. Dato experimental, sin un dato oficial de EA para comprobarlo.'],
         ['Equipo: retiene más / menos']].map(([h, tip], i) => el('th', { scope: 'col', class: i === 0 ? 'left' : null, title: tip ?? null }, h)))),
-      el('tbody', {}, [...data].sort((a, b) => b.danger - a.danger).map((d) => el('tr', { class: 'clickable', ...onActivate(() => openPerson(d.id)) },
+      el('tbody', {}, [...all].sort((a, b) => b.danger - a.danger).map((d) => el('tr', { class: 'clickable', ...onActivate(() => openPerson(d.id)) },
         el('td', { class: 'left' }, playerCell(d.label)), el('td', {}, fmtNum(d.n)), el('td', {}, fmtNum(d.touches90, 0)),
         el('td', {}, fmtNum(d.retention, 0)), el('td', {}, fmtNum(d.danger, 0)), el('td', {}, d.lossIdx == null ? '—' : fmtNum(d.lossIdx, 0)),
         el('td', {}, d.worsePct == null ? '—' : `${fmtPct(d.worsePct, 0)}${d.worseIdx == null ? '' : ` (${fmtNum(d.worseIdx, 0)})`}`),
         el('td', { title: 'Puntos por partido del equipo cuando retiene más que su propia mediana / cuando retiene menos' }, `${d.hiPts == null ? '—' : fmtNum(d.hiPts, 2)} / ${d.loPts == null ? '—' : fmtNum(d.loPts, 2)}`)))))));
-  box.replaceChildren(s, el('p', { class: 'muted small' }, 'Lo ideal es estar arriba: generar peligro con el balón, lo retenga mucho o poco. Abajo a la derecha está quien se queda con el balón sin sacarle provecho. Son datos experimentales y relaciones, no causas. Toca un punto para ver al jugador.'), table);
+  box.replaceChildren(picker, s, el('p', { class: 'muted small' }, `${Y.note} Son datos experimentales y relaciones, no causas. Toca un punto para ver al jugador.`,
+    missing.length ? ` Sin este dato: ${missing.join(', ')}.` : ''), table);
 }
 
 // ---------------------------------------------------------------------------

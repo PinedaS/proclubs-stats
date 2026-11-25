@@ -3,6 +3,14 @@
 // La fecha es la de Colombia (UTC−5), no la UTC: de noche ya es "mañana" en UTC.
 export const CHANGELOG = [
   {
+    version: '2.44',
+    date: '2026-11-25',
+    title: 'Con el balón: eje a elección',
+    changes: [
+      '"Con el balón" tiene un selector para el eje vertical: peligro por toque, elige un pase peor* o pérdidas por toque*. Así se ve si quien se queda con el balón genera peligro, elige bien el pase o lo pierde. En los dos últimos el eje va invertido: arriba siempre es "bien".',
+    ],
+  },
+  {
     version: '2.43',
     date: '2026-11-25',
     title: 'Con el balón: calidad del pase',
