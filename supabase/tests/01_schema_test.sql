@@ -580,6 +580,30 @@ exception when insufficient_privilege then raise notice 'PASS 025 anon sigue sin
 end $$;
 reset role;
 
+-- 026: humanos rivales sin identificar (forma real de players[<rival>] en el JSON de EA).
+insert into public.match_raw (match_id, club_id, match_type, payload) values
+  ('m26', 1330384, 'leagueMatch', '{"players": {"1330384": {"1": {"pos": "forward"}}, "888": {"9001": {"playername": "Tercero", "pos": "midfielder", "secondsPlayed": "5400", "goals": "1", "assists": "2", "shots": "3", "passesmade": "20", "passattempts": "25", "match_event_aggregate_0": "97:7,105:1,106:2", "match_event_aggregate_1": "182:4,152:3,112:2,115:1"}, "9002": {"playername": "Otro", "pos": "forward", "secondsPlayed": "2700", "goals": "0", "assists": "0", "shots": "1", "passesmade": "5", "passattempts": "8"}}}}');
+insert into public.matches (match_id, club_id, match_type, played_at, goals_for, goals_against, outcome, opponent_club_id) values
+  ('m26', 1330384, 'leagueMatch', '2026-11-06T20:00:00Z', 0, 1, 'loss', 888);
+set role anon;
+select pg_temp.assert_eq('026: dos humanos rivales', (select count(*) from public.v_opponent_player_stats where played_at = '2026-11-06T20:00:00Z'), 2::bigint);
+select pg_temp.assert_eq('026: conducciones y pérdidas del medio rival', (select carries_exp || '/' || possession_lost_exp from public.v_opponent_player_stats where position = 'midfielder' and played_at = '2026-11-06T20:00:00Z'), '7/3');
+select pg_temp.assert_eq('026: pase peor, filtrados, superados y 2ª asist.', (select should_have_passed_exp || '/' || through_passes_exp || '/' || beats_exp || '/' || second_assists_exp from public.v_opponent_player_stats where position = 'midfielder' and played_at = '2026-11-06T20:00:00Z'), '4/3/2/1');
+select pg_temp.assert_eq('026: oficiales del medio rival', (select goals || '/' || assists || '/' || shots || '/' || passes_made || '/' || pass_attempts || '/' || seconds_played from public.v_opponent_player_stats where position = 'midfielder' and played_at = '2026-11-06T20:00:00Z'), '1/2/3/20/25/5400');
+select pg_temp.assert_eq('026: sin contadores queda en null, no en 0', (select carries_exp from public.v_opponent_player_stats where position = 'forward' and played_at = '2026-11-06T20:00:00Z'), null::integer);
+reset role;
+select pg_temp.assert_eq('026: la vista no expone nombres, cuentas ni el club rival',
+  (select count(*) from information_schema.columns where table_schema = 'public' and table_name = 'v_opponent_player_stats'
+     and column_name in ('playername', 'player_id', 'person_id', 'person_name', 'opponent_club_id', 'opponent_name', 'match_id')), 0::bigint);
+set role anon;
+do $$
+begin
+  perform 1 from public.match_raw limit 1;
+  raise exception 'FAIL: anon pudo leer match_raw';
+exception when insufficient_privilege then raise notice 'PASS 026 anon sigue sin leer match_raw';
+end $$;
+reset role;
+
 -- =============================================================================
 -- 5. Borrar el club de prueba
 -- =============================================================================
