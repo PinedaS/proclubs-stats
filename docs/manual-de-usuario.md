@@ -191,13 +191,14 @@ Antes se llamaba "Duplas". Reúne cómo le va al equipo con y sin cada jugador, 
 - **División partido a partido:** en qué división se jugó cada partido, con el color del resultado. EA no da un puesto en una tabla general, sino la división y los puntos.
 - **Para mejorar como equipo:** qué datos cambian entre victorias y derrotas (por jugador humano y por 90 minutos, sin abandonos) y en qué situaciones nos va peor y mejor (humanos propios y rivales, rival fuerte o débil, división, tipo de partido; solo con 4+ partidos). Son relaciones, no causas.
 - **El equipo según los humanos rivales:** puntos por partido y goles según cuántos humanos tenía el rival.
+- **Nosotros contra los rivales (experimental):** nuestros humanos frente a los humanos rivales en los mismos partidos, por jugador y por 90 minutos o en %. Barras a la derecha = mejor nosotros; a la izquierda = mejor ellos. Con "Partidos" se elige todos, victorias o derrotas (por ejemplo, para ver en qué nos ganan cuando perdemos). Solo humanos, sin abandonos ni arqueros. Lo que hace cada lado lo hace contra el otro: si ellos tiran más, también habla de nuestra defensa.
 - **Logros en play-off:** lo que EA registra de los play-offs del club, tal cual. Está vacío hasta que el club juegue unos play-offs.
 
 ### Detalle de un jugador
 
 Se abre al tocar un jugador. Tiene cuatro pestañas:
 - **Resumen.**
-- **Resumen → Puntos fuertes y para mejorar:** sus 3 datos más altos y más bajos frente a los demás que juegan habitualmente en su posición principal (solo con 5+ partidos suyos y de los demás). Va primero lo que más se relaciona con ganar: ataque y defensa según su arquetipo, después pase. Si la referencia es una sola persona, lo dice.
+- **Resumen → Puntos fuertes y para mejorar:** sus 3 datos más altos y más bajos frente a un jugador típico de su posición principal (por defecto, compañeros habituales y humanos rivales, que son de nuestro nivel; con "Comparar con: Compañeros", solo los del club) (solo con 5+ partidos suyos y de los demás). Va primero lo que más se relaciona con ganar: ataque y defensa según su arquetipo, después pase. Si la referencia es una sola persona, lo dice.
 - **Resumen → En todo FC 27:** sus partidos, goles, asistencias, calificación y MVP en **todos sus clubes**, según EA. Incluye partidos que no capturamos, por eso no coincide con el resto del dashboard.
 - **Resumen → Su Pro:** nombre del Pro, altura, posición favorita y nacionalidad, según EA.
 - **Rendimiento:** datos avanzados, relativo a su posición, calificación contra el nivel del rival, regularidad, evolución semanal y posición recomendada.

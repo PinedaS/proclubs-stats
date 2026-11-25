@@ -3,6 +3,15 @@
 // La fecha es la de Colombia (UTC−5), no la UTC: de noche ya es "mañana" en UTC.
 export const CHANGELOG = [
   {
+    version: '2.46',
+    date: '2026-11-25',
+    title: 'Nosotros contra los rivales',
+    changes: [
+      'Club estrena "Nosotros contra los rivales": nuestros humanos frente a los humanos rivales en los mismos partidos, dato por dato (tiros, peligro, pase, pérdidas, entradas, intercepciones, aéreos, faltas), por jugador y por 90 minutos. Se puede ver en todos los partidos, solo en las victorias o solo en las derrotas, para ver en qué nos ganan.',
+      'En el detalle de cada jugador, "Puntos fuertes y para mejorar" tiene el mismo selector que "Con el balón": por defecto compara con un jugador típico de su posición (compañeros y rivales, que son de nuestro nivel), o solo con los compañeros.',
+    ],
+  },
+  {
     version: '2.45',
     date: '2026-11-25',
     title: 'Con el balón: comparado con jugadores de nuestro nivel',

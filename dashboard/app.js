@@ -1071,9 +1071,6 @@ async function renderRoles(filters, requestId) {
   $('#roles-table').replaceChildren(el('thead', {}, head), body);
   renderRoleDots(list);
   renderLineup($('#lineup'));
-  // v2.45: humanos rivales (sin identificar) para comparar "Con el balón" contra todos.
-  state.oppPlayers = filters.types.length ? await api.getOpponentPlayers(filters).catch(() => null) : [];
-  if (requestId !== state.requestId) return;
   renderBallUse($('#ball-use'));
 }
 
@@ -2631,6 +2628,7 @@ function renderClub() {
   renderGoalsPerMatch($('#club-goals'), games);
   renderDivisionPath($('#club-division'), games, state.timeline);
   renderTeamByOppHumans($('#club-opp-humans'), games, state.timeline);
+  renderUsVsThem($('#club-vs'));
   renderTeamImprove($('#club-improve'), games, state.timeline);
   renderPlayoffs($('#club-playoffs'));
   const last = snaps.at(-1);
@@ -2670,6 +2668,68 @@ async function renderPlayoffs(box) {
       el('td', { class: 'left' }, String(i + 1)),
       el('td', { class: 'left' }, Object.entries(r.entry ?? {}).map(([k, v]) => el('div', { class: 'small' }, el('span', { class: 'muted' }, `${k}: `), fmtVal(v))))))))),
     msg(`Foto del ${fmtDate(`${rows[0].snapshot_date}T12:00:00`, false)}.`));
+}
+
+/**
+ * v2.46 (pedido del usuario; era el "paso 2" de la v2.29): nuestros humanos frente a los
+ * humanos rivales en los mismos partidos (026/027, sin identificar), por jugador y por 90
+ * min o en proporción. Filtro de partidos: todos, victorias o derrotas.
+ */
+const VS_METRICS = [
+  { label: 'Calificación media', kind: 'mean', num: (t) => Number(t.rating), ok: (t) => t.rating != null, digits: 2 },
+  { label: 'Tiros por 90', kind: 'p90', num: (t) => Number(t.shots ?? 0) },
+  { label: 'Tiros a puerta %*', kind: 'ratio', num: (t) => Number(t.box_shots_on_exp ?? 0) + Number(t.outside_shots_on_exp ?? 0), den: (t) => ['box_shots_on_exp', 'box_shots_off_exp', 'outside_shots_on_exp', 'outside_shots_off_exp'].reduce((a, k) => a + Number(t[k] ?? 0), 0), ok: (t) => t.box_shots_on_exp != null },
+  { label: 'Peligro por toque*', kind: 'ratio', num: ballDanger, den: ballTouches, ok: (t) => t.carries_exp != null, digits: 3 },
+  { label: 'Pases por 90', kind: 'p90', num: (t) => Number(t.passes_made ?? 0) },
+  { label: 'Precisión de pase', kind: 'ratio', num: (t) => Number(t.passes_made ?? 0), den: (t) => Number(t.pass_attempts ?? 0) },
+  { label: 'Pase hacia adelante %*', kind: 'ratio', num: (t) => Number(t.forward_passes_ok_exp ?? 0), den: (t) => Number(t.forward_passes_ok_exp ?? 0) + Number(t.forward_passes_failed_exp ?? 0), ok: (t) => t.forward_passes_ok_exp != null },
+  { label: 'Elige un pase peor*', kind: 'ratio', low: true, num: (t) => Number(t.should_have_passed_exp ?? 0), den: (t) => Number(t.pass_attempts ?? 0), ok: (t) => t.should_have_passed_exp != null },
+  { label: 'Pérdidas por toque*', kind: 'ratio', low: true, num: (t) => Number(t.possession_lost_exp ?? 0), den: ballTouches, ok: (t) => t.possession_lost_exp != null && t.carries_exp != null, digits: 3 },
+  { label: 'Entradas ganadas por 90', kind: 'p90', num: (t) => Number(t.tackles_made ?? 0) },
+  { label: '% de entradas', kind: 'ratio', num: (t) => Number(t.tackles_made ?? 0), den: (t) => Number(t.tackle_attempts ?? 0) },
+  { label: 'Intercepciones por 90*', kind: 'p90', num: (t) => Number(t.interceptions_exp ?? 0), ok: (t) => t.interceptions_exp != null },
+  { label: 'Recuperaciones por 90*', kind: 'p90', num: (t) => Number(t.possession_won_exp ?? 0), ok: (t) => t.possession_won_exp != null },
+  { label: 'Duelos aéreos ganados por 90*', kind: 'p90', num: (t) => Number(t.aerial_duels_won_exp ?? 0), ok: (t) => t.aerial_duels_won_exp != null },
+  { label: 'Faltas por 90*', kind: 'p90', low: true, num: (t) => Number(t.fouls_exp ?? 0), ok: (t) => t.fouls_exp != null },
+];
+
+function renderUsVsThem(box) {
+  if (!box) return;
+  const msg = (t) => box.replaceChildren(el('p', { class: 'muted small chart-empty' }, t));
+  if (!state.oppPlayers?.length) { msg('No se pudieron leer los datos de los rivales con estos filtros.'); return; }
+  const which = state.vsFilter ?? 'all';
+  // Partidos válidos: no abandonados y con el resultado pedido. Los rivales se unen por fecha y hora del partido.
+  const games = new Map();
+  for (const t of state.timeline) if (!games.has(t.played_at)) games.set(t.played_at, { incomplete: t.incomplete, outcome: t.outcome });
+  const okGame = (at) => { const g = games.get(at); return g && !g.incomplete && (which === 'all' || g.outcome === which); };
+  const ours = state.timeline.filter((t) => okGame(t.played_at) && Number(t.seconds_played) > 0 && t.position !== 'goalkeeper');
+  const theirs = state.oppPlayers.filter((t) => okGame(t.played_at) && Number(t.seconds_played) > 0 && t.position !== 'goalkeeper');
+  const nGames = new Set(ours.map((t) => t.played_at)).size;
+  const val = (rows, m) => {
+    const ok = rows.filter((t) => (m.ok ? m.ok(t) : true));
+    if (ok.length < 5) return null;
+    if (m.kind === 'mean') return ok.reduce((a, t) => a + m.num(t), 0) / ok.length;
+    const num = ok.reduce((a, t) => a + m.num(t), 0);
+    const den = m.kind === 'p90' ? ok.reduce((a, t) => a + Number(t.seconds_played), 0) / 5400 : ok.reduce((a, t) => a + m.den(t), 0);
+    return den > 0 ? num / den : null;
+  };
+  const picker = el('div', { class: 'ball-ctl' }, el('span', { class: 'muted small' }, 'Partidos:'),
+    el('div', { class: 'segmented', role: 'group', 'aria-label': 'Partidos' },
+      [['all', 'Todos'], ['win', 'Victorias'], ['loss', 'Derrotas']].map(([k, label]) => el('button', { type: 'button', 'aria-pressed': String(which === k), onclick: () => { state.vsFilter = k; renderUsVsThem(box); } }, label))));
+  if (nGames < 3) { box.replaceChildren(picker, el('p', { class: 'muted small chart-empty' }, 'Hacen falta al menos 3 partidos con estos filtros.')); return; }
+  const fmtV = (m, v) => (v == null ? '—' : m.kind === 'ratio' && !m.digits ? fmtPct(100 * v, 1) : fmtNum(v, m.digits ?? 2));
+  const items = VS_METRICS.map((m) => ({ m, a: val(ours, m), b: val(theirs, m) })).filter((x) => x.a != null && x.b != null && x.b !== 0 && x.a !== 0)
+    .map((x) => ({ ...x, r: x.m.low ? x.b / x.a : x.a / x.b }));
+  const chart = divergingBars(items.map((x) => ({
+    label: x.m.label,
+    value: Math.log(Math.min(2.5, Math.max(0.4, x.r))) / Math.log(2.5),
+    text: x.m.low ? `${fmtNum(Math.abs(100 * (x.a / x.b - 1)), 0)} % ${x.a < x.b ? 'menos' : 'más'}` : `${x.a >= x.b ? '+' : '−'}${fmtNum(Math.abs(100 * (x.a / x.b - 1)), 0)} %`,
+    sub: `nosotros ${fmtV(x.m, x.a)} · rivales ${fmtV(x.m, x.b)}${x.m.low ? ' · menos es mejor' : ''}`,
+    title: `${x.m.label}: nosotros ${fmtV(x.m, x.a)}, rivales ${fmtV(x.m, x.b)}, por jugador humano${x.m.kind === 'p90' ? ' y por 90 min' : ''}${x.m.low ? ' (menos es mejor)' : ''}.${x.m.label.includes('*') ? ' Dato experimental.' : ''}`,
+  })), ['Mejor ellos', 'Mejor nosotros']);
+  box.replaceChildren(picker, chart, el('p', { class: 'muted small' },
+    `${nGames} partidos ${which === 'win' ? 'ganados' : which === 'loss' ? 'perdidos' : ''} (sin abandonados ni arqueros): ${ours.length} registros nuestros y ${theirs.length} de rivales. `,
+    'Ojo: lo que hace cada lado lo hace contra el otro; por ejemplo, si ellos tiran más, también habla de nuestra defensa. Son relaciones, no causas. * = experimental.'));
 }
 
 /**
@@ -2907,7 +2967,29 @@ function improveValue(rows, s) {
   return den > 0 ? num / den : null;
 }
 
-function improveSection(personId) {
+/**
+ * v2.46 (pedido del usuario): "Puntos fuertes y para mejorar" con selector "Comparar con".
+ * Todos los humanos (por defecto) = compañeros habituales + humanos rivales de esa posición
+ * (026/027, sin identificar): "un jugador de nuestro nivel". Compañeros = como antes.
+ */
+function improveBlock(personId) {
+  const box = el('div', { class: 'improve-block' });
+  const draw = () => {
+    const ref = state.improveRef === 'team' || !state.oppPlayers?.length ? 'team' : 'all';
+    const picker = el('div', { class: 'ball-ctl improve-ref' }, el('span', { class: 'muted small' }, 'Comparar con:'),
+      el('div', { class: 'segmented', role: 'group', 'aria-label': 'Comparar con' },
+        [['all', 'Todos los humanos'], ['team', 'Compañeros']].map(([k, label]) => el('button', {
+          type: 'button', 'aria-pressed': String(ref === k), disabled: k === 'all' && !state.oppPlayers?.length ? '' : null,
+          title: k === 'all' ? 'Un jugador típico de su posición en nuestros partidos: compañeros y rivales (jugadores de nuestro nivel)' : 'Solo los compañeros del club que juegan esa posición',
+          onclick: () => { state.improveRef = k; draw(); },
+        }, label))));
+    box.replaceChildren(picker, improveSection(personId, ref));
+  };
+  draw();
+  return box;
+}
+
+function improveSection(personId, ref = 'team') {
   const all = state.timeline.filter((t) => t.position && Number(t.seconds_played) > 0);
   const mine = all.filter((t) => t.person_id === personId);
   const note = (text) => el('p', { class: 'muted small' }, text);
@@ -2919,7 +3001,10 @@ function improveSection(personId) {
   // Los demás en esa posición, solo quienes la jugaron 3+ veces (sin ocasionales).
   const count = new Map();
   for (const t of all) if (t.position === pos && t.person_id !== personId) count.set(t.person_id, (count.get(t.person_id) ?? 0) + 1);
-  const peers = all.filter((t) => t.position === pos && t.person_id !== personId && count.get(t.person_id) >= 3);
+  const mates = all.filter((t) => t.position === pos && t.person_id !== personId && count.get(t.person_id) >= 3);
+  // v2.46: con "Todos los humanos", la referencia suma a los humanos rivales de esa posición.
+  const rivals = ref === 'all' ? (state.oppPlayers ?? []).filter((t) => t.position === pos && Number(t.seconds_played) > 0) : [];
+  const peers = [...mates, ...rivals];
   const posName = (POS_LABEL[pos] ?? pos).toLowerCase();
   if (myRows.length < IMPROVE_MIN) return note(`Hacen falta al menos ${IMPROVE_MIN} partidos de ${posName} para comparar (tiene ${myRows.length}).`);
   if (peers.length < IMPROVE_MIN) return note(`No hay suficientes partidos de otros jugadores como ${posName} para comparar.`);
@@ -2931,7 +3016,7 @@ function improveSection(personId) {
   const famTot = [...fam.values()].reduce((a, v) => a + v, 0) || 1;
   const famW = (k) => [...fam].reduce((a, [f, s]) => a + (s / famTot) * (ARCH_SPLIT[f][k] / 15), 0);
   const importance = { ...IMPROVE_IMPORTANCE, attack: IMPROVE_IMPORTANCE.attack * famW('attack'), defense: IMPROVE_IMPORTANCE.defense * famW('defense') };
-  const nPeers = new Set(peers.map((t) => t.person_id)).size;
+  const nPeers = new Set(mates.map((t) => t.person_id)).size;
   const groups = pos === 'goalkeeper' ? [['defenseGk', SUB.defenseGk]] : [['rating', [rating]], ['attack', SUB.attack], ['defense', SUB.defense], ['passing', SUB.passing]];
   const items = [];
   for (const [g, specs] of groups) {
@@ -2955,11 +3040,14 @@ function improveSection(personId) {
     value: Math.log(Math.min(2.5, Math.max(0.4, x.r))) / Math.log(2.5),
     // En los datos donde menos es mejor, el signo confunde junto a una barra azul: se dice "menos"/"más".
     text: x.s.low ? `${fmtNum(Math.abs(100 * (x.a / x.b - 1)), 0)} % ${x.a < x.b ? 'menos' : 'más'}` : `${x.a >= x.b ? '+' : '−'}${fmtNum(Math.abs(100 * (x.a / x.b - 1)), 0)} %`,
-    title: `${x.s.label}: ${fmt(x.s, x.a)} frente a ${fmt(x.s, x.b)} de los demás${x.s.low ? ' (menos es mejor)' : ''}${x.s.label.includes('*') ? '. Dato experimental: interpretación de la comunidad, no oficial de EA' : ''}`,
-    sub: `${fmt(x.s, x.a)} · demás ${fmt(x.s, x.b)}${x.s.low ? ' · menos es mejor' : ''}`,
-  })), ['Para mejorar', 'Puntos fuertes']) : note('Ningún dato se aleja más de un 10 % de los demás en su posición.');
+    title: `${x.s.label}: ${fmt(x.s, x.a)} frente a ${fmt(x.s, x.b)} ${ref === 'all' ? 'de un jugador típico de su posición' : 'de los demás'}${x.s.low ? ' (menos es mejor)' : ''}${x.s.label.includes('*') ? '. Dato experimental: interpretación de la comunidad, no oficial de EA' : ''}`,
+    sub: `${fmt(x.s, x.a)} · ${ref === 'all' ? 'típico' : 'demás'} ${fmt(x.s, x.b)}${x.s.low ? ' · menos es mejor' : ''}`,
+  })), ['Para mejorar', 'Puntos fuertes']) : note(`Ningún dato se aleja más de un 10 % de ${ref === 'all' ? 'un jugador típico' : 'los demás'} en su posición.`);
+  const who = ref === 'all'
+    ? `un jugador típico de ${posName} en nuestros partidos: ${mates.length} partidos de ${nPeers === 1 ? 'un compañero habitual' : `${nPeers} compañeros habituales`} y ${rivals.length} de humanos rivales, que son de nuestro nivel porque el juego nos empareja por nivel`
+    : `${nPeers === 1 ? 'el otro jugador' : `los otros ${nPeers} jugadores`} que juega${nPeers === 1 ? '' : 'n'} habitualmente como ${posName}${nPeers === 1 ? ' (con una sola persona de referencia, "los demás" es esa persona)' : ''}`;
   return el('div', { class: 'improve' }, chart,
-    note(`Comparado con ${nPeers === 1 ? 'el otro jugador' : `los otros ${nPeers} jugadores`} que juega${nPeers === 1 ? '' : 'n'} habitualmente como ${posName} (su posición principal: ${myRows.length} partidos suyos ahí), con los filtros actuales.${nPeers === 1 ? ' Con una sola persona de referencia, "los demás" es esa persona.' : ''} Va primero lo que más se relaciona con ganar: ataque y defensa según su arquetipo, como en Mejor jugador, y después pase. Es una comparación, no un juicio: con pocos partidos puede ser casualidad. * = experimental.`));
+    note(`Comparado con ${who}. Su posición principal: ${myRows.length} partidos suyos ahí, con los filtros actuales. Va primero lo que más se relaciona con ganar: ataque y defensa según su arquetipo, como en Mejor jugador, y después pase. Es una comparación, no un juicio: con pocos partidos puede ser casualidad. * = experimental.`));
 }
 
 function openPerson(personId) {
@@ -3458,7 +3546,7 @@ async function renderPerson(filters, requestId) {
   // Pestañas internas: menos desplazamiento, sobre todo en el celular.
   const sec = (title, content) => (content ? [el('p', { class: 'section-title' }, title), content] : null);
   const panels = {
-    resumen: [basics, sec('Puntos fuertes y para mejorar', improveSection(state.personId)),
+    resumen: [basics, sec('Puntos fuertes y para mejorar', improveBlock(state.personId)),
       sec('En todo FC 27 (todos sus clubes, según EA)', careerSection), sec('Su Pro', profileSection), el('div', { class: 'grid-2' }, chartBox, overallBox)],
     // Orden por importancia (decisión del usuario): rendimiento, relativo a la posición,
     // evolución y, al final, la posición recomendada (orientativa).
@@ -4513,10 +4601,13 @@ async function refreshData() {
   const filters = readFilters();
   showError(null);
   try {
-    const [ranking, records, relative, timeline, photos] = filters.types.length
-      ? await Promise.all([api.getPersonStats(filters), api.getPersonRecords(filters), api.getRelativeStats('position', filters), api.getRatingsTimeline(filters).catch(() => []), api.getPlayerPhotos().catch(() => new Map())])
-      : [[], [], [], [], state.photos];
+    // v2.45/v2.46: humanos rivales sin identificar (026/027), con los mismos filtros: referencia
+    // "jugador de nuestro nivel" (Con el balón, Puntos fuertes) y "Nosotros contra los rivales".
+    const [ranking, records, relative, timeline, photos, oppPlayers] = filters.types.length
+      ? await Promise.all([api.getPersonStats(filters), api.getPersonRecords(filters), api.getRelativeStats('position', filters), api.getRatingsTimeline(filters).catch(() => []), api.getPlayerPhotos().catch(() => new Map()), api.getOpponentPlayers(filters).catch(() => null)])
+      : [[], [], [], [], state.photos, []];
     state.photos = photos;
+    state.oppPlayers = oppPlayers;
     state.timeline = timeline;
     state.trend = trendByPerson(timeline);
     if (!state.members) state.members = await api.getMembers(state.clubId).catch(() => []);

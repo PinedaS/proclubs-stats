@@ -223,7 +223,8 @@ export function getPersonMatches(personId, f) {
  */
 export function getOpponentPlayers(f) {
   const p = filterParams(f);
-  p.set('select', 'played_at,match_type,position,seconds_played,goals,assists,shots,passes_made,pass_attempts,carries_exp,possession_lost_exp,should_have_passed_exp,through_passes_exp,beats_exp,second_assists_exp');
+  // Todas las columnas: la vista solo tiene números, posición, fecha y tipo (027), nada que identifique.
+  p.set('select', '*');
   return request(`v_opponent_player_stats?${p}`);
 }
 
